@@ -243,8 +243,8 @@ LONG_ONLY = True              # if True: SELL action is treated as HOLD
 # predicted Sharpe (mean / std over pred_horizon). The forecast trains with much
 # denser signal than REINFORCE and may have real predictive value.
 USE_FORECAST_POLICY = True            # exp28: re-test now that we have multi-horizon predictions
-FORECAST_BUY_SHARPE_THRESHOLD = 0.3   # exp30: lower threshold — more seeds find profit
-FORECAST_HORIZON_IDX = 1              # 1h — verified best in exp29 sweep (1d worse)
+FORECAST_BUY_SHARPE_THRESHOLD = 0.5   # exp28 setting (exp30 lowering had no effect)
+FORECAST_HORIZON_IDX = -1             # exp31: -1 = average ALL horizons (ensemble)
 SGD_BATCH = 64
 GRAD_CLIP = 1.0
 RL_STEP_EVERY_BARS = 5
@@ -524,14 +524,20 @@ def simulate(model: PatchTransformer, features: dict[str, pd.DataFrame], device:
                 xb = torch.from_numpy(np.stack(batch_X)).to(device)
                 mean, log_std, alog = model(xb)        # alog: (B, 3)
                 if USE_FORECAST_POLICY:
-                    # exp28: action from MULTI-HORIZON head at FORECAST_HORIZON_IDX.
-                    # Falls back to per-step head if mh_head not available.
+                    # exp28+: action from MULTI-HORIZON head.
+                    # FORECAST_HORIZON_IDX:
+                    #   >=0 → use that single horizon
+                    #   -1  → ensemble: average per-horizon predicted Sharpes
                     if model.horizons_minutes:
                         mh_mean, mh_log_std = model.forward_multi_horizon(xb)
-                        # Pick the configured horizon (e.g. 1h).
-                        h_mean = mh_mean[:, FORECAST_HORIZON_IDX]
-                        h_std = torch.exp(mh_log_std[:, FORECAST_HORIZON_IDX])
-                        pred_sharpe = h_mean / (h_std + 1e-12)
+                        if FORECAST_HORIZON_IDX < 0:
+                            # Per-horizon Sharpe, then average
+                            per_h_sharpe = mh_mean / (torch.exp(mh_log_std) + 1e-12)  # (B, H)
+                            pred_sharpe = per_h_sharpe.mean(dim=-1)
+                        else:
+                            h_mean = mh_mean[:, FORECAST_HORIZON_IDX]
+                            h_std = torch.exp(mh_log_std[:, FORECAST_HORIZON_IDX])
+                            pred_sharpe = h_mean / (h_std + 1e-12)
                     else:
                         h_mean = mean.sum(dim=-1)
                         h_var = torch.exp(2 * log_std).sum(dim=-1)
