@@ -2,6 +2,29 @@
 
 Karpathy-style [autoresearch](https://github.com/karpathy/autoresearch) harness, adapted for **portfolio management research**: an LLM agent autonomously iterates on a small intraday transformer + RL policy overnight, keeping changes that robustly improve risk-adjusted returns.
 
+## Naive baselines (what to beat)
+
+Before iterating on RL, here's what the **eval slice** looks like under naive non-model strategies. Any model worth shipping has to outperform these.
+
+![baselines](docs/baselines.png)
+
+| Strategy | Sharpe | PnL | DD | Trades |
+|---|---:|---:|---:|---:|
+| Buy-and-hold SPY | +1.17 | +$38 | −0.2% | 1 |
+| Buy-and-hold QQQ | **+2.09** | +$90 | −0.2% | 1 |
+| Buy-and-hold NVDA | +2.04 | +$155 | −0.4% | 1 |
+| Buy-and-hold AAPL | +0.56 | +$26 | −0.2% | 1 |
+| Buy-and-hold TSLA | −1.18 | −$96 | −0.4% | 1 |
+| **Buy-and-hold equal-weight all 5** | **+1.67** | **+$217** | **−1.1%** | 5 |
+| **Untrained model (random init)** | 0 | $0 | 0% | **0 trades** (HOLD bias dominates) |
+
+Key insights:
+- **The bar is high**: equal-weight buy-and-hold made +$217 with sharpe +1.67. Most single names also did well (only TSLA lost).
+- **The market was up** during the eval window — passive does fine. A model has to be *substantially better* than passive to justify the trading complexity + fees.
+- **The untrained model trades nothing** because the action head's HOLD bias is intentionally strong (anti-churn prior). Any non-zero PnL from the trained model is genuinely from training, not from random init.
+
+Regenerate any time: `python baselines.py`.
+
 ## Backtest strategies
 
 The same trained model can be evaluated under different "trading strategies." Each strategy uses the model's predictions in a different way, producing a different equity curve and a different reward signal for RL. Comparing them tells us not just *whether the model is good*, but *what kind of trader it learned to be*.
