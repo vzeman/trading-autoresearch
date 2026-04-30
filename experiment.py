@@ -645,10 +645,10 @@ PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at on
 # Up to MAX_NEW_TRADES_PER_TIMESTEP simultaneous buys, each capped at
 # MAX_POS_FRACTION_OF_FREE_CASH of free cash.
 # ============================================================================
-MAX_POS_FRACTION_OF_FREE_CASH = 0.20  # never bet >20% of free cash on one trade
+MAX_POS_FRACTION_OF_FREE_CASH = 0.40  # exp34: was 0.20 — Kelly already saturated, raise cap
 MIN_CASH_RESERVE_PCT = 0.10           # keep 10% of starting cash unspent
 MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
-KELLY_SCALE = 1.0                     # exp33: full Kelly — bigger bets on high confidence
+KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effect — cap saturates)
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
 WEIGHTED_MIN_TRADE_USD = 100.0        # too small → fee dominates
 

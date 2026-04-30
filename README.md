@@ -124,8 +124,8 @@ A **broken** result: lines fan out wildly, some up some down, dense forest of ve
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 16:57 UTC_  
-_Total experiments: **36**  ·  kept: **9**  ·  latest commit: `a82ee98`_
+_Last updated: 2026-04-30 17:17 UTC_  
+_Total experiments: **37**  ·  kept: **10**  ·  latest commit: `152a21e`_
 
 ### Latest experiment — primary strategy (full portfolio)
 
@@ -161,7 +161,7 @@ _Total experiments: **36**  ·  kept: **9**  ·  latest commit: `a82ee98`_
 | Net PnL | $+193.93 (+0.388%) |
 | Trades | 12 |
 | Fees / slippage | $12.00 / $1.14 |
-| Wall time | 1504.5s |
+| Wall time | 1106.4s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
@@ -174,9 +174,9 @@ _Total experiments: **36**  ·  kept: **9**  ·  latest commit: `a82ee98`_
 |---|---|---:|---:|---:|---:|---:|---|
 | 1 | `d38cd93` | +0.00 | +0.00 | -1.34 | $+0.00 | 0 | exp26 KEEP: LONG_ONLY=True. Per-seed: 1/3 keeps profitable +$194, 2/3 don't trade ($0 vs v5's -$220 each). Mean pnl +$65 (vs v5's -$82). Killed catastrophic SELL-dominant equilibrium. Still loses to passive but no longer to v5. |
 | 2 | `86d13f0` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp28 KEEP 🎯 MULTI-HORIZON prediction (1m/1h/1d/1w). First positive median sharpe on year-of-data (+0.96 vs v5's -1.08). 2/3 seeds find profitable equilibrium (was 1/3). Now ~85% of passive SPY (+0.96 vs +1.17). |
-| 3 | `aeff147` | -0.39 | -4.63 | -0.31 | $-13.06 | 7 | exp1: HOLD bias 3.0→1.0 — ci_low improved -5.61→-4.63, DD -9.18→-0.31% |
-| 4 | `4a6dea7` | -0.32 | -5.61 | -9.18 | $-10.56 | 5 | baseline (v2 features, HOLD bias 3.0) |
-| 5 | `3c5a1c7` | +2.35 | -6.48 | -0.30 | $+75.39 | 13 | exp11 KEEP 🌐 +4 context features (VIX, TLT, UUP, SPY-cross). Sharpe +2.31→+2.35. KEY: 8/10 seeds (was 5/10) converge to the better +2.348 equilibrium. Macro context steers optimization. |
+| 3 | `a82ee98` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp32 KEEP 🎯🎯 STRATEGY 3 WEIGHTED dynamic sizing — primary unchanged but WEIGHTED strategy: sharpe +1.03, pnl +$1303 (+2.6%), 5 trades, DD -8.6%. SIX TIMES the PnL of best passive ($217 equal-wt). First strategy that meaningfully beats passive on absolute return. |
+| 4 | `aeff147` | -0.39 | -4.63 | -0.31 | $-13.06 | 7 | exp1: HOLD bias 3.0→1.0 — ci_low improved -5.61→-4.63, DD -9.18→-0.31% |
+| 5 | `4a6dea7` | -0.32 | -5.61 | -9.18 | $-10.56 | 5 | baseline (v2 features, HOLD bias 3.0) |
 
 <!-- RESULTS_END -->
 
