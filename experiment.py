@@ -209,11 +209,11 @@ PATCH_LEN = 8
 CONTEXT_PATCHES = 16            # context window = PATCH_LEN * CONTEXT_PATCHES = 128 bars
 D_MODEL = 96                    # exp11 KEPT; exp14 (64) and exp17 (128) both discarded
 N_HEADS = 4
-N_LAYERS = 4    # exp18: deeper model — width tested, try depth
+N_LAYERS = 3
 D_FF = 192
 DROPOUT = 0.1
 PRED_HORIZON = 5
-RL_REWARD_HORIZON = 3
+RL_REWARD_HORIZON = 5    # exp19: longer reward horizon — policy sees more of each trade's outcome
 ACTION_HEAD_HOLD_BIAS = 1.5     # exp10: softmax([-1.5,1.5,-1.5]) ≈ [4.7%,90.6%,4.7%]: be even more selective
 
 PRETRAIN_EPOCHS = 2             # supervised forecast pretrain on TRAIN slice

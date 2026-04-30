@@ -20,3 +20,4 @@ da2cc8b	2.2552	-6.3273	-0.30	72.25	11	discard	exp14: D_MODEL 96→64 — sharpe 
 99613fa	-3.2960	-11.3641	-0.35	-106.62	19	discard	exp15: RL_EPOCHS 1→2 — CATASTROPHIC. 6/10 seeds at sharpe -3.3 to -3.7, pnl -$106 to -$121. 4/10 still profitable. Bimodal failure confirms RL=1 is the ceiling for this family. Same as exp2. Reverted.
 c17f86b	2.2552	-6.3273	-0.30	72.25	11	discard	exp16 (commit hash drift — was ENTROPY_COEF 0.01→0.05): sharpe +2.35→+2.26. Higher entropy pushed seeds OUT of the +2.348 optimum into the lower +2.255 equilibrium. Reverted.
 6af3bb7	2.3478	-6.4834	-0.31	75.39	13	discard	exp17: D_MODEL 96→128 — sharpe IDENTICAL to exp11. Larger model doesn't help. D_MODEL=96 is the right size (64 worse, 96=128). Simpler wins. Reverted.
+e09842b	2.3156	-6.5181	-0.31	74.36	14	discard	exp18: N_LAYERS 3→4 — sharpe slightly worse, more cross-seed variance. Depth doesn't help (8 consecutive discards). Reverted.
