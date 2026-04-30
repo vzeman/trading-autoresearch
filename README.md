@@ -6,8 +6,8 @@ Karpathy-style [autoresearch](https://github.com/karpathy/autoresearch) harness,
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 07:40 UTC_  
-_Total experiments: **14**  ·  kept: **5**  ·  latest commit: `dff38d6`_
+_Last updated: 2026-04-30 07:49 UTC_  
+_Total experiments: **15**  ·  kept: **6**  ·  latest commit: `3c5a1c7`_
 
 ### Latest experiment
 
@@ -15,14 +15,14 @@ _Total experiments: **14**  ·  kept: **5**  ·  latest commit: `dff38d6`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+2.313** |
-| Sharpe — bootstrap CI low (5%) | **-6.486** |
-| Sharpe — bootstrap CI high (95%) | +10.148 |
+| Sharpe (median over seeds) | **+2.348** |
+| Sharpe — bootstrap CI low (5%) | **-6.483** |
+| Sharpe — bootstrap CI high (95%) | +10.170 |
 | Max drawdown | -0.30% |
-| Net PnL | $+74.27 (+0.149%) |
-| Trades | 14 |
-| Fees / slippage | $14.00 / $2.81 |
-| Wall time | 314.6s |
+| Net PnL | $+75.39 (+0.151%) |
+| Trades | 13 |
+| Fees / slippage | $13.00 / $2.61 |
+| Wall time | 305.1s |
 | Seeds completed | 10 |
 
 ### Progress over all experiments
@@ -35,9 +35,9 @@ _Total experiments: **14**  ·  kept: **5**  ·  latest commit: `dff38d6`_
 |---|---|---:|---:|---:|---:|---:|---|
 | 1 | `aeff147` | -0.39 | -4.63 | -0.31 | $-13.06 | 7 | exp1: HOLD bias 3.0→1.0 — ci_low improved -5.61→-4.63, DD -9.18→-0.31% |
 | 2 | `4a6dea7` | -0.32 | -5.61 | -9.18 | $-10.56 | 5 | baseline (v2 features, HOLD bias 3.0) |
-| 3 | `8616861` | +2.06 | -6.66 | -0.32 | $+66.02 | 21 | exp7 KEEP 🚀 RL_LR 3e-5→2e-5 — ALL 10 SEEDS POSITIVE. Median sharpe +2.06, all DD ≤-0.32%, pnl +$56-$73, trades 15-27. First profitable AND stable config. |
-| 4 | `ed1886c` | -0.65 | -9.70 | -0.31 | $-12.98 | 8 | exp6 KEEP: RL_LR 1e-5→3e-5 — sharpe -1.08→-0.65 (+0.43), per-seed range tightened to [-0.78,-0.43], trades 5-11. Best so far. |
-| 5 | `c3775f2` | -1.08 | -10.12 | -0.23 | $-21.57 | 14 | exp4 KEEP: drop signed_log_vol + vol_z_15 — sharpe -2.39→-1.08 (+1.30), per-seed variance 6× tighter, trades 13-51→11-17. Big win. |
+| 3 | `dff38d6` | +2.31 | -6.49 | -0.30 | $+74.27 | 14 | exp10 KEEP 🎯 HOLD bias 1.0→1.5 — sharpe +2.06→+2.31, per-seed range collapsed to [+2.28,+2.35], all DDs -0.30%, trades 13-15. Two discrete equilibria. New best. |
+| 4 | `8616861` | +2.06 | -6.66 | -0.32 | $+66.02 | 21 | exp7 KEEP 🚀 RL_LR 3e-5→2e-5 — ALL 10 SEEDS POSITIVE. Median sharpe +2.06, all DD ≤-0.32%, pnl +$56-$73, trades 15-27. First profitable AND stable config. |
+| 5 | `ed1886c` | -0.65 | -9.70 | -0.31 | $-12.98 | 8 | exp6 KEEP: RL_LR 1e-5→3e-5 — sharpe -1.08→-0.65 (+0.43), per-seed range tightened to [-0.78,-0.43], trades 5-11. Best so far. |
 
 <!-- RESULTS_END -->
 
