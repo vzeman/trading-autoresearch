@@ -4,3 +4,4 @@ aeff147	-0.3913	-4.6270	-0.31	-13.06	7	keep	exp1: HOLD bias 3.0→1.0 — ci_low
 1975ba9	-0.4780	-5.7125	-6.35	-15.83	43	discard	exp2: RL_EPOCHS 1→2 — overfit, 6× turnover, ci_low -4.63→-5.71. Reverted.
 0ea0aed	-0.3913	-4.5217	-0.22	-13.06	7	discard	exp3: PRETRAIN_EPOCHS 2→4 — equiv to exp1 (within noise), simpler wins. Reverted.
 9dd7191	-2.5269	-11.7003	-0.26	-49.90	29	infra	infra: batch sim per timestamp (4.5× speedup); RNG path differs. v3 baseline; old rows not apples-to-apples.
+1120820	-2.3892	-11.6721	-0.29	-47.49	29	auto	infra: N_SEEDS 3→10 for tighter median (now feasible after batched-sim speedup)
