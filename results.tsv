@@ -26,3 +26,4 @@ c47ec0f	2.3478	-6.4834	-0.30	75.39	13	discard	exp20: VOL_PENALTY=10 — IDENTICA
 f44a1c5	2.3478	-6.4834	-0.33	75.39	13	discard	exp21: VOL_PENALTY=1000 — BIMODAL: 7/10 at +2.348, 3/10 CATASTROPHIC (-3.3 to -3.4 sharpe, -$106 to -$109). Median lucky. 30% tail-risk unacceptable. Reverted.
 c7095f1	-194.0853	-202.4330	-7.60	-3078.15	2558	discard	exp22: DROPOUT 0.1→0.0 — DISASTER. Sharpe -194, 2558 trades, pnl -$3078. Without dropout the action head overfits and goes degenerate. Reverted. Dropout is essential.
 323240d	2.3478	-6.4834	-0.30	75.39	13	infra	feat: strategy comparison table + picker Sharpe tracking. Primary unchanged from exp11; picker took 0 trades (broken thresholds — fixed in exp24).
+95ca8c4	0.0000	0.0000	0.00	0.00	0	crash	exp24: redesigned picker (rank-based + auto-sell). Killed mid-run by manual cache wipe (mixed yfinance/Alpaca timestamp dtypes). Will re-test under v5 Alpaca data.

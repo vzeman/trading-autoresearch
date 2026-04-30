@@ -26,9 +26,9 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 # ---- Fixed universe (do not modify in agent loop). 5 highly liquid names. ----
 UNIVERSE = ["SPY", "QQQ", "NVDA", "AAPL", "TSLA"]
 
-# ---- Fixed window. yfinance free tier exposes ~30d of 1-min bars. ----
-DAYS = 28                    # calendar days fetched
-EVAL_FRACTION = 0.50         # last 50% (~14 cal days, ~10 trading days = 2 weeks) used as held-out eval
+# ---- v5: Alpaca free tier serves 1-min IEX bars going back YEARS. ----
+DAYS = 365                   # 1 year of 1-min bars
+EVAL_FRACTION = 0.20         # last 20% (~73 days) used as held-out eval — much longer window
 SEED = 0                     # for any deterministic shuffles in evaluator
 
 # ---- Fixed economic constants for the simulator (the broker is the evaluator) ----
@@ -50,39 +50,30 @@ def _cache_path(symbol: str) -> Path:
     return CACHE_DIR / f"{symbol}_1m.parquet"
 
 
-def fetch_bars(symbol: str, force: bool = False) -> pd.DataFrame:
-    """Download 1-min bars for a symbol via yfinance, cached on disk.
+# Alpaca symbols cannot include indices like "^VIX". Use yfinance fallback for those.
+_ALPACA_INVALID = {"^VIX", "^DXY", "^GSPC"}
 
-    yfinance limits 1m data to 7-day windows per request; we chunk DAYS / 7 calls.
-    """
-    p = _cache_path(symbol)
-    if p.exists() and not force:
-        return pd.read_parquet(p)
 
+def _fetch_via_yfinance(symbol: str, days: int) -> pd.DataFrame:
+    """Fallback for indices Alpaca doesn't serve. Capped at ~30 days by yfinance."""
     import yfinance as yf
     from datetime import timedelta
-    print(f"[prepare] downloading {symbol} 1m × {DAYS}d via yfinance (chunked) …", flush=True)
+    days = min(days, 28)
+    print(f"[prepare] {symbol} (yfinance fallback, max ~30d): downloading {days}d …", flush=True)
     end = datetime.now(timezone.utc)
-    chunks: list[pd.DataFrame] = []
+    chunks = []
     cur_end = end
-    days_left = DAYS
+    days_left = days
     while days_left > 0:
         chunk_days = min(7, days_left)
         chunk_start = cur_end - timedelta(days=chunk_days)
-        df = yf.download(
-            symbol,
-            start=chunk_start.strftime("%Y-%m-%d"),
-            end=cur_end.strftime("%Y-%m-%d"),
-            interval="1m",
-            auto_adjust=False,
-            progress=False,
-            threads=False,
-        )
+        df = yf.download(symbol, start=chunk_start.strftime("%Y-%m-%d"),
+                         end=cur_end.strftime("%Y-%m-%d"), interval="1m",
+                         auto_adjust=False, progress=False, threads=False)
         if df is not None and not df.empty:
             chunks.append(df)
         cur_end = chunk_start
         days_left -= chunk_days
-
     if not chunks:
         raise RuntimeError(f"yfinance returned no data for {symbol}")
     df = pd.concat(chunks).sort_index()
@@ -90,8 +81,59 @@ def fetch_bars(symbol: str, force: bool = False) -> pd.DataFrame:
         df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
     df = df.rename(columns=str.lower).reset_index()
     df = df.rename(columns={"datetime": "timestamp", "Datetime": "timestamp"})
-    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
-    df = df[["timestamp", "open", "high", "low", "close", "volume"]].drop_duplicates(subset=["timestamp"]).dropna()
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).astype("datetime64[ns, UTC]")
+    return df[["timestamp", "open", "high", "low", "close", "volume"]].drop_duplicates(subset=["timestamp"]).dropna()
+
+
+def _fetch_via_alpaca(symbol: str, days: int) -> pd.DataFrame:
+    """Alpaca free IEX feed — 1-min bars, supports years of history."""
+    from datetime import timedelta
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent / ".env")
+    key = os.environ.get("ALPACA_API_KEY")
+    secret = os.environ.get("ALPACA_SECRET_KEY")
+    if not (key and secret):
+        raise RuntimeError("ALPACA_API_KEY / ALPACA_SECRET_KEY not set in .env")
+    from alpaca.data.historical import StockHistoricalDataClient
+    from alpaca.data.requests import StockBarsRequest
+    from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
+    from alpaca.data.enums import DataFeed
+
+    client = StockHistoricalDataClient(key, secret)
+    end = datetime.now(timezone.utc) - timedelta(minutes=16)   # IEX needs >15min lag on free
+    start = end - timedelta(days=days)
+    print(f"[prepare] {symbol} (Alpaca IEX): downloading {days}d 1m bars …", flush=True)
+    req = StockBarsRequest(
+        symbol_or_symbols=symbol,
+        timeframe=TimeFrame(amount=1, unit=TimeFrameUnit.Minute),
+        start=start, end=end,
+        feed=DataFeed.IEX,
+        adjustment="raw",
+    )
+    resp = client.get_stock_bars(req)
+    df = resp.df
+    if df is None or df.empty:
+        raise RuntimeError(f"Alpaca returned no data for {symbol}")
+    if isinstance(df.index, pd.MultiIndex):
+        df = df.xs(symbol, level=0)
+    df = df.reset_index()
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).astype("datetime64[ns, UTC]")
+    return df[["timestamp", "open", "high", "low", "close", "volume"]].drop_duplicates(subset=["timestamp"]).dropna()
+
+
+def fetch_bars(symbol: str, force: bool = False) -> pd.DataFrame:
+    """Download 1-min bars, cached on disk. Alpaca primary, yfinance for indices."""
+    p = _cache_path(symbol)
+    if p.exists() and not force:
+        return pd.read_parquet(p)
+    if symbol in _ALPACA_INVALID:
+        df = _fetch_via_yfinance(symbol, DAYS)
+    else:
+        try:
+            df = _fetch_via_alpaca(symbol, DAYS)
+        except Exception as e:
+            print(f"[prepare] {symbol}: Alpaca failed ({e}); falling back to yfinance", flush=True)
+            df = _fetch_via_yfinance(symbol, DAYS)
     df.to_parquet(p, index=False)
     print(f"[prepare] {symbol}: {len(df):,} bars → {p}")
     return df

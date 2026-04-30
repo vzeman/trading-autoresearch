@@ -8,7 +8,9 @@ dependencies = [
     "numpy>=1.26",
     "pandas>=2.2",
     "pyarrow>=15.0",
-    "yfinance>=0.2.40",
+    "alpaca-py>=0.30",        # 5+ years of 1-min IEX bars (free tier)
+    "python-dotenv>=1.0",
+    "yfinance>=0.2.40",       # fallback for symbols not on Alpaca (e.g. ^VIX index)
     "matplotlib>=3.8",
     "typer>=0.12",
 ]
