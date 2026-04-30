@@ -6,8 +6,8 @@ Karpathy-style [autoresearch](https://github.com/karpathy/autoresearch) harness,
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 08:09 UTC_  
-_Total experiments: **18**  ·  kept: **7**  ·  latest commit: `da2cc8b`_
+_Last updated: 2026-04-30 08:20 UTC_  
+_Total experiments: **19**  ·  kept: **7**  ·  latest commit: `99613fa`_
 
 ### Latest experiment
 
@@ -15,14 +15,14 @@ _Total experiments: **18**  ·  kept: **7**  ·  latest commit: `da2cc8b`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+2.255** |
-| Sharpe — bootstrap CI low (5%) | **-6.327** |
-| Sharpe — bootstrap CI high (95%) | +10.013 |
-| Max drawdown | -0.30% |
-| Net PnL | $+72.25 (+0.145%) |
-| Trades | 11 |
-| Fees / slippage | $11.00 / $2.21 |
-| Wall time | 295.9s |
+| Sharpe (median over seeds) | **-3.296** |
+| Sharpe — bootstrap CI low (5%) | **-11.364** |
+| Sharpe — bootstrap CI high (95%) | +5.420 |
+| Max drawdown | -0.35% |
+| Net PnL | $-106.62 (-0.213%) |
+| Trades | 19 |
+| Fees / slippage | $19.00 / $3.81 |
+| Wall time | 511.4s |
 | Seeds completed | 10 |
 
 ### Progress over all experiments
