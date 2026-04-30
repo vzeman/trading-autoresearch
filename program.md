@@ -6,21 +6,18 @@ robustly improve a portfolio's risk-adjusted return.
 
 ## Setup (do once at the start of a run)
 
-1. **Agree on a run tag** with the human (e.g. `apr30`). The branch
-   `autoresearch/<tag>` must not already exist.
-2. `git checkout -b autoresearch/<tag>` from `main`.
-3. **Read these files** for full context:
+1. **Stay on `main`** — all experiments commit directly to `main`. No separate
+   `autoresearch/<tag>` branch.
+2. **Read these files** for full context:
    - `README.md` — repo overview
    - `prepare.py` — frozen: data download, broker, metrics, train/eval split. **Do not modify.**
    - `experiment.py` — the file you edit. Features, model, RL policy, train loop.
    - `evaluator.py` — frozen evaluator harness. **Do not modify.**
-4. **Verify data is cached**: run `python prepare.py`. Should print 5 symbols ×
-   ~7,000 1-min bars each. If yfinance throttles you, wait and retry.
-5. **Initialize `results.tsv`** with the header row:
-   ```
-   commit	sharpe	sharpe_ci_low	max_dd_pct	pnl_usd	trades	status	description
-   ```
-6. **Run the baseline once** to ensure the harness works end-to-end.
+3. **Verify data is cached**: run `python prepare.py`. Should print 5 symbols ×
+   ~100k 1-min bars each (Alpaca year-of-data cache). If Alpaca throttles you,
+   wait and retry.
+4. **Verify `results.tsv` exists** with the header row. It does (committed).
+5. **Run the latest config once** to ensure the harness works end-to-end (~25min).
 
 ## Experimentation loop
 
