@@ -213,7 +213,7 @@ N_LAYERS = 3
 D_FF = 192
 DROPOUT = 0.1
 PRED_HORIZON = 5
-RL_REWARD_HORIZON = 5    # exp19: longer reward horizon — policy sees more of each trade's outcome
+RL_REWARD_HORIZON = 3
 ACTION_HEAD_HOLD_BIAS = 1.5     # exp10: softmax([-1.5,1.5,-1.5]) ≈ [4.7%,90.6%,4.7%]: be even more selective
 
 PRETRAIN_EPOCHS = 2             # supervised forecast pretrain on TRAIN slice
@@ -223,6 +223,7 @@ RL_PRETRAIN_EPOCHS = 1          # offline RL pass(es) on TRAIN slice
 RL_LR = 2e-5     # exp7 KEPT setting (known stable, no rogue seeds)
 RL_COEF = 1.0
 ENTROPY_COEF = 0.01
+VOL_PENALTY = 10.0   # exp20: subtract VOL_PENALTY * (pos*log_return)^2 from reward — Sharpe-flavored
 SGD_BATCH = 64
 GRAD_CLIP = 1.0
 RL_STEP_EVERY_BARS = 5
@@ -476,7 +477,8 @@ def simulate(model: PatchTransformer, features: dict[str, pd.DataFrame], device:
                 future_close = float(close[p_["i"] + RL_REWARD_HORIZON])
                 log_ret = math.log(max(future_close, 1e-12) / max(p_["entry"], 1e-12))
                 cost_charge = 0.5 * (round_trip_var_cost + fixed_cost_frac) * p_["pos_change"]
-                reward = portfolio_weight * (p_["target"] * log_ret - cost_charge)
+                pos_ret = p_["target"] * log_ret
+                reward = portfolio_weight * (pos_ret - cost_charge - VOL_PENALTY * pos_ret * pos_ret)
                 buf_X.append(p_["X"]); buf_a.append(p_["a"]); buf_r.append(reward)
 
         # periodic SGD step (counted in timestamps now, not in events)

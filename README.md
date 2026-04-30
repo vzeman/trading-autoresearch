@@ -29,8 +29,8 @@ A **broken** result: lines fan out wildly, some up some down, dense forest of ve
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 09:27 UTC_  
-_Total experiments: **22**  ·  kept: **7**  ·  latest commit: `e09842b`_
+_Last updated: 2026-04-30 09:34 UTC_  
+_Total experiments: **23**  ·  kept: **7**  ·  latest commit: `ce1fdab`_
 
 ### Latest experiment
 
@@ -38,14 +38,14 @@ _Total experiments: **22**  ·  kept: **7**  ·  latest commit: `e09842b`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+2.316** |
-| Sharpe — bootstrap CI low (5%) | **-6.518** |
+| Sharpe (median over seeds) | **+2.348** |
+| Sharpe — bootstrap CI low (5%) | **-6.483** |
 | Sharpe — bootstrap CI high (95%) | +10.170 |
-| Max drawdown | -0.31% |
-| Net PnL | $+74.36 (+0.149%) |
-| Trades | 14 |
-| Fees / slippage | $14.00 / $2.81 |
-| Wall time | 344.6s |
+| Max drawdown | -0.30% |
+| Net PnL | $+75.39 (+0.151%) |
+| Trades | 13 |
+| Fees / slippage | $13.00 / $2.61 |
+| Wall time | 294.3s |
 | Seeds completed | 10 |
 
 ### Progress over all experiments
