@@ -77,9 +77,38 @@ MAX_DD_FLOOR_PCT = -10.0
 MAX_SECONDS_PER_SEED = 3600
 
 
-def run() -> dict:
-    from experiment import train_and_eval   # imported here so import errors → discard
+def _seed_worker(seed: int):
+    """Pickle-safe worker: imports + runs one seed in a subprocess."""
+    import os
+    # Pin per-worker torch threads to avoid oversubscription across multiple workers.
+    os.environ.setdefault("OMP_NUM_THREADS", "2")
+    os.environ.setdefault("MKL_NUM_THREADS", "2")
+    import torch
+    torch.set_num_threads(2)
+    from experiment import train_and_eval
+    return seed, train_and_eval(seed=seed)
 
+
+def _maybe_parallel_seeds(n_workers: int):
+    """Return list of (seed, result_tuple). If n_workers>1, run via multiprocessing."""
+    seeds = list(range(N_SEEDS))
+    if n_workers <= 1 or N_SEEDS <= 1:
+        return [_seed_worker(s) for s in seeds]
+    import multiprocessing as mp
+    ctx = mp.get_context("spawn")
+    print(f"[evaluator] running {N_SEEDS} seeds × {n_workers} parallel workers", flush=True)
+    with ctx.Pool(min(n_workers, N_SEEDS)) as pool:
+        # imap_unordered streams results as they complete — print as we go
+        out = []
+        for seed_idx, result in pool.imap_unordered(_seed_worker, seeds):
+            out.append((seed_idx, result))
+            print(f"[evaluator] seed {seed_idx} returned ({len(out)}/{N_SEEDS} done)", flush=True)
+    out.sort(key=lambda x: x[0])
+    return out
+
+
+def run(n_workers: int = 3) -> dict:
+    """Run evaluator. n_workers=1 is sequential; >1 uses multiprocessing.Pool."""
     t0 = time.time()
     sharpes: list[float] = []
     sharpes_ci_low: list[float] = []
@@ -100,10 +129,8 @@ def run() -> dict:
     picker_fees_l: list[float] = []
     seeds_done = 0
 
-    for seed in range(N_SEEDS):
-        print(f"\n[evaluator] === seed {seed+1}/{N_SEEDS} ===", flush=True)
-        seed_t0 = time.time()
-        result = train_and_eval(seed=seed)
+    seed_results = _maybe_parallel_seeds(n_workers)
+    for seed, result in seed_results:
         # Backward-compat: 4 / 5 / 9 tuple lengths supported.
         # 9-tuple = primary + picker secondary strategy.
         picker_eq, picker_nt, picker_fees, picker_trades = [], 0, 0.0, []
@@ -114,11 +141,6 @@ def run() -> dict:
         else:
             eq, n_trades, fees, slip = result
             trades = []
-        seed_elapsed = time.time() - seed_t0
-        if seed_elapsed > MAX_SECONDS_PER_SEED:
-            print(f"[evaluator] WARNING seed {seed} took {seed_elapsed:.0f}s "
-                  f"(safety ceiling {MAX_SECONDS_PER_SEED}s) — consider a smaller config",
-                  flush=True)
         if not eq or len(eq) < 5:
             print(f"[evaluator] seed {seed}: empty equity curve, skipping", flush=True)
             continue
