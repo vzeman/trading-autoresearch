@@ -238,10 +238,15 @@ RL_STEP_EVERY_BARS = 5
 
 
 def pick_device() -> str:
+    """Picks compute device. CPU is forced on M-series Macs because:
+      - Our batch size (≤5 = num universe symbols per timestep) is too small
+        for MPS launch overhead to amortize.
+      - Empirically MPS is ~6× slower than CPU on this exact workload
+        (verified at d_model=96, batch=5).
+      - For larger models or batches, MPS would win — re-enable then.
+    """
     if torch.cuda.is_available():
         return "cuda"
-    if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
-        return "mps"
     return "cpu"
 
 
