@@ -124,44 +124,36 @@ A **broken** result: lines fan out wildly, some up some down, dense forest of ve
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 20:58 UTC_  
-_Total experiments: **42**  ·  kept: **14**  ·  latest commit: `37936b9`_
+_Last updated: 2026-04-30 21:08 UTC_  
+_Total experiments: **43**  ·  kept: **15**  ·  latest commit: `43ac1b9`_
 
-### Latest experiment — primary strategy (full portfolio)
-
-![equity curve](docs/equity_latest.png)
-
-### Latest experiment — best-stock picker (secondary strategy)
-
-![picker equity](docs/picker_latest.png)
-
-### Latest experiment — weighted dynamic sizing (Strategy 3)
+### Weighted strategy — full eval window (~73 days)
 
 ![weighted equity](docs/weighted_latest.png)
 
-### Strategy comparison @ this checkpoint
+### Weighted strategy — first month of eval
 
-| Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees |
-|---|---:|---:|---:|---:|---:|---:|
-| Primary (full portfolio every-bar) | +0.961 | $+193.93 | +0.388% | **-1.34%** 🏆 | 12 | $12.00 |
-| Picker (best-stock, $1k cooldown 5min) | -6.330 | $-6,882.72 | -13.765% | -17.59% | 4365 | $4365.00 |
-| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+1.785** 🏆 | **$+5,551.19** 🏆 | +11.102% | -16.59% | 3 | $3.00 |
-| **SP500 (SPY) buy-and-hold** — passive benchmark | +1.204 | $+1,964.67 | +3.929% | -9.45% | 1 | **$1.00** 🏆 |
+![weighted 1m](docs/weighted_1m_latest.png)
 
-**Best by Sharpe:** Weighted (Kelly-sized, max 20% free cash, ≤5/step)
+### Strategy vs SPY benchmark
 
-### Detailed metrics — primary strategy
+| Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees | % time > SPY |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | +0.969 | $+682.90 | +1.366% | **-8.32%** 🏆 | 5 | $5.00 | **0%** 🏆 |
+| **SP500 (SPY) buy-and-hold** — passive benchmark | **+1.320** 🏆 | **$+14,375.39** 🏆 | +28.751% | -16.27% | 1 | **$1.00** 🏆 | 0% |
+
+**Best by Sharpe:** **SP500 (SPY) buy-and-hold** — passive benchmark
+
+### Detailed metrics — weighted strategy
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+0.961** |
-| Sharpe — bootstrap CI low (5%) | **-2.522** |
-| Sharpe — bootstrap CI high (95%) | +4.056 |
-| Max drawdown | -1.34% |
-| Net PnL | $+193.93 (+0.388%) |
-| Trades | 12 |
-| Fees / slippage | $12.00 / $1.14 |
-| Wall time | 1221.9s |
+| Sharpe (median over seeds) | **+0.969** |
+| Net PnL | $+682.90 (+1.366%) |
+| Max drawdown | -8.32% |
+| Trades | 5 |
+| % time above SPY | 0% |
+| Wall time | 539.6s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
