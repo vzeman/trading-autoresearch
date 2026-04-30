@@ -8,3 +8,4 @@ aeff147	-0.3913	-4.6270	-0.31	-13.06	7	keep	exp1: HOLD bias 3.0→1.0 — ci_low
 c3775f2	-1.0839	-10.1241	-0.23	-21.57	14	keep	exp4 KEEP: drop signed_log_vol + vol_z_15 — sharpe -2.39→-1.08 (+1.30), per-seed variance 6× tighter, trades 13-51→11-17. Big win.
 0543f4c	-1.3194	-10.2955	-0.24	-26.20	18	discard	exp5: drop rv_15 too — sharpe -1.08→-1.32, ci_low -10.12→-10.30. Worse. rv_15 carries useful regime info, unlike the other 2. Reverted.
 ed1886c	-0.6490	-9.6965	-0.31	-12.98	8	keep	exp6 KEEP: RL_LR 1e-5→3e-5 — sharpe -1.08→-0.65 (+0.43), per-seed range tightened to [-0.78,-0.43], trades 5-11. Best so far.
+541478d	2.1311	-6.6427	-17.20	68.34	19	discard	v4 baseline @ 2wk eval: 9/10 seeds POSITIVE sharpe (+1.9 to +2.3, +$60-$73 pnl, 15-23 trades). 1 rogue seed: 6169 trades, -17.2% DD, -$8.6k. Auto-discard for DD violation. RL_LR=3e-5 too aggressive on longer train slice — runaway risk.

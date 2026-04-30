@@ -6,8 +6,8 @@ Karpathy-style [autoresearch](https://github.com/karpathy/autoresearch) harness,
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 07:04 UTC_  
-_Total experiments: **9**  ·  kept: **3**  ·  latest commit: `ed1886c`_
+_Last updated: 2026-04-30 07:11 UTC_  
+_Total experiments: **10**  ·  kept: **4**  ·  latest commit: `541478d`_
 
 ### Latest experiment
 
@@ -15,14 +15,14 @@ _Total experiments: **9**  ·  kept: **3**  ·  latest commit: `ed1886c`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **-0.649** |
-| Sharpe — bootstrap CI low (5%) | **-9.696** |
-| Sharpe — bootstrap CI high (95%) | +11.368 |
-| Max drawdown | -0.31% |
-| Net PnL | $-12.98 (-0.026%) |
-| Trades | 8 |
-| Fees / slippage | $8.00 / $1.60 |
-| Wall time | 370.1s |
+| Sharpe (median over seeds) | **+2.131** |
+| Sharpe — bootstrap CI low (5%) | **-6.643** |
+| Sharpe — bootstrap CI high (95%) | +9.931 |
+| Max drawdown | -17.20% |
+| Net PnL | $+68.34 (+0.137%) |
+| Trades | 19 |
+| Fees / slippage | $19.00 / $3.82 |
+| Wall time | 298.9s |
 | Seeds completed | 10 |
 
 ### Progress over all experiments
@@ -35,7 +35,8 @@ _Total experiments: **9**  ·  kept: **3**  ·  latest commit: `ed1886c`_
 |---|---|---:|---:|---:|---:|---:|---|
 | 1 | `aeff147` | -0.39 | -4.63 | -0.31 | $-13.06 | 7 | exp1: HOLD bias 3.0→1.0 — ci_low improved -5.61→-4.63, DD -9.18→-0.31% |
 | 2 | `4a6dea7` | -0.32 | -5.61 | -9.18 | $-10.56 | 5 | baseline (v2 features, HOLD bias 3.0) |
-| 3 | `c3775f2` | -1.08 | -10.12 | -0.23 | $-21.57 | 14 | exp4 KEEP: drop signed_log_vol + vol_z_15 — sharpe -2.39→-1.08 (+1.30), per-seed variance 6× tighter, trades 13-51→11-17. Big win. |
+| 3 | `ed1886c` | -0.65 | -9.70 | -0.31 | $-12.98 | 8 | exp6 KEEP: RL_LR 1e-5→3e-5 — sharpe -1.08→-0.65 (+0.43), per-seed range tightened to [-0.78,-0.43], trades 5-11. Best so far. |
+| 4 | `c3775f2` | -1.08 | -10.12 | -0.23 | $-21.57 | 14 | exp4 KEEP: drop signed_log_vol + vol_z_15 — sharpe -2.39→-1.08 (+1.30), per-seed variance 6× tighter, trades 13-51→11-17. Big win. |
 
 <!-- RESULTS_END -->
 
