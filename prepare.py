@@ -23,8 +23,15 @@ import pandas as pd
 CACHE_DIR = Path(os.path.expanduser("~/.cache/trading-autoresearch"))
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-# ---- Fixed universe (do not modify in agent loop). 5 highly liquid names. ----
-UNIVERSE = ["SPY", "QQQ", "NVDA", "AAPL", "TSLA"]
+# ---- v6: top-20 by liquidity (5 ETFs + 15 mega/large-caps). ----
+UNIVERSE = [
+    # broad-market & sector ETFs
+    "SPY", "QQQ", "IWM", "EEM", "XLF",
+    # mega-cap tech / consumer
+    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AMD", "INTC", "NFLX",
+    # high-volume large-caps
+    "BAC", "F", "COIN", "PLTR", "NIO",
+]
 
 # ---- v6: extended to 6 years for much longer eval window. ----
 DAYS = 2190                  # 6 years of 1-min bars (Alpaca IEX serves back to ~2016)
