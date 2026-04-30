@@ -124,8 +124,8 @@ A **broken** result: lines fan out wildly, some up some down, dense forest of ve
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 19:53 UTC_  
-_Total experiments: **39**  ·  kept: **11**  ·  latest commit: `e32c804`_
+_Last updated: 2026-04-30 20:16 UTC_  
+_Total experiments: **40**  ·  kept: **12**  ·  latest commit: `eecab82`_
 
 ### Latest experiment — primary strategy (full portfolio)
 
@@ -145,7 +145,7 @@ _Total experiments: **39**  ·  kept: **11**  ·  latest commit: `e32c804`_
 |---|---:|---:|---:|---:|---:|---:|
 | Primary (full portfolio every-bar) | +0.961 | $+193.93 | +0.388% | **-1.34%** 🏆 | 12 | $12.00 |
 | Picker (best-stock, $1k cooldown 5min) | -6.330 | $-6,882.72 | -13.765% | -17.59% | 4365 | $4365.00 |
-| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+1.365** 🏆 | **$+2,947.58** 🏆 | +5.895% | -13.71% | 5 | $5.00 |
+| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+1.495** 🏆 | **$+3,571.76** 🏆 | +7.144% | -14.57% | 5 | $5.00 |
 | **SP500 (SPY) buy-and-hold** — passive benchmark | +1.204 | $+1,964.67 | +3.929% | -9.45% | 1 | **$1.00** 🏆 |
 
 **Best by Sharpe:** Weighted (Kelly-sized, max 20% free cash, ≤5/step)
@@ -161,7 +161,7 @@ _Total experiments: **39**  ·  kept: **11**  ·  latest commit: `e32c804`_
 | Net PnL | $+193.93 (+0.388%) |
 | Trades | 12 |
 | Fees / slippage | $12.00 / $1.14 |
-| Wall time | 1072.1s |
+| Wall time | 1020.2s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
@@ -176,7 +176,7 @@ _Total experiments: **39**  ·  kept: **11**  ·  latest commit: `e32c804`_
 | 2 | `86d13f0` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp28 KEEP 🎯 MULTI-HORIZON prediction (1m/1h/1d/1w). First positive median sharpe on year-of-data (+0.96 vs v5's -1.08). 2/3 seeds find profitable equilibrium (was 1/3). Now ~85% of passive SPY (+0.96 vs +1.17). |
 | 3 | `a82ee98` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp32 KEEP 🎯🎯 STRATEGY 3 WEIGHTED dynamic sizing — primary unchanged but WEIGHTED strategy: sharpe +1.03, pnl +$1303 (+2.6%), 5 trades, DD -8.6%. SIX TIMES the PnL of best passive ($217 equal-wt). First strategy that meaningfully beats passive on absolute return. |
 | 4 | `535c7ca` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp34 KEEP 🎯🎯🎯 cap 0.20→0.40 — weighted: sharpe +1.03→+1.24, pnl +$1303→+$2370 (+82%), DD -8.6→-12.6%. Nearly doubled PnL for 50% more DD — Kelly behaving as expected. New best. |
-| 5 | `aeff147` | -0.39 | -4.63 | -0.31 | $-13.06 | 7 | exp1: HOLD bias 3.0→1.0 — ci_low improved -5.61→-4.63, DD -9.18→-0.31% |
+| 5 | `e32c804` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp35 KEEP 🎯🎯🎯🎯 cap 0.40→0.50 — weighted: sharpe +1.24→+1.37, pnl +$2370→+$2948 (+24%), DD -12.6→-13.7%. BEST RESULT EVER. Beats SPY B&H by 50% on PnL (+$2948 vs +$1965). Cap still binding — keep ratcheting. |
 
 <!-- RESULTS_END -->
 
