@@ -232,6 +232,9 @@ VOL_PENALTY = 0.0   # exp20/21 showed: small penalty=invisible, large penalty=de
 # ============================================================================
 PRIMARY_MIN_HOLD_BARS = 1     # primary strategy: how many bars to hold before allowing position change
 # (Picker already has PICKER_BUY_COOLDOWN_S = 5 min between BUYs.)
+
+# exp26: in a bull market, SELLs systematically lose. Force long-only.
+LONG_ONLY = True              # if True: SELL action is treated as HOLD
 SGD_BATCH = 64
 GRAD_CLIP = 1.0
 RL_STEP_EVERY_BARS = 5
@@ -468,6 +471,9 @@ def simulate(model: PatchTransformer, features: dict[str, pd.DataFrame], device:
             # Apply each decision (still serial, but only broker bookkeeping — fast)
             for (sym, i_now), a_idx, X_arr in zip(batch_meta, a_idx_list, batch_X):
                 st = sym_state[sym]
+                # exp26: long-only — collapse SELL (a_idx=0) → HOLD (a_idx=1)
+                if LONG_ONLY and a_idx == 0:
+                    a_idx = 1
                 target = float(ACTION_TO_POS[a_idx])
                 # STICKINESS: if not enough bars since last position change, force HOLD
                 if (i_now - st["last_change_idx"]) < PRIMARY_MIN_HOLD_BARS:
