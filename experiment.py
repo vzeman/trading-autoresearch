@@ -211,7 +211,7 @@ D_MODEL = 96                    # exp11 KEPT; exp14 (64) and exp17 (128) both di
 N_HEADS = 4
 N_LAYERS = 3
 D_FF = 192
-DROPOUT = 0.1
+DROPOUT = 0.0   # exp22: less regularization — small dataset may not need it
 PRED_HORIZON = 5
 RL_REWARD_HORIZON = 3
 ACTION_HEAD_HOLD_BIAS = 1.5     # exp10: softmax([-1.5,1.5,-1.5]) ≈ [4.7%,90.6%,4.7%]: be even more selective
@@ -223,7 +223,7 @@ RL_PRETRAIN_EPOCHS = 1          # offline RL pass(es) on TRAIN slice
 RL_LR = 2e-5     # exp7 KEPT setting (known stable, no rogue seeds)
 RL_COEF = 1.0
 ENTROPY_COEF = 0.01
-VOL_PENALTY = 1000.0   # exp21: 100× stronger — penalty/reward ~5x, must dominate behavior
+VOL_PENALTY = 0.0   # exp20/21 showed: small penalty=invisible, large penalty=destabilizing. Off.
 SGD_BATCH = 64
 GRAD_CLIP = 1.0
 RL_STEP_EVERY_BARS = 5
