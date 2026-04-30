@@ -113,8 +113,8 @@ A **broken** result: lines fan out wildly, some up some down, dense forest of ve
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 11:41 UTC_  
-_Total experiments: **29**  ·  kept: **7**  ·  latest commit: `e4963c6`_
+_Last updated: 2026-04-30 14:13 UTC_  
+_Total experiments: **30**  ·  kept: **7**  ·  latest commit: `d38cd93`_
 
 ### Latest experiment — primary strategy (full portfolio)
 
@@ -128,9 +128,9 @@ _Total experiments: **29**  ·  kept: **7**  ·  latest commit: `e4963c6`_
 
 | Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees |
 |---|---:|---:|---:|---:|---:|---:|
-| Primary (full portfolio every-bar) | -1.080 | $-220.21 | -0.440% | **-1.50%** 🏆 | 12 | $12.00 |
-| Picker (best-stock, $1k cooldown 5min) | -6.029 | $-6,672.61 | -13.345% | -19.23% | 4369 | $4369.00 |
-| **SP500 (SPY) buy-and-hold** — passive benchmark | **+1.204** 🏆 | **$+1,964.67** 🏆 | +3.929% | -9.45% | 1 | **$1.00** 🏆 |
+| Primary (full portfolio every-bar) | +0.000 | $+0.00 | +0.000% | **-1.34%** 🏆 | 0 | **$0.00** 🏆 |
+| Picker (best-stock, $1k cooldown 5min) | -5.029 | $-6,037.70 | -12.075% | -18.17% | 4366 | $4366.00 |
+| **SP500 (SPY) buy-and-hold** — passive benchmark | **+1.204** 🏆 | **$+1,964.67** 🏆 | +3.929% | -9.45% | 1 | $1.00 |
 
 **Best by Sharpe:** **SP500 (SPY) buy-and-hold** — passive benchmark
 
@@ -138,14 +138,14 @@ _Total experiments: **29**  ·  kept: **7**  ·  latest commit: `e4963c6`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **-1.080** |
-| Sharpe — bootstrap CI low (5%) | **-4.149** |
-| Sharpe — bootstrap CI high (95%) | +2.392 |
-| Max drawdown | -1.50% |
-| Net PnL | $-220.21 (-0.440%) |
-| Trades | 12 |
-| Fees / slippage | $12.00 / $1.14 |
-| Wall time | 712.9s |
+| Sharpe (median over seeds) | **+0.000** |
+| Sharpe — bootstrap CI low (5%) | **+0.000** |
+| Sharpe — bootstrap CI high (95%) | +0.000 |
+| Max drawdown | -1.34% |
+| Net PnL | $+0.00 (+0.000%) |
+| Trades | 0 |
+| Fees / slippage | $0.00 / $0.00 |
+| Wall time | 811.1s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments

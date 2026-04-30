@@ -235,6 +235,12 @@ PRIMARY_MIN_HOLD_BARS = 1     # primary strategy: how many bars to hold before a
 
 # exp26: in a bull market, SELLs systematically lose. Force long-only.
 LONG_ONLY = True              # if True: SELL action is treated as HOLD
+
+# exp27: bypass RL action_head entirely — derive action from forecast head's
+# predicted Sharpe (mean / std over pred_horizon). The forecast trains with much
+# denser signal than REINFORCE and may have real predictive value.
+USE_FORECAST_POLICY = True            # if True: use predicted Sharpe instead of action_head
+FORECAST_BUY_SHARPE_THRESHOLD = 0.5   # |predicted_sharpe| above this triggers a position
 SGD_BATCH = 64
 GRAD_CLIP = 1.0
 RL_STEP_EVERY_BARS = 5
@@ -459,8 +465,20 @@ def simulate(model: PatchTransformer, features: dict[str, pd.DataFrame], device:
             with torch.no_grad():
                 model.eval()
                 xb = torch.from_numpy(np.stack(batch_X)).to(device)
-                _, _, alog = model(xb)        # alog: (B, 3)
-                if learn:
+                mean, log_std, alog = model(xb)        # alog: (B, 3)
+                if USE_FORECAST_POLICY:
+                    # exp27: action from forecast head's predicted Sharpe.
+                    # mean/log_std shape: (B, pred_horizon). Sum over horizon for total return + variance.
+                    h_mean = mean.sum(dim=-1)                       # (B,) total predicted log-return
+                    h_var = torch.exp(2 * log_std).sum(dim=-1)      # (B,) total predicted variance
+                    pred_sharpe = h_mean / torch.sqrt(h_var + 1e-12)
+                    # SELL=0, HOLD=1, BUY=2
+                    a_idx_t = torch.full_like(pred_sharpe, 1, dtype=torch.long)
+                    a_idx_t = torch.where(pred_sharpe > FORECAST_BUY_SHARPE_THRESHOLD,
+                                          torch.tensor(2, device=a_idx_t.device), a_idx_t)
+                    a_idx_t = torch.where(pred_sharpe < -FORECAST_BUY_SHARPE_THRESHOLD,
+                                          torch.tensor(0, device=a_idx_t.device), a_idx_t)
+                elif learn:
                     probs = torch.softmax(alog, dim=-1)
                     a_idx_t = torch.distributions.Categorical(probs=probs).sample()
                 else:
