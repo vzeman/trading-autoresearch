@@ -124,8 +124,8 @@ A **broken** result: lines fan out wildly, some up some down, dense forest of ve
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 16:26 UTC_  
-_Total experiments: **35**  ·  kept: **9**  ·  latest commit: `4f7deb8`_
+_Last updated: 2026-04-30 16:57 UTC_  
+_Total experiments: **36**  ·  kept: **9**  ·  latest commit: `a82ee98`_
 
 ### Latest experiment — primary strategy (full portfolio)
 
@@ -135,13 +135,18 @@ _Total experiments: **35**  ·  kept: **9**  ·  latest commit: `4f7deb8`_
 
 ![picker equity](docs/picker_latest.png)
 
+### Latest experiment — weighted dynamic sizing (Strategy 3)
+
+![weighted equity](docs/weighted_latest.png)
+
 ### Strategy comparison @ this checkpoint
 
 | Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees |
 |---|---:|---:|---:|---:|---:|---:|
-| Primary (full portfolio every-bar) | +0.000 | $+0.00 | +0.000% | -72.87% | 12 | $12.00 |
-| Picker (best-stock, $1k cooldown 5min) | -6.184 | $-6,848.08 | -13.696% | -15.87% | 4213 | $4213.00 |
-| **SP500 (SPY) buy-and-hold** — passive benchmark | **+1.204** 🏆 | **$+1,964.67** 🏆 | +3.929% | **-9.45%** 🏆 | 1 | **$1.00** 🏆 |
+| Primary (full portfolio every-bar) | +0.961 | $+193.93 | +0.388% | **-1.34%** 🏆 | 12 | $12.00 |
+| Picker (best-stock, $1k cooldown 5min) | -6.330 | $-6,882.72 | -13.765% | -17.59% | 4365 | $4365.00 |
+| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | +1.034 | $+1,302.61 | +2.605% | -8.57% | 5 | $5.00 |
+| **SP500 (SPY) buy-and-hold** — passive benchmark | **+1.204** 🏆 | **$+1,964.67** 🏆 | +3.929% | -9.45% | 1 | **$1.00** 🏆 |
 
 **Best by Sharpe:** **SP500 (SPY) buy-and-hold** — passive benchmark
 
@@ -149,14 +154,14 @@ _Total experiments: **35**  ·  kept: **9**  ·  latest commit: `4f7deb8`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+0.000** |
+| Sharpe (median over seeds) | **+0.961** |
 | Sharpe — bootstrap CI low (5%) | **-2.522** |
-| Sharpe — bootstrap CI high (95%) | +0.000 |
-| Max drawdown | -72.87% |
-| Net PnL | $+0.00 (+0.000%) |
+| Sharpe — bootstrap CI high (95%) | +4.056 |
+| Max drawdown | -1.34% |
+| Net PnL | $+193.93 (+0.388%) |
 | Trades | 12 |
 | Fees / slippage | $12.00 / $1.14 |
-| Wall time | 1215.1s |
+| Wall time | 1504.5s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
