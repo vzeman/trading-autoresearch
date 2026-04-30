@@ -6,8 +6,8 @@ Karpathy-style [autoresearch](https://github.com/karpathy/autoresearch) harness,
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 06:46 UTC_  
-_Total experiments: **7**  ·  kept: **2**  ·  latest commit: `c3775f2`_
+_Last updated: 2026-04-30 06:55 UTC_  
+_Total experiments: **8**  ·  kept: **3**  ·  latest commit: `0543f4c`_
 
 ### Latest experiment
 
@@ -15,14 +15,14 @@ _Total experiments: **7**  ·  kept: **2**  ·  latest commit: `c3775f2`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **-1.084** |
-| Sharpe — bootstrap CI low (5%) | **-10.124** |
-| Sharpe — bootstrap CI high (95%) | +10.970 |
-| Max drawdown | -0.23% |
-| Net PnL | $-21.57 (-0.043%) |
-| Trades | 14 |
-| Fees / slippage | $14.00 / $2.80 |
-| Wall time | 364.3s |
+| Sharpe (median over seeds) | **-1.319** |
+| Sharpe — bootstrap CI low (5%) | **-10.295** |
+| Sharpe — bootstrap CI high (95%) | +10.672 |
+| Max drawdown | -0.24% |
+| Net PnL | $-26.20 (-0.052%) |
+| Trades | 18 |
+| Fees / slippage | $18.00 / $3.60 |
+| Wall time | 365.1s |
 | Seeds completed | 10 |
 
 ### Progress over all experiments
@@ -35,6 +35,7 @@ _Total experiments: **7**  ·  kept: **2**  ·  latest commit: `c3775f2`_
 |---|---|---:|---:|---:|---:|---:|---|
 | 1 | `aeff147` | -0.39 | -4.63 | -0.31 | $-13.06 | 7 | exp1: HOLD bias 3.0→1.0 — ci_low improved -5.61→-4.63, DD -9.18→-0.31% |
 | 2 | `4a6dea7` | -0.32 | -5.61 | -9.18 | $-10.56 | 5 | baseline (v2 features, HOLD bias 3.0) |
+| 3 | `c3775f2` | -1.08 | -10.12 | -0.23 | $-21.57 | 14 | exp4 KEEP: drop signed_log_vol + vol_z_15 — sharpe -2.39→-1.08 (+1.30), per-seed variance 6× tighter, trades 13-51→11-17. Big win. |
 
 <!-- RESULTS_END -->
 

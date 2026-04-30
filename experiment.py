@@ -56,7 +56,7 @@ ALL_FEATURES = [
     "tod_sin", "tod_cos",
 ]
 
-USE_FEATURES = [f for f in ALL_FEATURES if f not in {"signed_log_vol", "vol_z_15", "rv_15"}]   # exp5: drop 3rd short-window feature too
+USE_FEATURES = [f for f in ALL_FEATURES if f not in {"signed_log_vol", "vol_z_15"}]   # exp4: drop noisy ones
 
 
 def _ema(x: np.ndarray, span: int) -> np.ndarray:
@@ -162,7 +162,7 @@ PRETRAIN_EPOCHS = 2             # supervised forecast pretrain on TRAIN slice
 PRETRAIN_BATCH = 128
 PRETRAIN_LR = 3e-4
 RL_PRETRAIN_EPOCHS = 1          # offline RL pass(es) on TRAIN slice
-RL_LR = 1e-5
+RL_LR = 3e-5     # exp6: 3× stronger REINFORCE updates so policy actually moves
 RL_COEF = 1.0
 ENTROPY_COEF = 0.01
 SGD_BATCH = 64
