@@ -113,8 +113,8 @@ A **broken** result: lines fan out wildly, some up some down, dense forest of ve
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 14:13 UTC_  
-_Total experiments: **30**  ·  kept: **7**  ·  latest commit: `d38cd93`_
+_Last updated: 2026-04-30 14:29 UTC_  
+_Total experiments: **31**  ·  kept: **8**  ·  latest commit: `4b937fb`_
 
 ### Latest experiment — primary strategy (full portfolio)
 
@@ -129,7 +129,7 @@ _Total experiments: **30**  ·  kept: **7**  ·  latest commit: `d38cd93`_
 | Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees |
 |---|---:|---:|---:|---:|---:|---:|
 | Primary (full portfolio every-bar) | +0.000 | $+0.00 | +0.000% | **-1.34%** 🏆 | 0 | **$0.00** 🏆 |
-| Picker (best-stock, $1k cooldown 5min) | -5.029 | $-6,037.70 | -12.075% | -18.17% | 4366 | $4366.00 |
+| Picker (best-stock, $1k cooldown 5min) | -4.918 | $-5,611.14 | -11.222% | -18.10% | 4372 | $4372.00 |
 | **SP500 (SPY) buy-and-hold** — passive benchmark | **+1.204** 🏆 | **$+1,964.67** 🏆 | +3.929% | -9.45% | 1 | $1.00 |
 
 **Best by Sharpe:** **SP500 (SPY) buy-and-hold** — passive benchmark
@@ -145,7 +145,7 @@ _Total experiments: **30**  ·  kept: **7**  ·  latest commit: `d38cd93`_
 | Net PnL | $+0.00 (+0.000%) |
 | Trades | 0 |
 | Fees / slippage | $0.00 / $0.00 |
-| Wall time | 811.1s |
+| Wall time | 715.3s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
@@ -156,11 +156,11 @@ _Total experiments: **30**  ·  kept: **7**  ·  latest commit: `d38cd93`_
 
 | # | commit | Sharpe | CI-low | DD% | PnL | Trades | Description |
 |---|---|---:|---:|---:|---:|---:|---|
-| 1 | `aeff147` | -0.39 | -4.63 | -0.31 | $-13.06 | 7 | exp1: HOLD bias 3.0→1.0 — ci_low improved -5.61→-4.63, DD -9.18→-0.31% |
-| 2 | `4a6dea7` | -0.32 | -5.61 | -9.18 | $-10.56 | 5 | baseline (v2 features, HOLD bias 3.0) |
-| 3 | `3c5a1c7` | +2.35 | -6.48 | -0.30 | $+75.39 | 13 | exp11 KEEP 🌐 +4 context features (VIX, TLT, UUP, SPY-cross). Sharpe +2.31→+2.35. KEY: 8/10 seeds (was 5/10) converge to the better +2.348 equilibrium. Macro context steers optimization. |
-| 4 | `dff38d6` | +2.31 | -6.49 | -0.30 | $+74.27 | 14 | exp10 KEEP 🎯 HOLD bias 1.0→1.5 — sharpe +2.06→+2.31, per-seed range collapsed to [+2.28,+2.35], all DDs -0.30%, trades 13-15. Two discrete equilibria. New best. |
-| 5 | `8616861` | +2.06 | -6.66 | -0.32 | $+66.02 | 21 | exp7 KEEP 🚀 RL_LR 3e-5→2e-5 — ALL 10 SEEDS POSITIVE. Median sharpe +2.06, all DD ≤-0.32%, pnl +$56-$73, trades 15-27. First profitable AND stable config. |
+| 1 | `d38cd93` | +0.00 | +0.00 | -1.34 | $+0.00 | 0 | exp26 KEEP: LONG_ONLY=True. Per-seed: 1/3 keeps profitable +$194, 2/3 don't trade ($0 vs v5's -$220 each). Mean pnl +$65 (vs v5's -$82). Killed catastrophic SELL-dominant equilibrium. Still loses to passive but no longer to v5. |
+| 2 | `aeff147` | -0.39 | -4.63 | -0.31 | $-13.06 | 7 | exp1: HOLD bias 3.0→1.0 — ci_low improved -5.61→-4.63, DD -9.18→-0.31% |
+| 3 | `4a6dea7` | -0.32 | -5.61 | -9.18 | $-10.56 | 5 | baseline (v2 features, HOLD bias 3.0) |
+| 4 | `3c5a1c7` | +2.35 | -6.48 | -0.30 | $+75.39 | 13 | exp11 KEEP 🌐 +4 context features (VIX, TLT, UUP, SPY-cross). Sharpe +2.31→+2.35. KEY: 8/10 seeds (was 5/10) converge to the better +2.348 equilibrium. Macro context steers optimization. |
+| 5 | `dff38d6` | +2.31 | -6.49 | -0.30 | $+74.27 | 14 | exp10 KEEP 🎯 HOLD bias 1.0→1.5 — sharpe +2.06→+2.31, per-seed range collapsed to [+2.28,+2.35], all DDs -0.30%, trades 13-15. Two discrete equilibria. New best. |
 
 <!-- RESULTS_END -->
 

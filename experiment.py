@@ -213,6 +213,9 @@ N_LAYERS = 3
 D_FF = 192
 DROPOUT = 0.1   # exp22 (DROPOUT=0) was disastrous — keep regularization
 PRED_HORIZON = 5
+# exp28: multi-horizon prediction targets (in 1-min bars)
+# 1, 60, 390, 1950 = 1m, 1h, 1d, 1w. Each predicted as cumulative log-return Gaussian.
+HORIZONS_MINUTES = [1, 60, 390, 1950]
 RL_REWARD_HORIZON = 3
 ACTION_HEAD_HOLD_BIAS = 1.5     # exp10: softmax([-1.5,1.5,-1.5]) ≈ [4.7%,90.6%,4.7%]: be even more selective
 
@@ -239,8 +242,9 @@ LONG_ONLY = True              # if True: SELL action is treated as HOLD
 # exp27: bypass RL action_head entirely — derive action from forecast head's
 # predicted Sharpe (mean / std over pred_horizon). The forecast trains with much
 # denser signal than REINFORCE and may have real predictive value.
-USE_FORECAST_POLICY = True            # if True: use predicted Sharpe instead of action_head
+USE_FORECAST_POLICY = True            # exp28: re-test now that we have multi-horizon predictions
 FORECAST_BUY_SHARPE_THRESHOLD = 0.5   # |predicted_sharpe| above this triggers a position
+FORECAST_HORIZON_IDX = 1              # which horizon drives the policy: 0=1m, 1=1h, 2=1d, 3=1w
 SGD_BATCH = 64
 GRAD_CLIP = 1.0
 RL_STEP_EVERY_BARS = 5
@@ -284,12 +288,14 @@ class PatchTransformer(nn.Module):
 
     def __init__(self, n_features: int, patch_len: int, context_patches: int,
                  d_model: int, n_heads: int, n_layers: int, d_ff: int,
-                 dropout: float, pred_horizon: int) -> None:
+                 dropout: float, pred_horizon: int,
+                 horizons_minutes: list[int] | None = None) -> None:
         super().__init__()
         self.n_features = n_features
         self.patch_len = patch_len
         self.context_patches = context_patches
         self.pred_horizon = pred_horizon
+        self.horizons_minutes = horizons_minutes or []
 
         in_dim = patch_len * n_features
         self.patch_proj = nn.Linear(in_dim, d_model)
@@ -303,6 +309,14 @@ class PatchTransformer(nn.Module):
         self.head = nn.Sequential(
             nn.Linear(d_model, d_ff), nn.GELU(), nn.Linear(d_ff, pred_horizon * 2),
         )
+        # exp28: separate multi-horizon head — predicts cumulative log-return
+        # Gaussian at each horizon (1m, 1h, 1d, 1w). Independent of pred_horizon
+        # (which still trains per-step).
+        if self.horizons_minutes:
+            self.mh_head = nn.Sequential(
+                nn.Linear(d_model, d_ff), nn.GELU(),
+                nn.Linear(d_ff, len(self.horizons_minutes) * 2),
+            )
         self.action_head = nn.Sequential(
             nn.Linear(d_model, d_ff), nn.GELU(), nn.Linear(d_ff, 3),
         )
@@ -331,6 +345,17 @@ class PatchTransformer(nn.Module):
         action_logits = self.action_head(h)
         return mean, log_std, action_logits
 
+    def forward_multi_horizon(self, x: torch.Tensor):
+        """Forward pass returning multi-horizon (mean, log_std). Only available
+        if `horizons_minutes` was set at construction."""
+        if not self.horizons_minutes:
+            return None, None
+        h = self.encode(x)
+        out = self.mh_head(h).view(-1, len(self.horizons_minutes), 2)
+        mean = out[..., 0]
+        log_std = out[..., 1].clamp(self.MIN_LOG_STD, self.MAX_LOG_STD)
+        return mean, log_std
+
     @staticmethod
     def gaussian_nll(mean, log_std, target) -> torch.Tensor:
         var = torch.exp(2 * log_std)
@@ -344,19 +369,38 @@ class PatchTransformer(nn.Module):
 # WINDOWING
 # ============================================================================
 
-def windows_from_features(feat: pd.DataFrame, context_len: int, pred_horizon: int):
+def windows_from_features(feat: pd.DataFrame, context_len: int, pred_horizon: int,
+                          horizons_minutes: list[int] | None = None):
+    """Returns (X, y_per_step, y_multi_horizon) where:
+      - X: (N, context_len, F)
+      - y_per_step: (N, pred_horizon)  — next pred_horizon per-bar log returns
+      - y_multi_horizon: (N, len(horizons_minutes)) — cumulative log return at
+        each horizon (e.g. close[t+H]/close[t]) — None if horizons_minutes empty.
+    """
     cols = USE_FEATURES
     arr = feat[cols].to_numpy(np.float32)
     log_ret = feat["log_return_1"].to_numpy(np.float32)
-    n = len(feat) - context_len - pred_horizon
+    close = feat["close"].to_numpy(np.float32) if "close" in feat.columns else None
+    horizons = horizons_minutes or []
+    max_h = max([pred_horizon] + horizons) if horizons else pred_horizon
+    n = len(feat) - context_len - max_h
     if n <= 0:
-        return np.empty((0, context_len, len(cols)), np.float32), np.empty((0, pred_horizon), np.float32)
+        return (np.empty((0, context_len, len(cols)), np.float32),
+                np.empty((0, pred_horizon), np.float32),
+                np.empty((0, len(horizons)), np.float32) if horizons else None)
     X = np.empty((n, context_len, len(cols)), np.float32)
-    y = np.empty((n, pred_horizon), np.float32)
+    y_step = np.empty((n, pred_horizon), np.float32)
+    y_mh = np.empty((n, len(horizons)), np.float32) if horizons else None
     for i in range(n):
         X[i] = arr[i : i + context_len]
-        y[i] = log_ret[i + context_len : i + context_len + pred_horizon]
-    return X, y
+        y_step[i] = log_ret[i + context_len : i + context_len + pred_horizon]
+        if horizons:
+            t = i + context_len
+            base = float(close[t]) if close is not None else 1.0
+            for j, H in enumerate(horizons):
+                future_close = float(close[t + H]) if close is not None else 1.0
+                y_mh[i, j] = math.log(max(future_close, 1e-12) / max(base, 1e-12))
+    return X, y_step, y_mh
 
 
 # ============================================================================
@@ -364,34 +408,47 @@ def windows_from_features(feat: pd.DataFrame, context_len: int, pred_horizon: in
 # ============================================================================
 
 def supervised_pretrain(model: PatchTransformer, train_features: dict[str, pd.DataFrame], device: str):
-    Xs, ys = [], []
+    horizons = model.horizons_minutes
+    Xs, ys, ymhs = [], [], []
     for sym, feat in train_features.items():
-        X, y = windows_from_features(feat, model.context_len, model.pred_horizon)
+        X, y, y_mh = windows_from_features(feat, model.context_len, model.pred_horizon, horizons)
         if len(X) > 0:
             Xs.append(X); ys.append(y)
+            if horizons:
+                ymhs.append(y_mh)
     if not Xs:
         return
     X = torch.from_numpy(np.concatenate(Xs))
     y = torch.from_numpy(np.concatenate(ys))
+    y_mh = torch.from_numpy(np.concatenate(ymhs)) if (horizons and ymhs) else None
     n = len(X)
     perm = torch.randperm(n)
     X, y = X[perm], y[perm]
+    if y_mh is not None:
+        y_mh = y_mh[perm]
     opt = torch.optim.AdamW(model.parameters(), lr=PRETRAIN_LR, weight_decay=1e-4)
     model.train()
     for ep in range(PRETRAIN_EPOCHS):
-        losses = []
+        losses, losses_mh = [], []
         for i in range(0, n - SGD_BATCH, PRETRAIN_BATCH):
             xb = X[i : i + PRETRAIN_BATCH].to(device)
             yb = y[i : i + PRETRAIN_BATCH].to(device)
             opt.zero_grad(set_to_none=True)
             mean, log_std, _ = model(xb)
             loss = PatchTransformer.gaussian_nll(mean, log_std, yb)
+            if y_mh is not None:
+                ymh_b = y_mh[i : i + PRETRAIN_BATCH].to(device)
+                mh_mean, mh_log_std = model.forward_multi_horizon(xb)
+                loss_mh = PatchTransformer.gaussian_nll(mh_mean, mh_log_std, ymh_b)
+                loss = loss + loss_mh
+                losses_mh.append(float(loss_mh.item()))
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
             opt.step()
             losses.append(loss.item())
         if losses:
-            print(f"[pretrain] epoch {ep+1}/{PRETRAIN_EPOCHS}  nll={np.mean(losses):.4f}", flush=True)
+            extra = f"  mh_nll={np.mean(losses_mh):.4f}" if losses_mh else ""
+            print(f"[pretrain] epoch {ep+1}/{PRETRAIN_EPOCHS}  nll={np.mean(losses):.4f}{extra}", flush=True)
 
 
 # ============================================================================
@@ -467,11 +524,18 @@ def simulate(model: PatchTransformer, features: dict[str, pd.DataFrame], device:
                 xb = torch.from_numpy(np.stack(batch_X)).to(device)
                 mean, log_std, alog = model(xb)        # alog: (B, 3)
                 if USE_FORECAST_POLICY:
-                    # exp27: action from forecast head's predicted Sharpe.
-                    # mean/log_std shape: (B, pred_horizon). Sum over horizon for total return + variance.
-                    h_mean = mean.sum(dim=-1)                       # (B,) total predicted log-return
-                    h_var = torch.exp(2 * log_std).sum(dim=-1)      # (B,) total predicted variance
-                    pred_sharpe = h_mean / torch.sqrt(h_var + 1e-12)
+                    # exp28: action from MULTI-HORIZON head at FORECAST_HORIZON_IDX.
+                    # Falls back to per-step head if mh_head not available.
+                    if model.horizons_minutes:
+                        mh_mean, mh_log_std = model.forward_multi_horizon(xb)
+                        # Pick the configured horizon (e.g. 1h).
+                        h_mean = mh_mean[:, FORECAST_HORIZON_IDX]
+                        h_std = torch.exp(mh_log_std[:, FORECAST_HORIZON_IDX])
+                        pred_sharpe = h_mean / (h_std + 1e-12)
+                    else:
+                        h_mean = mean.sum(dim=-1)
+                        h_var = torch.exp(2 * log_std).sum(dim=-1)
+                        pred_sharpe = h_mean / torch.sqrt(h_var + 1e-12)
                     # SELL=0, HOLD=1, BUY=2
                     a_idx_t = torch.full_like(pred_sharpe, 1, dtype=torch.long)
                     a_idx_t = torch.where(pred_sharpe > FORECAST_BUY_SHARPE_THRESHOLD,
@@ -748,6 +812,7 @@ def train_and_eval(seed: int = 0) -> tuple:
         n_features=n_features, patch_len=PATCH_LEN, context_patches=CONTEXT_PATCHES,
         d_model=D_MODEL, n_heads=N_HEADS, n_layers=N_LAYERS, d_ff=D_FF,
         dropout=DROPOUT, pred_horizon=PRED_HORIZON,
+        horizons_minutes=HORIZONS_MINUTES,   # exp28: also predict at 1m/1h/1d/1w
     ).to(device)
     print(f"[experiment] device={device}  features={n_features}  params={model.num_parameters():,}", flush=True)
 
