@@ -75,7 +75,10 @@ def run() -> dict:
     picker_curves: list[list[tuple]] = []
     picker_trades_per_seed: list[list[tuple]] = []
     picker_pnls: list[float] = []
+    picker_sharpes: list[float] = []
+    picker_dds: list[float] = []
     picker_trades_n: list[int] = []
+    picker_fees_l: list[float] = []
     seeds_done = 0
 
     for seed in range(N_SEEDS):
@@ -111,11 +114,14 @@ def run() -> dict:
         trades_per_seed.append(trades)
         picker_curves.append(picker_eq)
         picker_trades_per_seed.append(picker_trades)
-        if picker_eq:
+        if picker_eq and len(picker_eq) > 5:
             picker_pnls.append(picker_eq[-1][1] - picker_eq[0][1])
+            picker_sharpes.append(sharpe_ratio(picker_eq))
+            picker_dds.append(max_drawdown_pct(picker_eq))
         else:
-            picker_pnls.append(0.0)
+            picker_pnls.append(0.0); picker_sharpes.append(0.0); picker_dds.append(0.0)
         picker_trades_n.append(picker_nt)
+        picker_fees_l.append(picker_fees)
         seeds_done += 1
         print(f"[evaluator] seed {seed}: sharpe={s:+.3f}  dd={dd:+.2f}%  pnl=${pnl:+,.2f}  trades={n_trades}", flush=True)
 
@@ -140,6 +146,13 @@ def run() -> dict:
         trades=trades_med, fees_usd=fees_med, slippage_usd=slip_med,
         elapsed_seconds=elapsed, seeds_completed=seeds_done,
     )
+    # Picker (secondary strategy) summary
+    summary["picker_sharpe"] = float(np.median(picker_sharpes)) if picker_sharpes else 0.0
+    summary["picker_pnl_usd"] = float(np.median(picker_pnls)) if picker_pnls else 0.0
+    summary["picker_pnl_pct"] = summary["picker_pnl_usd"] / STARTING_CASH_USD * 100
+    summary["picker_max_dd_pct"] = float(min(picker_dds)) if picker_dds else 0.0
+    summary["picker_trades"] = int(np.median(picker_trades_n)) if picker_trades_n else 0
+    summary["picker_fees_usd"] = float(np.median(picker_fees_l)) if picker_fees_l else 0.0
 
     print("\n---")
     for k, v in summary.items():
@@ -382,6 +395,64 @@ README_START = "<!-- RESULTS_START -->"
 README_END = "<!-- RESULTS_END -->"
 
 
+def _strategy_comparison_md(summary: dict) -> str:
+    """Side-by-side comparison table — highlight the winner per metric."""
+    primary = {
+        "name": "Primary (full portfolio every-bar)",
+        "sharpe": summary.get("sharpe", 0.0),
+        "pnl": summary.get("pnl_usd", 0.0),
+        "pnl_pct": summary.get("pnl_pct", 0.0),
+        "dd": summary.get("max_dd_pct", 0.0),
+        "trades": int(summary.get("trades", 0)),
+        "fees": summary.get("fees_usd", 0.0),
+    }
+    picker = {
+        "name": "Picker (best-stock, $1k cooldown 5min)",
+        "sharpe": summary.get("picker_sharpe", 0.0),
+        "pnl": summary.get("picker_pnl_usd", 0.0),
+        "pnl_pct": summary.get("picker_pnl_pct", 0.0),
+        "dd": summary.get("picker_max_dd_pct", 0.0),
+        "trades": int(summary.get("picker_trades", 0)),
+        "fees": summary.get("picker_fees_usd", 0.0),
+    }
+    strategies = [primary, picker]
+
+    def winner(key: str, higher_better: bool) -> int:
+        vals = [s[key] for s in strategies]
+        return vals.index(max(vals) if higher_better else min(vals))
+
+    win = {
+        "sharpe": winner("sharpe", True),
+        "pnl": winner("pnl", True),
+        "dd": winner("dd", True),     # higher (less negative) is better
+        "fees": winner("fees", False),
+    }
+
+    def cell(s_idx: int, key: str, fmt: str) -> str:
+        v = strategies[s_idx][key]
+        text = fmt.format(v)
+        return f"**{text}** 🏆" if win.get(key) == s_idx else text
+
+    lines = [
+        "| Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for i, s in enumerate(strategies):
+        lines.append(
+            f"| {s['name']} | "
+            f"{cell(i, 'sharpe', '{:+.3f}')} | "
+            f"{cell(i, 'pnl', '${:+,.2f}')} | "
+            f"{s['pnl_pct']:+.3f}% | "
+            f"{cell(i, 'dd', '{:+.2f}%')} | "
+            f"{s['trades']} | "
+            f"{cell(i, 'fees', '${:.2f}')} |"
+        )
+    overall_winner = strategies[win["sharpe"]]["name"]
+    lines.append("")
+    lines.append(f"**Best by Sharpe:** {overall_winner}")
+    return "\n".join(lines)
+
+
 def _update_readme(summary: dict, commit: str) -> None:
     if not README.exists():
         return
@@ -410,6 +481,12 @@ def _update_readme(summary: dict, commit: str) -> None:
              "### Latest experiment — best-stock picker (secondary strategy)",
              "",
              f"![picker equity](docs/picker_latest.png)",
+             "",
+             "### Strategy comparison @ this checkpoint",
+             "",
+             _strategy_comparison_md(summary),
+             "",
+             "### Detailed metrics — primary strategy",
              "",
              f"| metric | value |",
              f"|---|---|",
