@@ -16,3 +16,4 @@ dff38d6	2.3128	-6.4862	-0.30	74.27	14	keep	exp10 KEEP 🎯 HOLD bias 1.0→1.5 �
 3c5a1c7	2.3478	-6.4834	-0.30	75.39	13	keep	exp11 KEEP 🌐 +4 context features (VIX, TLT, UUP, SPY-cross). Sharpe +2.31→+2.35. KEY: 8/10 seeds (was 5/10) converge to the better +2.348 equilibrium. Macro context steers optimization.
 7baaa23	2.2552	-6.3273	-0.30	72.25	11	discard	exp12: CONTEXT_PATCHES 16→24 — sharpe +2.35→+2.26 (worse), policy more conservative (13→11 trades), 50% more compute. ci_low marginally better but that's per-seed noise. Reverted.
 94f2940	2.3478	-6.4834	-0.30	75.39	13	discard	exp13: PRETRAIN_EPOCHS 2→3 — sharpe & ci_low IDENTICAL to exp11. Extra epoch wasted. Bottleneck isn't pretrain capacity. Reverted (simpler wins).
+da2cc8b	2.2552	-6.3273	-0.30	72.25	11	discard	exp14: D_MODEL 96→64 — sharpe -0.09. Smaller model CAN'T find the +2.348 equilibrium (capped at +2.255). 96 was doing useful work. Reverted.
