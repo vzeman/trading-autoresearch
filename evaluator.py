@@ -67,6 +67,43 @@ def _spy_benchmark_curve() -> tuple[list, float]:
     except Exception:
         return [], 0.0
 
+
+def _spy_aligned(strategy_curve: list, spy_curve: list) -> np.ndarray:
+    """Interpolate SPY equity at each strategy timestamp. Returns array same len as strategy_curve."""
+    if not strategy_curve or not spy_curve:
+        return np.array([])
+    s_t = np.array([t.value for t, _ in strategy_curve], dtype=np.int64)
+    spy_t = np.array([t.value for t, _ in spy_curve], dtype=np.int64)
+    spy_v = np.array([v for _, v in spy_curve], dtype=np.float64)
+    return np.interp(s_t, spy_t, spy_v)
+
+
+def _pct_time_over_spy(strategy_curve: list, spy_curve: list) -> float:
+    """Fraction of bars where strategy equity > SPY benchmark. Returns 0..100."""
+    if not strategy_curve or not spy_curve:
+        return 0.0
+    s_v = np.array([v for _, v in strategy_curve], dtype=np.float64)
+    spy_at = _spy_aligned(strategy_curve, spy_curve)
+    if s_v.size == 0 or spy_at.size != s_v.size:
+        return 0.0
+    return float((s_v > spy_at).mean() * 100.0)
+
+
+def _median_curve(curves: list[list]) -> list:
+    """Build a 'median' equity curve across seeds, aligned to seed-0 timestamps."""
+    valid = [c for c in curves if c and len(c) > 1]
+    if not valid:
+        return []
+    base_t = [t for t, _ in valid[0]]
+    base_int = np.array([t.value for t in base_t], dtype=np.int64)
+    stack = []
+    for c in valid:
+        ct = np.array([t.value for t, _ in c], dtype=np.int64)
+        cv = np.array([v for _, v in c], dtype=np.float64)
+        stack.append(np.interp(base_int, ct, cv))
+    med = np.median(np.stack(stack, axis=0), axis=0)
+    return list(zip(base_t, med.tolist()))
+
 # Constraint: an experiment that draws down more than this is auto-rejected
 MAX_DD_FLOOR_PCT = -10.0
 
@@ -225,6 +262,12 @@ def run(n_workers: int = 3) -> dict:
     summary["weighted_trades"] = int(np.median(weighted_trades_n)) if weighted_trades_n else 0
     summary["weighted_fees_usd"] = float(np.median(weighted_fees_l)) if weighted_fees_l else 0.0
 
+    # % of time each strategy's median equity is above SPY buy-and-hold benchmark
+    spy_curve_for_pct, _ = _spy_benchmark_curve()
+    summary["primary_pct_over_spy"] = _pct_time_over_spy(_median_curve(equity_curves), spy_curve_for_pct)
+    summary["picker_pct_over_spy"] = _pct_time_over_spy(_median_curve(picker_curves), spy_curve_for_pct)
+    summary["weighted_pct_over_spy"] = _pct_time_over_spy(_median_curve(weighted_curves), spy_curve_for_pct)
+
     print("\n---")
     for k, v in summary.items():
         if isinstance(v, float):
@@ -331,6 +374,19 @@ def _render_equity_chart(curves: list[list[tuple]], commit: str, summary: dict,
                 alpha=0.8, label=f"SP500 B&H (${spy_pnl:+,.0f})", zorder=5)
     ax.axhline(y=STARTING_CASH_USD, linestyle=":", color="gray", alpha=0.5, label="start")
 
+    # Shade where median strategy curve > SPY benchmark
+    pct_over = 0.0
+    med_curve = _median_curve(curves)
+    if spy_curve and med_curve:
+        med_t = [t for t, _ in med_curve]
+        med_v = np.array([v for _, v in med_curve], dtype=np.float64)
+        spy_at_med = _spy_aligned(med_curve, spy_curve)
+        ax.fill_between(med_t, med_v, spy_at_med, where=(med_v > spy_at_med),
+                        interpolate=True, color="#22c55e", alpha=0.18, zorder=1, label="median > SPY")
+        ax.fill_between(med_t, med_v, spy_at_med, where=(med_v < spy_at_med),
+                        interpolate=True, color="#ef4444", alpha=0.10, zorder=1)
+        pct_over = _pct_time_over_spy(med_curve, spy_curve)
+
     # Trade markers — show seed 0's trades only (chart would be too busy with all 10).
     n_trades_drawn = 0
     if trades_per_seed and trades_per_seed[0]:
@@ -354,7 +410,8 @@ def _render_equity_chart(curves: list[list[tuple]], commit: str, summary: dict,
     ax.set_title(
         f"Equity — commit {commit}  ·  "
         f"sharpe {summary['sharpe']:+.2f} (CI low {summary['sharpe_ci_low']:+.2f})  ·  "
-        f"DD {summary['max_dd_pct']:+.1f}%  ·  {summary['trades']} trades{title_extra}",
+        f"DD {summary['max_dd_pct']:+.1f}%  ·  {summary['trades']} trades  ·  "
+        f"over SPY {pct_over:.0f}% of time{title_extra}",
         fontsize=10,
     )
     ax.set_xlabel("time (UTC)")
@@ -391,6 +448,18 @@ def _render_picker_chart(curves: list[list[tuple]], commit: str, summary: dict,
                 alpha=0.8, label=f"SP500 B&H (${spy_pnl:+,.0f})", zorder=5)
     ax.axhline(y=STARTING_CASH_USD, linestyle=":", color="gray", alpha=0.5, label="start")
 
+    pct_over_p = 0.0
+    med_p = _median_curve(curves)
+    if spy_curve and med_p:
+        med_t = [t for t, _ in med_p]
+        med_v = np.array([v for _, v in med_p], dtype=np.float64)
+        spy_at = _spy_aligned(med_p, spy_curve)
+        ax.fill_between(med_t, med_v, spy_at, where=(med_v > spy_at),
+                        interpolate=True, color="#22c55e", alpha=0.18, zorder=1, label="median > SPY")
+        ax.fill_between(med_t, med_v, spy_at, where=(med_v < spy_at),
+                        interpolate=True, color="#ef4444", alpha=0.10, zorder=1)
+        pct_over_p = _pct_time_over_spy(med_p, spy_curve)
+
     n_picker_trades = 0
     if picker_trades_per_seed and picker_trades_per_seed[0]:
         for ts, sym, side in picker_trades_per_seed[0]:
@@ -410,7 +479,8 @@ def _render_picker_chart(curves: list[list[tuple]], commit: str, summary: dict,
     ax.set_title(
         f"Best-Stock Picker — commit {commit}  ·  "
         f"median PnL ${summary.get('pnl_med', 0):+,.2f}  ·  "
-        f"{summary.get('trades_med', 0)} trades  ·  {n_picker_trades} markers (seed 0)",
+        f"{summary.get('trades_med', 0)} trades  ·  "
+        f"over SPY {pct_over_p:.0f}% of time  ·  {n_picker_trades} markers (seed 0)",
         fontsize=10,
     )
     ax.set_xlabel("time (UTC)")
@@ -446,6 +516,18 @@ def _render_weighted_chart(curves: list[list[tuple]], commit: str, summary: dict
                 alpha=0.8, label=f"SP500 B&H (${spy_pnl:+,.0f})", zorder=5)
     ax.axhline(y=STARTING_CASH_USD, linestyle=":", color="gray", alpha=0.5, label="start")
 
+    pct_over_w = 0.0
+    med_w = _median_curve(curves)
+    if spy_curve and med_w:
+        med_t = [t for t, _ in med_w]
+        med_v = np.array([v for _, v in med_w], dtype=np.float64)
+        spy_at = _spy_aligned(med_w, spy_curve)
+        ax.fill_between(med_t, med_v, spy_at, where=(med_v > spy_at),
+                        interpolate=True, color="#22c55e", alpha=0.18, zorder=1, label="median > SPY")
+        ax.fill_between(med_t, med_v, spy_at, where=(med_v < spy_at),
+                        interpolate=True, color="#ef4444", alpha=0.10, zorder=1)
+        pct_over_w = _pct_time_over_spy(med_w, spy_curve)
+
     n_w_trades = 0
     if trades_per_seed and trades_per_seed[0]:
         for ts, sym, side in trades_per_seed[0]:
@@ -466,7 +548,8 @@ def _render_weighted_chart(curves: list[list[tuple]], commit: str, summary: dict
         f"Weighted Dynamic Sizing — commit {commit}  ·  "
         f"sharpe {summary.get('sharpe_med', 0):+.2f}  ·  "
         f"median PnL ${summary.get('pnl_med', 0):+,.2f}  ·  "
-        f"{summary.get('trades_med', 0)} trades  ·  {n_w_trades} markers (seed 0)",
+        f"{summary.get('trades_med', 0)} trades  ·  "
+        f"over SPY {pct_over_w:.0f}% of time  ·  {n_w_trades} markers (seed 0)",
         fontsize=10,
     )
     ax.set_xlabel("time (UTC)")
@@ -559,6 +642,7 @@ def _strategy_comparison_md(summary: dict) -> str:
         "dd": summary.get("max_dd_pct", 0.0),
         "trades": int(summary.get("trades", 0)),
         "fees": summary.get("fees_usd", 0.0),
+        "over_spy": summary.get("primary_pct_over_spy", 0.0),
     }
     picker = {
         "name": "Picker (best-stock, $1k cooldown 5min)",
@@ -568,6 +652,7 @@ def _strategy_comparison_md(summary: dict) -> str:
         "dd": summary.get("picker_max_dd_pct", 0.0),
         "trades": int(summary.get("picker_trades", 0)),
         "fees": summary.get("picker_fees_usd", 0.0),
+        "over_spy": summary.get("picker_pct_over_spy", 0.0),
     }
     weighted = {
         "name": "Weighted (Kelly-sized, max 20% free cash, ≤5/step)",
@@ -577,6 +662,7 @@ def _strategy_comparison_md(summary: dict) -> str:
         "dd": summary.get("weighted_max_dd_pct", 0.0),
         "trades": int(summary.get("weighted_trades", 0)),
         "fees": summary.get("weighted_fees_usd", 0.0),
+        "over_spy": summary.get("weighted_pct_over_spy", 0.0),
     }
     # SP500 buy-and-hold benchmark — naive comparison
     spy_curve, spy_pnl = _spy_benchmark_curve()
@@ -591,6 +677,7 @@ def _strategy_comparison_md(summary: dict) -> str:
         "dd": spy_dd,
         "trades": 1,
         "fees": 1.0,   # one $1 fee at entry
+        "over_spy": 0.0,  # SPY is the benchmark; trivially 0% strictly above itself
     }
     strategies = [primary, picker, weighted, spy]
 
@@ -603,6 +690,7 @@ def _strategy_comparison_md(summary: dict) -> str:
         "pnl": winner("pnl", True),
         "dd": winner("dd", True),     # higher (less negative) is better
         "fees": winner("fees", False),
+        "over_spy": winner("over_spy", True),
     }
 
     def cell(s_idx: int, key: str, fmt: str) -> str:
@@ -611,8 +699,8 @@ def _strategy_comparison_md(summary: dict) -> str:
         return f"**{text}** 🏆" if win.get(key) == s_idx else text
 
     lines = [
-        "| Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees | % time > SPY |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for i, s in enumerate(strategies):
         lines.append(
@@ -622,7 +710,8 @@ def _strategy_comparison_md(summary: dict) -> str:
             f"{s['pnl_pct']:+.3f}% | "
             f"{cell(i, 'dd', '{:+.2f}%')} | "
             f"{s['trades']} | "
-            f"{cell(i, 'fees', '${:.2f}')} |"
+            f"{cell(i, 'fees', '${:.2f}')} | "
+            f"{cell(i, 'over_spy', '{:.0f}%')} |"
         )
     overall_winner = strategies[win["sharpe"]]["name"]
     lines.append("")
