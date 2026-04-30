@@ -648,7 +648,7 @@ PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at on
 MAX_POS_FRACTION_OF_FREE_CASH = 0.20  # never bet >20% of free cash on one trade
 MIN_CASH_RESERVE_PCT = 0.10           # keep 10% of starting cash unspent
 MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
-KELLY_SCALE = 0.5                     # half-Kelly aggressiveness
+KELLY_SCALE = 1.0                     # exp33: full Kelly — bigger bets on high confidence
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
 WEIGHTED_MIN_TRADE_USD = 100.0        # too small → fee dominates
 
