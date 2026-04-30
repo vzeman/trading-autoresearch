@@ -91,8 +91,9 @@ Two PNGs auto-regenerate on every experiment run:
 
 ### `docs/equity_latest.png` — equity curve
 
-- **Each colored line is one of `N_SEEDS=10` random initializations of the same model.** Same architecture, same hyperparameters, same data — different starting weights and different RL action samples. Cross-seed variance shows how robust the result is.
-- **Dashed gray horizontal line** at `$50,000` = starting capital. Anything above is profit; below is loss.
+- **Each thin colored line is one of `N_SEEDS=10` random initializations of the same model.** Same architecture, same hyperparameters, same data — different starting weights and different RL action samples. Cross-seed variance shows how robust the result is.
+- **Thick black DASHED line** = **SP500 (SPY) buy-and-hold benchmark.** Invest the full starting capital in SPY at the beginning of the eval slice and hold to the end. **Any colored line below this line means the model lost to passive index investing.**
+- **Dotted gray horizontal line** at `$50,000` = starting capital. Anything above is profit; below is loss.
 - **Vertical green dotted lines** = BUY trades on **seed 0** only (showing all 10 seeds' markers would be unreadable; seed 0 is representative).
 - **Vertical red dotted lines** = SELL trades on **seed 0** only.
 - **Title** shows: commit, median Sharpe + bootstrap CI low, max DD across seeds, median trade count.

@@ -48,6 +48,25 @@ DOCS.mkdir(exist_ok=True)
 RESULTS_TSV = REPO / "results.tsv"
 README = REPO / "README.md"
 
+
+def _spy_benchmark_curve() -> tuple[list, float]:
+    """Buy-and-hold full SP500 (SPY): invest STARTING_CASH at start of eval slice.
+    Returns (equity_curve, final_pnl). Cached prices from prepare.fetch_bars."""
+    try:
+        from prepare import fetch_bars, split
+        bars = fetch_bars("SPY")
+        _, ev = split(bars)
+        if len(ev) < 2:
+            return [], 0.0
+        closes = ev["close"].to_numpy()
+        times = ev["timestamp"].tolist()
+        qty = STARTING_CASH_USD / max(closes[0], 1e-9)
+        curve = [(times[i], qty * closes[i]) for i in range(len(closes))]
+        pnl = curve[-1][1] - STARTING_CASH_USD
+        return curve, pnl
+    except Exception:
+        return [], 0.0
+
 # Constraint: an experiment that draws down more than this is auto-rejected
 MAX_DD_FLOOR_PCT = -10.0
 
@@ -224,8 +243,11 @@ def _render_equity_chart(curves: list[list[tuple]], commit: str, summary: dict,
                          trades_per_seed: list[list[tuple]] | None = None) -> None:
     """Per-experiment equity curve PNG → docs/equity_latest.png + docs/equity_<commit>.png.
 
-    If `trades_per_seed` is provided, vertical markers at each trade timestamp
-    of seed 0 are drawn (BUY = green dotted, SELL = red dotted).
+    Overlays:
+      - Each per-seed equity line (thin, colored)
+      - SP500 (SPY) buy-and-hold reference line (thick black dashed)
+      - Start-cash horizontal line
+      - Trade markers (vertical lines, seed 0): green=BUY, red=SELL
     """
     if not curves:
         return
@@ -238,8 +260,15 @@ def _render_equity_chart(curves: list[list[tuple]], commit: str, summary: dict,
             continue
         ts = [e[0] for e in eq]
         vals = [e[1] for e in eq]
-        ax.plot(ts, vals, alpha=0.7, label=f"seed {i}")
-    ax.axhline(y=STARTING_CASH_USD, linestyle="--", color="gray", alpha=0.5, label="start")
+        ax.plot(ts, vals, alpha=0.7, label=f"seed {i}", linewidth=1.0)
+    # SP500 buy-and-hold benchmark — thick dashed black
+    spy_curve, spy_pnl = _spy_benchmark_curve()
+    if spy_curve:
+        spy_ts = [e[0] for e in spy_curve]
+        spy_vals = [e[1] for e in spy_curve]
+        ax.plot(spy_ts, spy_vals, color="black", linestyle="--", linewidth=2.0,
+                alpha=0.8, label=f"SP500 B&H (${spy_pnl:+,.0f})", zorder=5)
+    ax.axhline(y=STARTING_CASH_USD, linestyle=":", color="gray", alpha=0.5, label="start")
 
     # Trade markers — show seed 0's trades only (chart would be too busy with all 10).
     n_trades_drawn = 0
@@ -291,8 +320,15 @@ def _render_picker_chart(curves: list[list[tuple]], commit: str, summary: dict,
             continue
         ts = [e[0] for e in eq]
         vals = [e[1] for e in eq]
-        ax.plot(ts, vals, alpha=0.7, label=f"seed {i}")
-    ax.axhline(y=STARTING_CASH_USD, linestyle="--", color="gray", alpha=0.5, label="start")
+        ax.plot(ts, vals, alpha=0.7, label=f"seed {i}", linewidth=1.0)
+    # SP500 benchmark for picker chart too
+    spy_curve, spy_pnl = _spy_benchmark_curve()
+    if spy_curve:
+        spy_ts = [e[0] for e in spy_curve]
+        spy_vals = [e[1] for e in spy_curve]
+        ax.plot(spy_ts, spy_vals, color="black", linestyle="--", linewidth=2.0,
+                alpha=0.8, label=f"SP500 B&H (${spy_pnl:+,.0f})", zorder=5)
+    ax.axhline(y=STARTING_CASH_USD, linestyle=":", color="gray", alpha=0.5, label="start")
 
     n_picker_trades = 0
     if picker_trades_per_seed and picker_trades_per_seed[0]:
@@ -396,7 +432,8 @@ README_END = "<!-- RESULTS_END -->"
 
 
 def _strategy_comparison_md(summary: dict) -> str:
-    """Side-by-side comparison table — highlight the winner per metric."""
+    """Side-by-side comparison table — highlight the winner per metric.
+    Includes SP500 (SPY) buy-and-hold as a passive baseline."""
     primary = {
         "name": "Primary (full portfolio every-bar)",
         "sharpe": summary.get("sharpe", 0.0),
@@ -415,7 +452,21 @@ def _strategy_comparison_md(summary: dict) -> str:
         "trades": int(summary.get("picker_trades", 0)),
         "fees": summary.get("picker_fees_usd", 0.0),
     }
-    strategies = [primary, picker]
+    # SP500 buy-and-hold benchmark — naive comparison
+    spy_curve, spy_pnl = _spy_benchmark_curve()
+    spy_pnl_pct = spy_pnl / STARTING_CASH_USD * 100 if STARTING_CASH_USD > 0 else 0
+    spy_sharpe = sharpe_ratio(spy_curve) if spy_curve else 0.0
+    spy_dd = max_drawdown_pct(spy_curve) if spy_curve else 0.0
+    spy = {
+        "name": "**SP500 (SPY) buy-and-hold** — passive benchmark",
+        "sharpe": spy_sharpe,
+        "pnl": spy_pnl,
+        "pnl_pct": spy_pnl_pct,
+        "dd": spy_dd,
+        "trades": 1,
+        "fees": 1.0,   # one $1 fee at entry
+    }
+    strategies = [primary, picker, spy]
 
     def winner(key: str, higher_better: bool) -> int:
         vals = [s[key] for s in strategies]
