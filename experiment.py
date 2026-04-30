@@ -158,7 +158,7 @@ PRED_HORIZON = 5
 RL_REWARD_HORIZON = 3
 ACTION_HEAD_HOLD_BIAS = 1.0     # softmax([-1,1,-1]) ≈ [13%,73%,13%]: explore but lean HOLD
 
-PRETRAIN_EPOCHS = 4             # supervised forecast pretrain on TRAIN slice
+PRETRAIN_EPOCHS = 2             # supervised forecast pretrain on TRAIN slice
 PRETRAIN_BATCH = 128
 PRETRAIN_LR = 3e-4
 RL_PRETRAIN_EPOCHS = 1          # offline RL pass(es) on TRAIN slice
@@ -322,25 +322,33 @@ ACTION_TO_POS = np.array([-1.0, 0.0, 1.0], dtype=np.float32)
 
 def simulate(model: PatchTransformer, features: dict[str, pd.DataFrame], device: str,
              learn: bool) -> PaperBroker:
-    """Replay merged events through the model. If learn=True, also train action head."""
+    """Replay merged events through the model, BATCHING all symbols' decisions
+    at the same timestamp into a single forward pass.
+
+    Original loop did 1 forward(batch=1) per (sym, ts) event → ~50k tiny GPU
+    launches. This version groups events by ts and does 1 forward(batch=N_syms)
+    per timestamp → ~10k larger launches. ~5× MPS speedup.
+
+    If learn=True, also accumulates RL transitions and takes periodic
+    REINFORCE updates from the buffer.
+    """
     portfolio_weight = NOTIONAL_PER_SYMBOL_USD / STARTING_CASH_USD
     round_trip_var_cost = 2.0 * SLIPPAGE_BPS * 1e-4
     fixed_cost_frac = 2.0 * FEE_PER_TRADE_USD / NOTIONAL_PER_SYMBOL_USD
 
     broker = PaperBroker()
-    sym_state: dict[str, dict] = {s: {"i": 0, "pending": [], "last_pos": 0.0} for s in features}
+    sym_state: dict[str, dict] = {s: {"i": -1, "pending": [], "last_pos": 0.0} for s in features}
 
     cols = USE_FEATURES
     feat_arrays: dict[str, np.ndarray] = {s: f[cols].to_numpy(np.float32) for s, f in features.items()}
     close_arrays: dict[str, np.ndarray] = {s: f["close"].to_numpy(np.float32) for s, f in features.items()}
-    ts_arrays: dict[str, list] = {s: list(f["timestamp"]) for s, f in features.items()}
 
-    # merge events chronologically
-    rows: list[tuple[pd.Timestamp, str, int]] = []
-    for sym, ts_list in ts_arrays.items():
-        for i, ts in enumerate(ts_list):
-            rows.append((ts, sym, i))
-    rows.sort(key=lambda r: r[0])
+    # Group events by timestamp. One model.forward per group, batch = #symbols ready.
+    events_by_ts: dict[pd.Timestamp, list[tuple[str, int]]] = {}
+    for sym, f in features.items():
+        for i, ts in enumerate(f["timestamp"]):
+            events_by_ts.setdefault(ts, []).append((sym, i))
+    sorted_ts = sorted(events_by_ts.keys())
 
     opt = torch.optim.AdamW(model.parameters(), lr=RL_LR, weight_decay=0.0) if learn else None
     buf_X: list[np.ndarray] = []
@@ -348,49 +356,73 @@ def simulate(model: PatchTransformer, features: dict[str, pd.DataFrame], device:
     buf_r: list[float] = []
 
     H_max = max(model.pred_horizon, RL_REWARD_HORIZON)
+    C = model.context_len
     n_decisions = 0
+    ts_count = 0
 
-    for ev_i, (ts, sym, i_now) in enumerate(rows):
-        st = sym_state[sym]
-        st["i"] = i_now
-        feat = feat_arrays[sym]
-        close = close_arrays[sym]
+    for ts in sorted_ts:
+        ts_count += 1
+        events_here = events_by_ts[ts]
 
-        if i_now >= model.context_len - 1:
-            X = feat[i_now - model.context_len + 1 : i_now + 1].copy()
+        # Update each symbol's "current bar index" so mark_to_market sees latest prices
+        for sym, i_now in events_here:
+            sym_state[sym]["i"] = i_now
+
+        # Build batched X for symbols that have enough history at this ts
+        batch_X: list[np.ndarray] = []
+        batch_meta: list[tuple[str, int]] = []
+        for sym, i_now in events_here:
+            if i_now >= C - 1:
+                batch_X.append(feat_arrays[sym][i_now - C + 1 : i_now + 1])
+                batch_meta.append((sym, i_now))
+
+        # ONE forward pass for all symbols ready at this timestamp
+        if batch_X:
             with torch.no_grad():
                 model.eval()
-                xb = torch.from_numpy(X).unsqueeze(0).to(device)
-                _, _, alog = model(xb)
+                xb = torch.from_numpy(np.stack(batch_X)).to(device)
+                _, _, alog = model(xb)        # alog: (B, 3)
                 if learn:
-                    a_idx = int(torch.distributions.Categorical(probs=torch.softmax(alog[0], dim=-1)).sample().item())
+                    probs = torch.softmax(alog, dim=-1)
+                    a_idx_t = torch.distributions.Categorical(probs=probs).sample()
                 else:
-                    a_idx = int(torch.argmax(alog[0]).item())
+                    a_idx_t = torch.argmax(alog, dim=-1)
+                a_idx_list = a_idx_t.cpu().tolist()
             model.train()
-            target = float(ACTION_TO_POS[a_idx])
-            pos_change = abs(target - st["last_pos"])
-            broker.update(sym, float(close[i_now]), ts, target)
-            st["pending"].append({"X": X, "a": a_idx, "target": target,
-                                  "entry": float(close[i_now]), "i": i_now,
-                                  "pos_change": pos_change})
-            st["last_pos"] = target
-            n_decisions += 1
 
-        # mark portfolio
-        prices = {s: float(close_arrays[s][sym_state[s]["i"]]) for s in sym_state if sym_state[s]["i"] > 0}
+            # Apply each decision (still serial, but only broker bookkeeping — fast)
+            for (sym, i_now), a_idx, X_arr in zip(batch_meta, a_idx_list, batch_X):
+                st = sym_state[sym]
+                target = float(ACTION_TO_POS[a_idx])
+                pos_change = abs(target - st["last_pos"])
+                broker.update(sym, float(close_arrays[sym][i_now]), ts, target)
+                st["pending"].append({
+                    "X": X_arr.copy(),
+                    "a": a_idx, "target": target,
+                    "entry": float(close_arrays[sym][i_now]),
+                    "i": i_now, "pos_change": pos_change,
+                })
+                st["last_pos"] = target
+                n_decisions += 1
+
+        # mark-to-market once per timestamp (was N times in old loop)
+        prices = {s: float(close_arrays[s][st_["i"]]) for s, st_ in sym_state.items() if st_["i"] >= 0}
         broker.mark_to_market(ts, prices)
 
-        # resolve pending whose horizon arrived
-        while st["pending"] and st["pending"][0]["i"] + H_max <= i_now:
-            p_ = st["pending"].pop(0)
-            future_close = float(close[p_["i"] + RL_REWARD_HORIZON])
-            log_ret = math.log(max(future_close, 1e-12) / max(p_["entry"], 1e-12))
-            cost_charge = 0.5 * (round_trip_var_cost + fixed_cost_frac) * p_["pos_change"]
-            reward = portfolio_weight * (p_["target"] * log_ret - cost_charge)
-            buf_X.append(p_["X"]); buf_a.append(p_["a"]); buf_r.append(reward)
+        # resolve pending whose horizon arrived (all symbols)
+        for sym, i_now in events_here:
+            st = sym_state[sym]
+            close = close_arrays[sym]
+            while st["pending"] and st["pending"][0]["i"] + H_max <= i_now:
+                p_ = st["pending"].pop(0)
+                future_close = float(close[p_["i"] + RL_REWARD_HORIZON])
+                log_ret = math.log(max(future_close, 1e-12) / max(p_["entry"], 1e-12))
+                cost_charge = 0.5 * (round_trip_var_cost + fixed_cost_frac) * p_["pos_change"]
+                reward = portfolio_weight * (p_["target"] * log_ret - cost_charge)
+                buf_X.append(p_["X"]); buf_a.append(p_["a"]); buf_r.append(reward)
 
-        # periodic SGD step
-        if learn and (ev_i + 1) % RL_STEP_EVERY_BARS == 0 and len(buf_X) >= SGD_BATCH:
+        # periodic SGD step (counted in timestamps now, not in events)
+        if learn and ts_count % RL_STEP_EVERY_BARS == 0 and len(buf_X) >= SGD_BATCH:
             idx = np.random.choice(len(buf_X), size=SGD_BATCH, replace=False)
             Xb = torch.from_numpy(np.stack([buf_X[i] for i in idx])).to(device)
             ab = torch.tensor([buf_a[i] for i in idx], dtype=torch.long, device=device)
