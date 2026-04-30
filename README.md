@@ -113,8 +113,8 @@ A **broken** result: lines fan out wildly, some up some down, dense forest of ve
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 10:07 UTC_  
-_Total experiments: **27**  ·  kept: **7**  ·  latest commit: `323240d`_
+_Last updated: 2026-04-30 11:41 UTC_  
+_Total experiments: **29**  ·  kept: **7**  ·  latest commit: `e4963c6`_
 
 ### Latest experiment — primary strategy (full portfolio)
 
@@ -128,24 +128,25 @@ _Total experiments: **27**  ·  kept: **7**  ·  latest commit: `323240d`_
 
 | Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees |
 |---|---:|---:|---:|---:|---:|---:|
-| Primary (full portfolio every-bar) | **+2.348** 🏆 | **$+75.39** 🏆 | +0.151% | -0.30% | 13 | $13.00 |
-| Picker (best-stock, $1k cooldown 5min) | +0.000 | $+0.00 | +0.000% | **+0.00%** 🏆 | 0 | **$0.00** 🏆 |
+| Primary (full portfolio every-bar) | -1.080 | $-220.21 | -0.440% | **-1.50%** 🏆 | 12 | $12.00 |
+| Picker (best-stock, $1k cooldown 5min) | -6.029 | $-6,672.61 | -13.345% | -19.23% | 4369 | $4369.00 |
+| **SP500 (SPY) buy-and-hold** — passive benchmark | **+1.204** 🏆 | **$+1,964.67** 🏆 | +3.929% | -9.45% | 1 | **$1.00** 🏆 |
 
-**Best by Sharpe:** Primary (full portfolio every-bar)
+**Best by Sharpe:** **SP500 (SPY) buy-and-hold** — passive benchmark
 
 ### Detailed metrics — primary strategy
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+2.348** |
-| Sharpe — bootstrap CI low (5%) | **-6.483** |
-| Sharpe — bootstrap CI high (95%) | +10.170 |
-| Max drawdown | -0.30% |
-| Net PnL | $+75.39 (+0.151%) |
-| Trades | 13 |
-| Fees / slippage | $13.00 / $2.61 |
-| Wall time | 388.1s |
-| Seeds completed | 10 |
+| Sharpe (median over seeds) | **-1.080** |
+| Sharpe — bootstrap CI low (5%) | **-4.149** |
+| Sharpe — bootstrap CI high (95%) | +2.392 |
+| Max drawdown | -1.50% |
+| Net PnL | $-220.21 (-0.440%) |
+| Trades | 12 |
+| Fees / slippage | $12.00 / $1.14 |
+| Wall time | 712.9s |
+| Seeds completed | 3 |
 
 ### Progress over all experiments
 
