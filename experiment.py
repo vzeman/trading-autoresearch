@@ -1012,14 +1012,19 @@ def train_and_eval(seed: int = 0) -> tuple:
     ).to(device)
     print(f"[experiment] device={device}  features={n_features}  params={model.num_parameters():,}", flush=True)
 
-    # Phase 1: supervised forecast-head pretrain (trains the multi-horizon head
-    # that the WEIGHTED strategy uses).
+    # Phase 1: supervised forecast-head pretrain (trains multi-horizon head).
     supervised_pretrain(model, train_feat, device)
 
-    # Phases 2-4 removed (exp38b): RL pretrain, primary eval, picker eval.
-    # Primary's median sharpe was always ~+0.96 (basically buy-once-hold) and
-    # picker was consistently catastrophic. Weighted strategy uses only the
-    # forecast head, so RL pretrain is unnecessary. Massive speedup.
+    # Phase 2: offline RL on the train slice — KEPT for its side-effect of
+    # warming the shared transformer encoder via gradient flow. Removing it
+    # in exp39 dropped weighted sharpe +1.79 → +0.97. The action head it
+    # trains is unused (primary/picker gone), but the encoder updates are
+    # load-bearing for forecast-head confidence in the weighted strategy.
+    for ep in range(RL_PRETRAIN_EPOCHS):
+        print(f"[rl_pretrain] epoch {ep+1}/{RL_PRETRAIN_EPOCHS} (encoder-warming)", flush=True)
+        _ = simulate(model, train_feat, device, learn=True)
+
+    # Phases 3-4 (primary + picker eval) stay removed — they didn't beat passive.
 
     # Phase 5: WEIGHTED dynamic-sizing strategy (the only one that works).
     weighted = simulate_weighted(model, eval_feat, device)
