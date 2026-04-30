@@ -72,14 +72,22 @@ def run() -> dict:
     slip_list: list[float] = []
     equity_curves: list[list[tuple]] = []
     trades_per_seed: list[list[tuple]] = []
+    picker_curves: list[list[tuple]] = []
+    picker_trades_per_seed: list[list[tuple]] = []
+    picker_pnls: list[float] = []
+    picker_trades_n: list[int] = []
     seeds_done = 0
 
     for seed in range(N_SEEDS):
         print(f"\n[evaluator] === seed {seed+1}/{N_SEEDS} ===", flush=True)
         seed_t0 = time.time()
         result = train_and_eval(seed=seed)
-        # backward-compat: accept 4-tuple OR 5-tuple (with trades list)
-        if len(result) == 5:
+        # Backward-compat: 4 / 5 / 9 tuple lengths supported.
+        # 9-tuple = primary + picker secondary strategy.
+        picker_eq, picker_nt, picker_fees, picker_trades = [], 0, 0.0, []
+        if len(result) == 9:
+            eq, n_trades, fees, slip, trades, picker_eq, picker_nt, picker_fees, picker_trades = result
+        elif len(result) == 5:
             eq, n_trades, fees, slip, trades = result
         else:
             eq, n_trades, fees, slip = result
@@ -101,6 +109,13 @@ def run() -> dict:
         fees_list.append(fees); slip_list.append(slip)
         equity_curves.append(eq)
         trades_per_seed.append(trades)
+        picker_curves.append(picker_eq)
+        picker_trades_per_seed.append(picker_trades)
+        if picker_eq:
+            picker_pnls.append(picker_eq[-1][1] - picker_eq[0][1])
+        else:
+            picker_pnls.append(0.0)
+        picker_trades_n.append(picker_nt)
         seeds_done += 1
         print(f"[evaluator] seed {seed}: sharpe={s:+.3f}  dd={dd:+.2f}%  pnl=${pnl:+,.2f}  trades={n_trades}", flush=True)
 
@@ -156,6 +171,15 @@ def run() -> dict:
     desc = _last_commit_subject()
     status = "discard" if dd_worst < MAX_DD_FLOOR_PCT else "auto"  # agent overwrites this
     _render_equity_chart(equity_curves, commit, summary, trades_per_seed=trades_per_seed)
+
+    # Picker (secondary strategy) — separate chart
+    if any(picker_curves):
+        picker_summary = {
+            "pnl_med": float(np.median(picker_pnls)) if picker_pnls else 0.0,
+            "trades_med": int(np.median(picker_trades_n)) if picker_trades_n else 0,
+        }
+        _render_picker_chart(picker_curves, commit, picker_summary,
+                             picker_trades_per_seed=picker_trades_per_seed)
     _append_results_row(commit, summary, status, desc)
     _render_progress_chart()
     _update_readme(summary, commit)
@@ -237,6 +261,55 @@ def _render_equity_chart(curves: list[list[tuple]], commit: str, summary: dict,
     fig.tight_layout()
     fig.savefig(DOCS / "equity_latest.png", dpi=110)
     fig.savefig(DOCS / f"equity_{commit}.png", dpi=110)
+    plt.close(fig)
+
+
+def _render_picker_chart(curves: list[list[tuple]], commit: str, summary: dict,
+                         picker_trades_per_seed: list[list[tuple]] | None = None) -> None:
+    """Best-stock picker equity curve PNG → docs/picker_latest.png + docs/picker_<commit>.png."""
+    if not any(curves):
+        return
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(10, 5))
+    for i, eq in enumerate(curves):
+        if not eq:
+            continue
+        ts = [e[0] for e in eq]
+        vals = [e[1] for e in eq]
+        ax.plot(ts, vals, alpha=0.7, label=f"seed {i}")
+    ax.axhline(y=STARTING_CASH_USD, linestyle="--", color="gray", alpha=0.5, label="start")
+
+    n_picker_trades = 0
+    if picker_trades_per_seed and picker_trades_per_seed[0]:
+        for ts, sym, side in picker_trades_per_seed[0]:
+            color = "#22c55e" if side == "BUY" else "#ef4444"
+            ax.axvline(ts, color=color, alpha=0.4, linewidth=0.7, linestyle=":")
+        n_picker_trades = len(picker_trades_per_seed[0])
+        from matplotlib.lines import Line2D
+        marker_handles = [
+            Line2D([0], [0], color="#22c55e", linestyle=":", label="BUY (seed 0)"),
+            Line2D([0], [0], color="#ef4444", linestyle=":", label="SELL (seed 0)"),
+        ]
+        existing = ax.get_legend_handles_labels()
+        ax.legend(handles=existing[0] + marker_handles, loc="best", fontsize=7, ncol=2)
+    else:
+        ax.legend(loc="best", fontsize=8)
+
+    ax.set_title(
+        f"Best-Stock Picker — commit {commit}  ·  "
+        f"median PnL ${summary.get('pnl_med', 0):+,.2f}  ·  "
+        f"{summary.get('trades_med', 0)} trades  ·  {n_picker_trades} markers (seed 0)",
+        fontsize=10,
+    )
+    ax.set_xlabel("time (UTC)")
+    ax.set_ylabel("portfolio equity ($)")
+    ax.grid(True, alpha=0.3)
+    fig.autofmt_xdate()
+    fig.tight_layout()
+    fig.savefig(DOCS / "picker_latest.png", dpi=110)
+    fig.savefig(DOCS / f"picker_{commit}.png", dpi=110)
     plt.close(fig)
 
 
@@ -330,9 +403,13 @@ def _update_readme(summary: dict, commit: str) -> None:
              f"_Last updated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}_  ",
              f"_Total experiments: **{len(rows)}**  ·  kept: **{len(kept)}**  ·  latest commit: `{commit}`_",
              "",
-             "### Latest experiment",
+             "### Latest experiment — primary strategy (full portfolio)",
              "",
              f"![equity curve](docs/equity_latest.png)",
+             "",
+             "### Latest experiment — best-stock picker (secondary strategy)",
+             "",
+             f"![picker equity](docs/picker_latest.png)",
              "",
              f"| metric | value |",
              f"|---|---|",

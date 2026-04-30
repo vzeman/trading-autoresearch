@@ -2,6 +2,55 @@
 
 Karpathy-style [autoresearch](https://github.com/karpathy/autoresearch) harness, adapted for **portfolio management research**: an LLM agent autonomously iterates on a small intraday transformer + RL policy overnight, keeping changes that robustly improve risk-adjusted returns.
 
+## Backtest strategies
+
+The same trained model can be evaluated under different "trading strategies." Each strategy uses the model's predictions in a different way, producing a different equity curve and a different reward signal for RL. Comparing them tells us not just *whether the model is good*, but *what kind of trader it learned to be*.
+
+### Strategy 1 (primary, used for RL training): full-portfolio every-bar
+
+- At every 1-min bar, the policy outputs `{SELL, HOLD, BUY}` for **each of the 5 universe symbols simultaneously**.
+- Position sizing: each symbol uses `notional_per_symbol_usd = $1000`. Up to $50k gross when fully deployed.
+- Reward fed back to RL: `portfolio_weight × (position × log_return − cost − vol_penalty)`
+- **Pros:** dense reward, easy gradient flow, all symbols active.
+- **Cons:** spreads capital thin; small per-symbol edge competes with $1 fixed fees.
+- **This is the strategy that drives RL learning.** The leaderboard `sharpe` metric refers to this one.
+
+### Strategy 2 (secondary, evaluation only): **best-stock picker** ⭐ NEW
+
+- At each bar, score every symbol by its model's `BUY` confidence (`logit[BUY] − logit[HOLD]`).
+- Buy ONLY the single highest-scoring symbol — fixed $1k each, **max 1 buy per 5 minutes** (cooldown).
+- Sells: close any held position whose `SELL` confidence exceeds threshold.
+- Position can stack (multiple buys of same symbol if it stays the best).
+- **Pros:** concentration on strongest signal, lower per-trade fee drag, mimics discretionary trading workflow.
+- **Cons:** tail-risk from concentration, unused capital while held.
+- **Currently used for evaluation only.** Each experiment now produces a SECOND chart (`docs/picker_latest.png`) showing what would happen if we used the model's outputs this way.
+
+### Strategy 3 (planned): top-K picker
+At each bar pick the top **K** symbols by BUY confidence, equal-weight $X each. Smooth interpolation between strategies 1 and 2.
+
+### Strategy 4 (planned): long/short market-neutral
+Long top‑K by BUY conviction, short bottom‑K by SELL conviction, equal dollar legs. Hedges market beta — measures pure model alpha.
+
+### Strategy 5 (planned): volatility-targeted
+Size each position inversely proportional to its recent realized vol so dollar-risk per name is comparable. Dampens drawdowns from one volatile name.
+
+### Strategy 6 (planned): pairs / spread trading
+Find correlated pairs (e.g. SPY/QQQ, NVDA/AMD), trade the spread when stretched relative to model expectation. Mean-reversion alpha.
+
+### Strategy 7 (planned): regime-switching
+Different policy thresholds for different VIX regimes. Conservative when VIX > 25, aggressive when VIX < 15.
+
+### Strategy 8 (planned): drawdown-aware sizing
+Reduce position size after consecutive losses (anti-Martingale). Survives streaks; gives up some upside during winning streaks.
+
+### Strategy 9 (planned): time-of-day filter
+Trade only during specific intraday windows (avoid first/last 30 min where spreads are wide). Easy to add as a feature gate.
+
+### Strategy 10 (planned): cross-validation across periods
+Multi-window walk-forward: train on weeks 1–2, eval on week 3; train on weeks 1–3, eval on week 4; etc. Detects regime overfit.
+
+**Why this matters for RL:** each strategy provides a different reward shape. A model that's only "okay" under strategy 1 might be excellent under strategy 2 (e.g., it correctly identifies the single best opportunity even if its average prediction is mediocre). Future RL iterations can use a **combined** reward across strategies — encouraging the model to be useful in multiple trading contexts. This is the "sweet stack" of training signals.
+
 ## Reading the charts
 
 Two PNGs auto-regenerate on every experiment run:
@@ -29,8 +78,8 @@ A **broken** result: lines fan out wildly, some up some down, dense forest of ve
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 09:48 UTC_  
-_Total experiments: **25**  ·  kept: **7**  ·  latest commit: `f44a1c5`_
+_Last updated: 2026-04-30 09:55 UTC_  
+_Total experiments: **26**  ·  kept: **7**  ·  latest commit: `c7095f1`_
 
 ### Latest experiment
 
@@ -38,14 +87,14 @@ _Total experiments: **25**  ·  kept: **7**  ·  latest commit: `f44a1c5`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+2.348** |
-| Sharpe — bootstrap CI low (5%) | **-6.483** |
-| Sharpe — bootstrap CI high (95%) | +10.170 |
-| Max drawdown | -0.33% |
-| Net PnL | $+75.39 (+0.151%) |
-| Trades | 13 |
-| Fees / slippage | $13.00 / $2.61 |
-| Wall time | 296.2s |
+| Sharpe (median over seeds) | **-194.085** |
+| Sharpe — bootstrap CI low (5%) | **-202.433** |
+| Sharpe — bootstrap CI high (95%) | -186.019 |
+| Max drawdown | -7.60% |
+| Net PnL | $-3,078.15 (-6.156%) |
+| Trades | 2558 |
+| Fees / slippage | $2558.00 / $511.60 |
+| Wall time | 299.9s |
 | Seeds completed | 10 |
 
 ### Progress over all experiments

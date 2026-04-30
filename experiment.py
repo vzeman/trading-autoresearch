@@ -211,7 +211,7 @@ D_MODEL = 96                    # exp11 KEPT; exp14 (64) and exp17 (128) both di
 N_HEADS = 4
 N_LAYERS = 3
 D_FF = 192
-DROPOUT = 0.0   # exp22: less regularization — small dataset may not need it
+DROPOUT = 0.1   # exp22 (DROPOUT=0) was disastrous — keep regularization
 PRED_HORIZON = 5
 RL_REWARD_HORIZON = 3
 ACTION_HEAD_HOLD_BIAS = 1.5     # exp10: softmax([-1.5,1.5,-1.5]) ≈ [4.7%,90.6%,4.7%]: be even more selective
@@ -502,6 +502,159 @@ def simulate(model: PatchTransformer, features: dict[str, pd.DataFrame], device:
 
 
 # ============================================================================
+# SECONDARY STRATEGY: BEST-STOCK PICKER
+# ============================================================================
+# Different way to USE the model's predictions: at each bar, pick the SINGLE
+# best stock to buy (max one buy per cooldown window, fixed $ per buy).
+# Sells whole position when model's SELL conviction exceeds threshold.
+# Uses its own broker (PickerBroker) so it doesn't interfere with the main
+# portfolio simulation — runs in parallel as a second equity curve.
+#
+# Why interesting:
+#   - Different alpha source (concentration on best signal vs spread across all)
+#   - Tighter risk per trade ($1k each, vs $1k * many positions)
+#   - More similar to a discretionary trader's workflow
+#   - Provides a SECOND reward signal that we can later feed back to RL
+# ============================================================================
+
+PICKER_POSITION_USD = 1_000.0
+PICKER_BUY_COOLDOWN_S = 5 * 60     # max 1 buy per 5 minutes
+PICKER_BUY_THRESHOLD = 0.5         # action_logits[BUY] - HOLD must exceed this
+PICKER_SELL_THRESHOLD = 0.5        # action_logits[SELL] - HOLD must exceed this
+
+
+class PickerBroker:
+    """Single-name buyer: each buy is a fixed $ amount, throttled by cooldown.
+
+    Buys ADD to the position (can stack multiple buys of same symbol).
+    Sells close the entire position. Long-only.
+    """
+    def __init__(self) -> None:
+        self.cash = STARTING_CASH_USD
+        self.positions: dict[str, float] = {}        # symbol -> qty
+        self.last_prices: dict[str, float] = {}
+        self.last_buy_ts: pd.Timestamp | None = None
+        self.n_trades = 0
+        self.total_fees = 0.0
+        self.total_slippage = 0.0
+        self.equity_curve: list[tuple[pd.Timestamp, float]] = []
+        self.trades: list[tuple[pd.Timestamp, str, str]] = []   # (ts, sym, side)
+
+    def _cooldown_ok(self, ts: pd.Timestamp) -> bool:
+        if self.last_buy_ts is None:
+            return True
+        return (ts - self.last_buy_ts).total_seconds() >= PICKER_BUY_COOLDOWN_S
+
+    def buy(self, sym: str, price: float, ts: pd.Timestamp) -> bool:
+        if not self._cooldown_ok(ts):
+            return False
+        fill_price = price * (1.0 + SLIPPAGE_BPS * 1e-4)
+        qty = PICKER_POSITION_USD / max(fill_price, 1e-9)
+        cost = qty * fill_price + FEE_PER_TRADE_USD
+        if cost > self.cash:
+            return False
+        slip_cost = qty * (fill_price - price)
+        self.cash -= cost
+        self.positions[sym] = self.positions.get(sym, 0.0) + qty
+        self.last_prices[sym] = price
+        self.last_buy_ts = ts
+        self.n_trades += 1
+        self.total_fees += FEE_PER_TRADE_USD
+        self.total_slippage += slip_cost
+        self.trades.append((ts, sym, "BUY"))
+        return True
+
+    def sell_all(self, sym: str, price: float, ts: pd.Timestamp) -> bool:
+        qty = self.positions.get(sym, 0.0)
+        if qty <= 1e-9:
+            return False
+        fill_price = price * (1.0 - SLIPPAGE_BPS * 1e-4)
+        proceeds = qty * fill_price - FEE_PER_TRADE_USD
+        slip_cost = qty * (price - fill_price)
+        self.cash += proceeds
+        self.positions[sym] = 0.0
+        self.last_prices[sym] = price
+        self.n_trades += 1
+        self.total_fees += FEE_PER_TRADE_USD
+        self.total_slippage += slip_cost
+        self.trades.append((ts, sym, "SELL"))
+        return True
+
+    def equity(self, prices: dict[str, float]) -> float:
+        e = self.cash
+        for sym, qty in self.positions.items():
+            if qty > 0:
+                e += qty * prices.get(sym, self.last_prices.get(sym, 0.0))
+        return e
+
+    def mark_to_market(self, ts: pd.Timestamp, prices: dict[str, float]) -> float:
+        eq = self.equity(prices)
+        self.equity_curve.append((ts, eq))
+        return eq
+
+
+def simulate_best_picker(model: PatchTransformer,
+                         features: dict[str, pd.DataFrame],
+                         device: str) -> PickerBroker:
+    """At each timestamp, pick the SINGLE highest-conviction BUY and execute
+    one $1k buy if cooldown permits. Sell entire position when SELL conviction
+    exceeds threshold for any held symbol.
+    """
+    broker = PickerBroker()
+    cols = USE_FEATURES
+    feat_arrays = {s: f[cols].to_numpy(np.float32) for s, f in features.items()}
+    close_arrays = {s: f["close"].to_numpy(np.float32) for s, f in features.items()}
+
+    events_by_ts: dict[pd.Timestamp, list[tuple[str, int]]] = {}
+    for sym, f in features.items():
+        for i, ts in enumerate(f["timestamp"]):
+            events_by_ts.setdefault(ts, []).append((sym, i))
+    sorted_ts = sorted(events_by_ts.keys())
+
+    C = model.context_len
+    last_idx_by_sym: dict[str, int] = {s: -1 for s in features}
+
+    for ts in sorted_ts:
+        events_here = events_by_ts[ts]
+        for sym, i_now in events_here:
+            last_idx_by_sym[sym] = i_now
+
+        # Score every ready symbol with the model's action head
+        batch_X, batch_meta = [], []
+        for sym, i_now in events_here:
+            if i_now >= C - 1:
+                batch_X.append(feat_arrays[sym][i_now - C + 1 : i_now + 1])
+                batch_meta.append((sym, i_now))
+
+        if batch_X:
+            with torch.no_grad():
+                model.eval()
+                xb = torch.from_numpy(np.stack(batch_X)).to(device)
+                _, _, alog = model(xb)   # (B, 3): SELL=0, HOLD=1, BUY=2
+                buy_score = (alog[:, 2] - alog[:, 1]).cpu().tolist()
+                sell_score = (alog[:, 0] - alog[:, 1]).cpu().tolist()
+            model.train()
+
+            # 1) Sell first — for held positions, exit if model says SELL strongly
+            for (sym, i_now), bs, ss in zip(batch_meta, buy_score, sell_score):
+                if broker.positions.get(sym, 0.0) > 0 and ss > PICKER_SELL_THRESHOLD:
+                    broker.sell_all(sym, float(close_arrays[sym][i_now]), ts)
+
+            # 2) Buy second — pick BEST symbol, one buy per cooldown
+            best_idx = max(range(len(buy_score)), key=lambda k: buy_score[k])
+            if buy_score[best_idx] > PICKER_BUY_THRESHOLD:
+                sym, i_now = batch_meta[best_idx]
+                broker.buy(sym, float(close_arrays[sym][i_now]), ts)
+
+        # Mark to market every bar
+        prices = {s: float(close_arrays[s][last_idx_by_sym[s]])
+                  for s in features if last_idx_by_sym[s] >= 0}
+        broker.mark_to_market(ts, prices)
+
+    return broker
+
+
+# ============================================================================
 # CONTRACT — DO NOT change the signature
 # ============================================================================
 
@@ -540,17 +693,30 @@ def train_and_eval(seed: int = 0) -> tuple:
         print(f"[rl_pretrain] epoch {ep+1}/{RL_PRETRAIN_EPOCHS}", flush=True)
         _ = simulate(model, train_feat, device, learn=True)
 
-    # Phase 3: deterministic eval on the held-out slice
+    # Phase 3: deterministic eval on the held-out slice (PRIMARY strategy)
     eval_broker = simulate(model, eval_feat, device, learn=False)
-    return (eval_broker.equity_curve, eval_broker.n_trades,
-            eval_broker.total_fees, eval_broker.total_slippage,
-            eval_broker.trades)   # 5th: list of (ts, symbol, side) for chart markers
+
+    # Phase 4: parallel evaluation with the BEST-STOCK PICKER strategy
+    # (uses the same trained model, different decision rule + broker)
+    picker = simulate_best_picker(model, eval_feat, device)
+
+    # Return tuple: 5 primary + 4 picker = 9 elements (extends 5-tuple contract)
+    return (
+        eval_broker.equity_curve, eval_broker.n_trades,
+        eval_broker.total_fees, eval_broker.total_slippage,
+        eval_broker.trades,
+        # ----- secondary: best-stock picker -----
+        picker.equity_curve, picker.n_trades, picker.total_fees, picker.trades,
+    )
 
 
 if __name__ == "__main__":
     t0 = time.time()
-    eq, nt, fees, slip, trades = train_and_eval(seed=0)
-    print(f"\n[experiment] eval bars={len(eq)}  trades={nt}  fees=${fees:.2f}  slippage=${slip:.2f}")
+    eq, nt, fees, slip, trades, p_eq, p_nt, p_fees, p_trades = train_and_eval(seed=0)
+    print(f"\n[primary] bars={len(eq)}  trades={nt}  fees=${fees:.2f}  slippage=${slip:.2f}")
     if eq:
-        print(f"[experiment] equity start=${eq[0][1]:,.2f}  end=${eq[-1][1]:,.2f}")
+        print(f"[primary] equity start=${eq[0][1]:,.2f}  end=${eq[-1][1]:,.2f}")
+    print(f"[picker]  bars={len(p_eq)}  trades={p_nt}  fees=${p_fees:.2f}")
+    if p_eq:
+        print(f"[picker]  equity start=${p_eq[0][1]:,.2f}  end=${p_eq[-1][1]:,.2f}")
     print(f"[experiment] total wall: {time.time()-t0:.1f}s")
