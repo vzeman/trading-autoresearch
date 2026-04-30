@@ -30,8 +30,15 @@ from torch import nn
 from prepare import (
     UNIVERSE, NOTIONAL_PER_SYMBOL_USD, STARTING_CASH_USD,
     FEE_PER_TRADE_USD, SLIPPAGE_BPS,
-    PaperBroker, prepare_all, split,
+    PaperBroker, prepare_all, split, fetch_bars,
 )
+
+# ============================================================================
+# CONTEXT SYMBOLS — macro + cross-asset signals fetched alongside the universe
+# ============================================================================
+# These are not traded; their bars are merged-asof onto each universe bar to
+# provide cross-asset / macro features.
+CONTEXT_SYMBOLS = ["^VIX", "TLT", "UUP", "SPY"]   # VIX, 20yr Treasury, USD-index proxy, SPY (cross-asset)
 
 # ============================================================================
 # FEATURE ENGINEERING — agent edits freely. Must remain causal.
@@ -54,9 +61,14 @@ ALL_FEATURES = [
     "hl_range",
     # Time of day
     "tod_sin", "tod_cos",
+    # exp11: cross-asset / macro context (forward-filled to each universe bar)
+    "vix_logret_1",   # CBOE Volatility Index — fear gauge
+    "tlt_logret_1",   # 20yr Treasury ETF — interest-rate signal
+    "uup_logret_1",   # USD-index ETF (DXY proxy) — currency macro
+    "spy_logret_1",   # SPY return as a market factor (for SPY itself this == log_return_1)
 ]
 
-USE_FEATURES = [f for f in ALL_FEATURES if f not in {"signed_log_vol", "vol_z_15"}]   # exp4: drop noisy ones
+USE_FEATURES = [f for f in ALL_FEATURES if f not in {"signed_log_vol", "vol_z_15"}]   # exp4 + exp11: drop 2 noisy + add 4 context
 
 
 def _ema(x: np.ndarray, span: int) -> np.ndarray:
@@ -64,8 +76,42 @@ def _ema(x: np.ndarray, span: int) -> np.ndarray:
     return pd.Series(x).ewm(span=span, adjust=False).mean().to_numpy()
 
 
-def featurize(bars: pd.DataFrame) -> pd.DataFrame:
+def fetch_context() -> dict[str, pd.DataFrame]:
+    """Fetch & cache the context symbols' bars; return {sym: log_return_series}.
+
+    Each value is a DataFrame with columns ['timestamp', 'logret'] — sorted by ts.
+    Used by featurize() via merge_asof to forward-fill onto universe bars.
+    """
+    out: dict[str, pd.DataFrame] = {}
+    for sym in CONTEXT_SYMBOLS:
+        try:
+            bars = fetch_bars(sym)
+        except Exception as e:
+            print(f"[context] {sym}: fetch failed ({e}) — feature will be 0", flush=True)
+            continue
+        df = bars[["timestamp", "close"]].sort_values("timestamp").reset_index(drop=True)
+        c = df["close"].to_numpy(np.float64)
+        lr = np.zeros_like(c)
+        lr[1:] = np.log(c[1:] / np.maximum(c[:-1], 1e-12))
+        out[sym] = pd.DataFrame({"timestamp": df["timestamp"], "logret": lr.astype(np.float32)})
+        print(f"[context] {sym}: {len(out[sym]):,} bars cached", flush=True)
+    return out
+
+
+_CONTEXT_KEY_TO_FEATURE = {
+    "^VIX": "vix_logret_1",
+    "TLT":  "tlt_logret_1",
+    "UUP":  "uup_logret_1",
+    "SPY":  "spy_logret_1",
+}
+
+
+def featurize(bars: pd.DataFrame, context: dict[str, pd.DataFrame] | None = None) -> pd.DataFrame:
     """OHLCV bars → causal feature dataframe + the close price (broker needs it).
+
+    If `context` is provided (mapping context symbol → log-return series),
+    those returns are forward-filled onto each universe bar's timestamp via
+    backward merge_asof — strictly causal (no future leakage).
 
     Returns a frame with columns ['timestamp', 'close', *ALL_FEATURES].
     """
@@ -140,6 +186,18 @@ def featurize(bars: pd.DataFrame) -> pd.DataFrame:
         "tod_sin": tod_sin.astype(np.float32),
         "tod_cos": tod_cos.astype(np.float32),
     })
+
+    # ---- Context features: backward merge_asof (causal) ----
+    feat = feat.sort_values("timestamp").reset_index(drop=True)
+    for ctx_sym, feat_name in _CONTEXT_KEY_TO_FEATURE.items():
+        if context is not None and ctx_sym in context:
+            ctx_df = context[ctx_sym].sort_values("timestamp").reset_index(drop=True)
+            merged = pd.merge_asof(
+                feat[["timestamp"]], ctx_df, on="timestamp", direction="backward",
+            )
+            feat[feat_name] = merged["logret"].fillna(0.0).astype(np.float32).to_numpy()
+        else:
+            feat[feat_name] = np.zeros(len(feat), dtype=np.float32)
     return feat
 
 
@@ -452,6 +510,7 @@ def train_and_eval(seed: int = 0) -> tuple:
     device = pick_device()
 
     bars_by_sym = prepare_all()
+    context = fetch_context()   # cached after first call
     train_feat: dict[str, pd.DataFrame] = {}
     eval_feat: dict[str, pd.DataFrame] = {}
     for sym in UNIVERSE:
@@ -459,9 +518,9 @@ def train_and_eval(seed: int = 0) -> tuple:
         tr_bars, ev_bars = split(bars)
         # featurize each slice independently — strict no-leakage
         if len(tr_bars) > 200:
-            train_feat[sym] = featurize(tr_bars)
+            train_feat[sym] = featurize(tr_bars, context=context)
         if len(ev_bars) > 50:
-            eval_feat[sym] = featurize(ev_bars)
+            eval_feat[sym] = featurize(ev_bars, context=context)
 
     n_features = len(USE_FEATURES)
     model = PatchTransformer(
