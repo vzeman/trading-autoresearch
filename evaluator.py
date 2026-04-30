@@ -223,12 +223,21 @@ def run(n_workers: int = 3) -> dict:
 
     seed_results = _maybe_parallel_seeds(n_workers)
     for seed, result in seed_results:
-        # Backward-compat: 4/5/9/13/16 tuple lengths supported.
-        # 16-tuple = 13 + 3 parallel cash_curves for allocation%.
+        # Tuple shapes supported (newest first):
+        #   6 = WEIGHTED-ONLY (current): (eq, ntrades, fees, slip, trades, cash_curve)
+        #   16 = legacy with primary+picker+weighted+3 cash curves
+        #   13 = legacy primary+picker+weighted (no cash curves)
+        #   9, 5, 4 = older still
         picker_eq, picker_nt, picker_fees, picker_trades = [], 0, 0.0, []
         weighted_eq, weighted_nt, weighted_fees, weighted_trades = [], 0, 0.0, []
         primary_cash, picker_cash, weighted_cash = [], [], []
-        if len(result) == 16:
+        if len(result) == 6:
+            # WEIGHTED-ONLY: pipe weighted into both "primary" eq slot and weighted slot
+            # so existing summary fields keep working until the deeper cleanup lands.
+            eq, n_trades, fees, slip, trades, weighted_cash = result
+            weighted_eq, weighted_nt, weighted_fees, weighted_trades = eq, n_trades, fees, trades
+            primary_cash = weighted_cash
+        elif len(result) == 16:
             (eq, n_trades, fees, slip, trades,
              picker_eq, picker_nt, picker_fees, picker_trades,
              weighted_eq, weighted_nt, weighted_fees, weighted_trades,
@@ -354,19 +363,7 @@ def run(n_workers: int = 3) -> dict:
     commit = _git_short_hash()
     desc = _last_commit_subject()
     status = "discard" if dd_worst < MAX_DD_FLOOR_PCT else "auto"  # agent overwrites this
-    _render_equity_chart(equity_curves, commit, summary, trades_per_seed=trades_per_seed,
-                         cash_curves=primary_cash_curves)
-
-    # Picker (secondary strategy) — separate chart
-    if any(picker_curves):
-        picker_summary = {
-            "pnl_med": float(np.median(picker_pnls)) if picker_pnls else 0.0,
-            "trades_med": int(np.median(picker_trades_n)) if picker_trades_n else 0,
-        }
-        _render_picker_chart(picker_curves, commit, picker_summary,
-                             picker_trades_per_seed=picker_trades_per_seed,
-                             cash_curves=picker_cash_curves)
-    # Weighted (Strategy 3) — separate chart
+    # Weighted is the only live strategy. Render full eval + 1-month sub-window.
     if any(weighted_curves):
         w_summary = {
             "pnl_med": float(np.median(weighted_pnls)) if weighted_pnls else 0.0,
@@ -376,6 +373,10 @@ def run(n_workers: int = 3) -> dict:
         _render_weighted_chart(weighted_curves, commit, w_summary,
                                trades_per_seed=weighted_trades_per_seed,
                                cash_curves=weighted_cash_curves)
+        _render_weighted_window_chart(weighted_curves, commit, w_summary,
+                                      trades_per_seed=weighted_trades_per_seed,
+                                      cash_curves=weighted_cash_curves,
+                                      window_days=30, suffix="1m", label="1 month")
     _append_results_row(commit, summary, status, desc)
     _render_progress_chart()
     _update_readme(summary, commit)
@@ -658,6 +659,117 @@ def _render_weighted_chart(curves: list[list[tuple]], commit: str, summary: dict
     plt.close(fig)
 
 
+def _slice_window(curves: list[list[tuple]], days: int) -> list[list[tuple]]:
+    """Truncate each per-seed curve to the first `days` of trading from its start."""
+    import pandas as pd
+    out = []
+    for c in curves:
+        if not c:
+            out.append([])
+            continue
+        t0 = c[0][0]
+        cutoff = t0 + pd.Timedelta(days=days)
+        out.append([(t, v) for (t, v) in c if t <= cutoff])
+    return out
+
+
+def _render_weighted_window_chart(curves, commit, summary, *, trades_per_seed=None,
+                                  cash_curves=None, window_days=30, suffix="1m",
+                                  label="1 month") -> None:
+    """Render the weighted strategy over a smaller time window (e.g. first 30 days)."""
+    if not any(curves):
+        return
+    sliced = _slice_window(curves, window_days)
+    sliced_cash = _slice_window(cash_curves or [], window_days) if cash_curves else None
+    sliced_trades = None
+    if trades_per_seed:
+        import pandas as pd
+        sliced_trades = []
+        for tlist, c in zip(trades_per_seed, curves):
+            if not c or not tlist:
+                sliced_trades.append([])
+                continue
+            cutoff = c[0][0] + pd.Timedelta(days=window_days)
+            sliced_trades.append([t for t in tlist if t[0] <= cutoff])
+
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    if sliced_cash and any(sliced_cash):
+        fig, (ax, ax2) = plt.subplots(2, 1, figsize=(10, 6.5),
+                                       gridspec_kw={"height_ratios": [3, 1]}, sharex=True)
+    else:
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax2 = None
+
+    for i, eq in enumerate(sliced):
+        if not eq:
+            continue
+        ax.plot([t for t, _ in eq], [v for _, v in eq], alpha=0.7, linewidth=1.0, label=f"seed {i}")
+
+    spy_curve, _ = _spy_benchmark_curve()
+    spy_window = []
+    if spy_curve and sliced and sliced[0]:
+        import pandas as pd
+        cutoff = sliced[0][0][0] + pd.Timedelta(days=window_days)
+        start = sliced[0][0][0]
+        spy_window = [(t, v) for (t, v) in spy_curve if start <= t <= cutoff]
+
+    if spy_window:
+        ax.plot([t for t, _ in spy_window], [v for _, v in spy_window],
+                color="black", linestyle="--", linewidth=2.0, alpha=0.8,
+                label="SP500 B&H", zorder=5)
+
+    ax.axhline(y=STARTING_CASH_USD, linestyle=":", color="gray", alpha=0.5, label="start")
+
+    pct_over = 0.0
+    med = _median_curve(sliced)
+    if spy_window and med:
+        med_t = [t for t, _ in med]
+        med_v = np.array([v for _, v in med], dtype=np.float64)
+        spy_at = _spy_aligned(med, spy_window)
+        ax.fill_between(med_t, med_v, spy_at, where=(med_v > spy_at),
+                        interpolate=True, color="#22c55e", alpha=0.18, zorder=1)
+        ax.fill_between(med_t, med_v, spy_at, where=(med_v < spy_at),
+                        interpolate=True, color="#ef4444", alpha=0.10, zorder=1)
+        pct_over = _pct_time_over_spy(med, spy_window)
+
+    n_trades_drawn = 0
+    if sliced_trades and sliced_trades[0]:
+        for ts, sym, side in sliced_trades[0]:
+            color = "#22c55e" if side == "BUY" else "#ef4444"
+            ax.axvline(ts, color=color, alpha=0.4, linewidth=0.7, linestyle=":")
+        n_trades_drawn = len(sliced_trades[0])
+
+    avg_alloc = 0.0
+    if ax2 is not None:
+        avg_alloc = _draw_allocation_axis(ax2, sliced, sliced_cash)
+        ax2.set_xlabel("time (UTC)")
+
+    # final PnL inside the window for the median seed
+    pnl_window = 0.0
+    if med:
+        pnl_window = med[-1][1] - STARTING_CASH_USD
+
+    alloc_extra = f"  ·  avg alloc {avg_alloc:.0f}%" if ax2 is not None else ""
+    ax.set_title(
+        f"Weighted ({label}) — commit {commit}  ·  "
+        f"PnL ${pnl_window:+,.2f}  ·  over SPY {pct_over:.0f}%{alloc_extra}  ·  "
+        f"{n_trades_drawn} markers (seed 0)",
+        fontsize=10,
+    )
+    if ax2 is None:
+        ax.set_xlabel("time (UTC)")
+    ax.set_ylabel("portfolio equity ($)")
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="best", fontsize=7, ncol=2)
+    fig.autofmt_xdate()
+    fig.tight_layout()
+    fig.savefig(DOCS / f"weighted_{suffix}_latest.png", dpi=110)
+    fig.savefig(DOCS / f"weighted_{suffix}_{commit}.png", dpi=110)
+    plt.close(fig)
+
+
 def _render_progress_chart() -> None:
     """Sharpe over experiments PNG → docs/progress.png."""
     if not RESULTS_TSV.exists():
@@ -730,26 +842,6 @@ README_END = "<!-- RESULTS_END -->"
 def _strategy_comparison_md(summary: dict) -> str:
     """Side-by-side comparison table — highlight the winner per metric.
     Includes SP500 (SPY) buy-and-hold as a passive baseline."""
-    primary = {
-        "name": "Primary (full portfolio every-bar)",
-        "sharpe": summary.get("sharpe", 0.0),
-        "pnl": summary.get("pnl_usd", 0.0),
-        "pnl_pct": summary.get("pnl_pct", 0.0),
-        "dd": summary.get("max_dd_pct", 0.0),
-        "trades": int(summary.get("trades", 0)),
-        "fees": summary.get("fees_usd", 0.0),
-        "over_spy": summary.get("primary_pct_over_spy", 0.0),
-    }
-    picker = {
-        "name": "Picker (best-stock, $1k cooldown 5min)",
-        "sharpe": summary.get("picker_sharpe", 0.0),
-        "pnl": summary.get("picker_pnl_usd", 0.0),
-        "pnl_pct": summary.get("picker_pnl_pct", 0.0),
-        "dd": summary.get("picker_max_dd_pct", 0.0),
-        "trades": int(summary.get("picker_trades", 0)),
-        "fees": summary.get("picker_fees_usd", 0.0),
-        "over_spy": summary.get("picker_pct_over_spy", 0.0),
-    }
     weighted = {
         "name": "Weighted (Kelly-sized, max 20% free cash, ≤5/step)",
         "sharpe": summary.get("weighted_sharpe", 0.0),
@@ -775,7 +867,7 @@ def _strategy_comparison_md(summary: dict) -> str:
         "fees": 1.0,   # one $1 fee at entry
         "over_spy": 0.0,  # SPY is the benchmark; trivially 0% strictly above itself
     }
-    strategies = [primary, picker, weighted, spy]
+    strategies = [weighted, spy]
 
     def winner(key: str, higher_better: bool) -> int:
         vals = [s[key] for s in strategies]
@@ -836,33 +928,27 @@ def _update_readme(summary: dict, commit: str) -> None:
              f"_Last updated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}_  ",
              f"_Total experiments: **{len(rows)}**  ·  kept: **{len(kept)}**  ·  latest commit: `{commit}`_",
              "",
-             "### Latest experiment — primary strategy (full portfolio)",
-             "",
-             f"![equity curve](docs/equity_latest.png)",
-             "",
-             "### Latest experiment — best-stock picker (secondary strategy)",
-             "",
-             f"![picker equity](docs/picker_latest.png)",
-             "",
-             "### Latest experiment — weighted dynamic sizing (Strategy 3)",
+             "### Weighted strategy — full eval window (~73 days)",
              "",
              f"![weighted equity](docs/weighted_latest.png)",
              "",
-             "### Strategy comparison @ this checkpoint",
+             "### Weighted strategy — first month of eval",
+             "",
+             f"![weighted 1m](docs/weighted_1m_latest.png)",
+             "",
+             "### Strategy vs SPY benchmark",
              "",
              _strategy_comparison_md(summary),
              "",
-             "### Detailed metrics — primary strategy",
+             "### Detailed metrics — weighted strategy",
              "",
              f"| metric | value |",
              f"|---|---|",
-             f"| Sharpe (median over seeds) | **{summary['sharpe']:+.3f}** |",
-             f"| Sharpe — bootstrap CI low (5%) | **{summary['sharpe_ci_low']:+.3f}** |",
-             f"| Sharpe — bootstrap CI high (95%) | {summary['sharpe_ci_high']:+.3f} |",
-             f"| Max drawdown | {summary['max_dd_pct']:+.2f}% |",
-             f"| Net PnL | ${summary['pnl_usd']:+,.2f} ({summary['pnl_pct']:+.3f}%) |",
-             f"| Trades | {int(summary['trades'])} |",
-             f"| Fees / slippage | ${summary['fees_usd']:.2f} / ${summary['slippage_usd']:.2f} |",
+             f"| Sharpe (median over seeds) | **{summary.get('weighted_sharpe', 0):+.3f}** |",
+             f"| Net PnL | ${summary.get('weighted_pnl_usd', 0):+,.2f} ({summary.get('weighted_pnl_pct', 0):+.3f}%) |",
+             f"| Max drawdown | {summary.get('weighted_max_dd_pct', 0):+.2f}% |",
+             f"| Trades | {int(summary.get('weighted_trades', 0))} |",
+             f"| % time above SPY | {summary.get('weighted_pct_over_spy', 0):.0f}% |",
              f"| Wall time | {summary['elapsed_seconds']:.1f}s |",
              f"| Seeds completed | {summary['seeds_completed']} |",
              "",

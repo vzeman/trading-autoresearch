@@ -1012,35 +1012,23 @@ def train_and_eval(seed: int = 0) -> tuple:
     ).to(device)
     print(f"[experiment] device={device}  features={n_features}  params={model.num_parameters():,}", flush=True)
 
-    # Phase 1: supervised forecast-head pretrain
+    # Phase 1: supervised forecast-head pretrain (trains the multi-horizon head
+    # that the WEIGHTED strategy uses).
     supervised_pretrain(model, train_feat, device)
 
-    # Phase 2: offline RL on the train slice (does not touch eval)
-    for ep in range(RL_PRETRAIN_EPOCHS):
-        print(f"[rl_pretrain] epoch {ep+1}/{RL_PRETRAIN_EPOCHS}", flush=True)
-        _ = simulate(model, train_feat, device, learn=True)
+    # Phases 2-4 removed (exp38b): RL pretrain, primary eval, picker eval.
+    # Primary's median sharpe was always ~+0.96 (basically buy-once-hold) and
+    # picker was consistently catastrophic. Weighted strategy uses only the
+    # forecast head, so RL pretrain is unnecessary. Massive speedup.
 
-    # Phase 3: deterministic eval on the held-out slice (PRIMARY strategy)
-    eval_broker = simulate(model, eval_feat, device, learn=False)
-
-    # Phase 4: parallel evaluation with the BEST-STOCK PICKER strategy
-    picker = simulate_best_picker(model, eval_feat, device)
-
-    # Phase 5: WEIGHTED dynamic-sizing strategy (exp32)
+    # Phase 5: WEIGHTED dynamic-sizing strategy (the only one that works).
     weighted = simulate_weighted(model, eval_feat, device)
 
-    # Return tuple: 5 primary + 4 picker + 4 weighted + 3 cash_curves = 16 elements
+    # Return 6-element tuple: weighted_eq, n_trades, fees, slip, trades, cash_curve.
     return (
-        eval_broker.equity_curve, eval_broker.n_trades,
-        eval_broker.total_fees, eval_broker.total_slippage,
-        eval_broker.trades,
-        # ----- secondary: best-stock picker -----
-        picker.equity_curve, picker.n_trades, picker.total_fees, picker.trades,
-        # ----- tertiary: weighted dynamic sizing -----
-        weighted.equity_curve, weighted.n_trades, weighted.total_fees, weighted.trades,
-        # ----- cash curves for allocation % charting -----
-        getattr(eval_broker, "cash_curve", []),
-        getattr(picker, "cash_curve", []),
+        weighted.equity_curve, weighted.n_trades,
+        weighted.total_fees, 0.0,
+        weighted.trades,
         getattr(weighted, "cash_curve", []),
     )
 
