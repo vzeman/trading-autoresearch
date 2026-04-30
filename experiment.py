@@ -56,7 +56,7 @@ ALL_FEATURES = [
     "tod_sin", "tod_cos",
 ]
 
-USE_FEATURES = [f for f in ALL_FEATURES if f not in {"signed_log_vol", "vol_z_15"}]   # exp4: drop noisy ones
+USE_FEATURES = [f for f in ALL_FEATURES if f not in {"signed_log_vol", "vol_z_15", "rv_15"}]   # exp5: drop 3rd short-window feature too
 
 
 def _ema(x: np.ndarray, span: int) -> np.ndarray:
