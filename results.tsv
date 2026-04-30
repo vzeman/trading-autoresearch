@@ -33,3 +33,4 @@ d38cd93	0.0000	0.0000	-1.34	0.00	0	keep	exp26 KEEP: LONG_ONLY=True. Per-seed: 1/
 86d13f0	0.9612	-2.5222	-1.34	193.93	12	keep	exp28 KEEP 🎯 MULTI-HORIZON prediction (1m/1h/1d/1w). First positive median sharpe on year-of-data (+0.96 vs v5's -1.08). 2/3 seeds find profitable equilibrium (was 1/3). Now ~85% of passive SPY (+0.96 vs +1.17).
 73deec8	0.8283	-2.5222	-1.38	167.21	12	discard	exp29: FORECAST_HORIZON_IDX 1d — sharpe +0.96→+0.83 (worse). 27 trades (vs 12) but less efficient. 1h horizon is the sweet spot. Reverted.
 e8b9d95	0.9612	-2.5222	-1.34	193.93	12	discard	exp30: threshold 0.5→0.3 — IDENTICAL to exp28. Seed 0's predicted Sharpe never even reaches 0.3. Threshold isn't the bottleneck; model confidence is. Reverted.
+4f7deb8	0.0000	-2.5222	-72.87	0.00	12	discard	exp31: ENSEMBLE all horizons — DD -72.87% disaster. 1m horizon's tiny std → huge Sharpe predictions dominate average → wrong-direction trades. Reverted to 1h.

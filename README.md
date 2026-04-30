@@ -48,10 +48,21 @@ The same trained model can be evaluated under different "trading strategies." Ea
 - **Cons:** tail-risk from concentration; unused capital while between buys.
 - **Currently used for evaluation only.** Each experiment now produces a SECOND chart (`docs/picker_latest.png`) showing what would happen if we used the model's outputs this way.
 
-### Strategy 3 (planned): top-K picker
-At each bar pick the top **K** symbols by BUY confidence, equal-weight $X each. Smooth interpolation between strategies 1 and 2.
+### Strategy 3: **weighted dynamic sizing** ⭐ NEW (exp32)
 
-### Strategy 4 (planned): long/short market-neutral
+- At each bar, predict 1-hour Sharpe for every symbol via the multi-horizon head.
+- For each symbol with **positive predicted Sharpe**, compute Kelly-like position size: `base_frac = clip(predicted_sharpe × KELLY_SCALE, 0, MAX_POS_FRACTION_OF_FREE_CASH)`.
+- Convert to dollars: `usd_size = base_frac × free_cash` where `free_cash = cash − (MIN_CASH_RESERVE_PCT × starting_cash)`.
+- Sort all candidate symbols by suggested $ size descending; execute up to `MAX_NEW_TRADES_PER_TIMESTEP=5` trades per timestep, deducting from free cash sequentially.
+- Auto-sell positions held > `WEIGHTED_HOLD_BARS=60` (1 hour).
+- **Defaults:** `MAX_POS_FRACTION_OF_FREE_CASH=0.20`, `MIN_CASH_RESERVE_PCT=0.10`, `KELLY_SCALE=0.5`.
+- **Pros:** position size scales with confidence, reserves cash for opportunities, holds up to 5 simultaneous positions of varying sizes.
+- **Cons:** Kelly assumes the model's predicted Sharpe is calibrated; if not, can over- or under-bet.
+
+### Strategy 4 (planned): top-K picker
+At each bar pick the top **K** symbols by BUY confidence, equal-weight $X each.
+
+### Strategy 5 (planned): long/short market-neutral
 Long top‑K by BUY conviction, short bottom‑K by SELL conviction, equal dollar legs. Hedges market beta — measures pure model alpha.
 
 ### Strategy 5 (planned): volatility-targeted
@@ -113,8 +124,8 @@ A **broken** result: lines fan out wildly, some up some down, dense forest of ve
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 16:03 UTC_  
-_Total experiments: **34**  ·  kept: **9**  ·  latest commit: `e8b9d95`_
+_Last updated: 2026-04-30 16:26 UTC_  
+_Total experiments: **35**  ·  kept: **9**  ·  latest commit: `4f7deb8`_
 
 ### Latest experiment — primary strategy (full portfolio)
 
@@ -128,9 +139,9 @@ _Total experiments: **34**  ·  kept: **9**  ·  latest commit: `e8b9d95`_
 
 | Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees |
 |---|---:|---:|---:|---:|---:|---:|
-| Primary (full portfolio every-bar) | +0.961 | $+193.93 | +0.388% | **-1.34%** 🏆 | 12 | $12.00 |
-| Picker (best-stock, $1k cooldown 5min) | -6.022 | $-6,582.60 | -13.165% | -17.59% | 4365 | $4365.00 |
-| **SP500 (SPY) buy-and-hold** — passive benchmark | **+1.204** 🏆 | **$+1,964.67** 🏆 | +3.929% | -9.45% | 1 | **$1.00** 🏆 |
+| Primary (full portfolio every-bar) | +0.000 | $+0.00 | +0.000% | -72.87% | 12 | $12.00 |
+| Picker (best-stock, $1k cooldown 5min) | -6.184 | $-6,848.08 | -13.696% | -15.87% | 4213 | $4213.00 |
+| **SP500 (SPY) buy-and-hold** — passive benchmark | **+1.204** 🏆 | **$+1,964.67** 🏆 | +3.929% | **-9.45%** 🏆 | 1 | **$1.00** 🏆 |
 
 **Best by Sharpe:** **SP500 (SPY) buy-and-hold** — passive benchmark
 
@@ -138,14 +149,14 @@ _Total experiments: **34**  ·  kept: **9**  ·  latest commit: `e8b9d95`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+0.961** |
+| Sharpe (median over seeds) | **+0.000** |
 | Sharpe — bootstrap CI low (5%) | **-2.522** |
-| Sharpe — bootstrap CI high (95%) | +4.056 |
-| Max drawdown | -1.34% |
-| Net PnL | $+193.93 (+0.388%) |
+| Sharpe — bootstrap CI high (95%) | +0.000 |
+| Max drawdown | -72.87% |
+| Net PnL | $+0.00 (+0.000%) |
 | Trades | 12 |
 | Fees / slippage | $12.00 / $1.14 |
-| Wall time | 1106.1s |
+| Wall time | 1215.1s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments

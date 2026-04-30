@@ -127,14 +127,26 @@ def run(n_workers: int = 3) -> dict:
     picker_dds: list[float] = []
     picker_trades_n: list[int] = []
     picker_fees_l: list[float] = []
+    weighted_curves: list[list[tuple]] = []
+    weighted_trades_per_seed: list[list[tuple]] = []
+    weighted_pnls: list[float] = []
+    weighted_sharpes: list[float] = []
+    weighted_dds: list[float] = []
+    weighted_trades_n: list[int] = []
+    weighted_fees_l: list[float] = []
     seeds_done = 0
 
     seed_results = _maybe_parallel_seeds(n_workers)
     for seed, result in seed_results:
-        # Backward-compat: 4 / 5 / 9 tuple lengths supported.
-        # 9-tuple = primary + picker secondary strategy.
+        # Backward-compat: 4/5/9/13 tuple lengths supported.
+        # 13-tuple = primary + picker + weighted (Strategy 3).
         picker_eq, picker_nt, picker_fees, picker_trades = [], 0, 0.0, []
-        if len(result) == 9:
+        weighted_eq, weighted_nt, weighted_fees, weighted_trades = [], 0, 0.0, []
+        if len(result) == 13:
+            (eq, n_trades, fees, slip, trades,
+             picker_eq, picker_nt, picker_fees, picker_trades,
+             weighted_eq, weighted_nt, weighted_fees, weighted_trades) = result
+        elif len(result) == 9:
             eq, n_trades, fees, slip, trades, picker_eq, picker_nt, picker_fees, picker_trades = result
         elif len(result) == 5:
             eq, n_trades, fees, slip, trades = result
@@ -163,6 +175,17 @@ def run(n_workers: int = 3) -> dict:
             picker_pnls.append(0.0); picker_sharpes.append(0.0); picker_dds.append(0.0)
         picker_trades_n.append(picker_nt)
         picker_fees_l.append(picker_fees)
+        # Weighted strategy stats
+        weighted_curves.append(weighted_eq)
+        weighted_trades_per_seed.append(weighted_trades)
+        if weighted_eq and len(weighted_eq) > 5:
+            weighted_pnls.append(weighted_eq[-1][1] - weighted_eq[0][1])
+            weighted_sharpes.append(sharpe_ratio(weighted_eq))
+            weighted_dds.append(max_drawdown_pct(weighted_eq))
+        else:
+            weighted_pnls.append(0.0); weighted_sharpes.append(0.0); weighted_dds.append(0.0)
+        weighted_trades_n.append(weighted_nt)
+        weighted_fees_l.append(weighted_fees)
         seeds_done += 1
         print(f"[evaluator] seed {seed}: sharpe={s:+.3f}  dd={dd:+.2f}%  pnl=${pnl:+,.2f}  trades={n_trades}", flush=True)
 
@@ -194,6 +217,13 @@ def run(n_workers: int = 3) -> dict:
     summary["picker_max_dd_pct"] = float(min(picker_dds)) if picker_dds else 0.0
     summary["picker_trades"] = int(np.median(picker_trades_n)) if picker_trades_n else 0
     summary["picker_fees_usd"] = float(np.median(picker_fees_l)) if picker_fees_l else 0.0
+    # Weighted (Strategy 3) summary
+    summary["weighted_sharpe"] = float(np.median(weighted_sharpes)) if weighted_sharpes else 0.0
+    summary["weighted_pnl_usd"] = float(np.median(weighted_pnls)) if weighted_pnls else 0.0
+    summary["weighted_pnl_pct"] = summary["weighted_pnl_usd"] / STARTING_CASH_USD * 100
+    summary["weighted_max_dd_pct"] = float(min(weighted_dds)) if weighted_dds else 0.0
+    summary["weighted_trades"] = int(np.median(weighted_trades_n)) if weighted_trades_n else 0
+    summary["weighted_fees_usd"] = float(np.median(weighted_fees_l)) if weighted_fees_l else 0.0
 
     print("\n---")
     for k, v in summary.items():
@@ -234,6 +264,15 @@ def run(n_workers: int = 3) -> dict:
         }
         _render_picker_chart(picker_curves, commit, picker_summary,
                              picker_trades_per_seed=picker_trades_per_seed)
+    # Weighted (Strategy 3) — separate chart
+    if any(weighted_curves):
+        w_summary = {
+            "pnl_med": float(np.median(weighted_pnls)) if weighted_pnls else 0.0,
+            "sharpe_med": float(np.median(weighted_sharpes)) if weighted_sharpes else 0.0,
+            "trades_med": int(np.median(weighted_trades_n)) if weighted_trades_n else 0,
+        }
+        _render_weighted_chart(weighted_curves, commit, w_summary,
+                               trades_per_seed=weighted_trades_per_seed)
     _append_results_row(commit, summary, status, desc)
     _render_progress_chart()
     _update_readme(summary, commit)
@@ -384,6 +423,62 @@ def _render_picker_chart(curves: list[list[tuple]], commit: str, summary: dict,
     plt.close(fig)
 
 
+def _render_weighted_chart(curves: list[list[tuple]], commit: str, summary: dict,
+                           trades_per_seed: list[list[tuple]] | None = None) -> None:
+    """Confidence-weighted strategy equity curve → docs/weighted_latest.png + commit copy."""
+    if not any(curves):
+        return
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(10, 5))
+    for i, eq in enumerate(curves):
+        if not eq:
+            continue
+        ts = [e[0] for e in eq]
+        vals = [e[1] for e in eq]
+        ax.plot(ts, vals, alpha=0.7, label=f"seed {i}", linewidth=1.0)
+    spy_curve, spy_pnl = _spy_benchmark_curve()
+    if spy_curve:
+        spy_ts = [e[0] for e in spy_curve]
+        spy_vals = [e[1] for e in spy_curve]
+        ax.plot(spy_ts, spy_vals, color="black", linestyle="--", linewidth=2.0,
+                alpha=0.8, label=f"SP500 B&H (${spy_pnl:+,.0f})", zorder=5)
+    ax.axhline(y=STARTING_CASH_USD, linestyle=":", color="gray", alpha=0.5, label="start")
+
+    n_w_trades = 0
+    if trades_per_seed and trades_per_seed[0]:
+        for ts, sym, side in trades_per_seed[0]:
+            color = "#22c55e" if side == "BUY" else "#ef4444"
+            ax.axvline(ts, color=color, alpha=0.4, linewidth=0.7, linestyle=":")
+        n_w_trades = len(trades_per_seed[0])
+        from matplotlib.lines import Line2D
+        marker_handles = [
+            Line2D([0], [0], color="#22c55e", linestyle=":", label="BUY (seed 0)"),
+            Line2D([0], [0], color="#ef4444", linestyle=":", label="SELL (seed 0)"),
+        ]
+        existing = ax.get_legend_handles_labels()
+        ax.legend(handles=existing[0] + marker_handles, loc="best", fontsize=7, ncol=2)
+    else:
+        ax.legend(loc="best", fontsize=8)
+
+    ax.set_title(
+        f"Weighted Dynamic Sizing — commit {commit}  ·  "
+        f"sharpe {summary.get('sharpe_med', 0):+.2f}  ·  "
+        f"median PnL ${summary.get('pnl_med', 0):+,.2f}  ·  "
+        f"{summary.get('trades_med', 0)} trades  ·  {n_w_trades} markers (seed 0)",
+        fontsize=10,
+    )
+    ax.set_xlabel("time (UTC)")
+    ax.set_ylabel("portfolio equity ($)")
+    ax.grid(True, alpha=0.3)
+    fig.autofmt_xdate()
+    fig.tight_layout()
+    fig.savefig(DOCS / "weighted_latest.png", dpi=110)
+    fig.savefig(DOCS / f"weighted_{commit}.png", dpi=110)
+    plt.close(fig)
+
+
 def _render_progress_chart() -> None:
     """Sharpe over experiments PNG → docs/progress.png."""
     if not RESULTS_TSV.exists():
@@ -474,6 +569,15 @@ def _strategy_comparison_md(summary: dict) -> str:
         "trades": int(summary.get("picker_trades", 0)),
         "fees": summary.get("picker_fees_usd", 0.0),
     }
+    weighted = {
+        "name": "Weighted (Kelly-sized, max 20% free cash, ≤5/step)",
+        "sharpe": summary.get("weighted_sharpe", 0.0),
+        "pnl": summary.get("weighted_pnl_usd", 0.0),
+        "pnl_pct": summary.get("weighted_pnl_pct", 0.0),
+        "dd": summary.get("weighted_max_dd_pct", 0.0),
+        "trades": int(summary.get("weighted_trades", 0)),
+        "fees": summary.get("weighted_fees_usd", 0.0),
+    }
     # SP500 buy-and-hold benchmark — naive comparison
     spy_curve, spy_pnl = _spy_benchmark_curve()
     spy_pnl_pct = spy_pnl / STARTING_CASH_USD * 100 if STARTING_CASH_USD > 0 else 0
@@ -488,7 +592,7 @@ def _strategy_comparison_md(summary: dict) -> str:
         "trades": 1,
         "fees": 1.0,   # one $1 fee at entry
     }
-    strategies = [primary, picker, spy]
+    strategies = [primary, picker, weighted, spy]
 
     def winner(key: str, higher_better: bool) -> int:
         vals = [s[key] for s in strategies]
@@ -554,6 +658,10 @@ def _update_readme(summary: dict, commit: str) -> None:
              "### Latest experiment — best-stock picker (secondary strategy)",
              "",
              f"![picker equity](docs/picker_latest.png)",
+             "",
+             "### Latest experiment — weighted dynamic sizing (Strategy 3)",
+             "",
+             f"![weighted equity](docs/weighted_latest.png)",
              "",
              "### Strategy comparison @ this checkpoint",
              "",

@@ -244,7 +244,7 @@ LONG_ONLY = True              # if True: SELL action is treated as HOLD
 # denser signal than REINFORCE and may have real predictive value.
 USE_FORECAST_POLICY = True            # exp28: re-test now that we have multi-horizon predictions
 FORECAST_BUY_SHARPE_THRESHOLD = 0.5   # exp28 setting (exp30 lowering had no effect)
-FORECAST_HORIZON_IDX = -1             # exp31: -1 = average ALL horizons (ensemble)
+FORECAST_HORIZON_IDX = 1              # 1h horizon (exp31 ensemble was a disaster)
 SGD_BATCH = 64
 GRAD_CLIP = 1.0
 RL_STEP_EVERY_BARS = 5
@@ -638,6 +638,20 @@ PICKER_BUY_COOLDOWN_S = 5 * 60     # max 1 buy per 5 minutes
 PICKER_HOLD_BARS = 60              # auto-sell after N bars (1 hour at 1-min bars)
 PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at once
 
+# ============================================================================
+# Strategy 3: WEIGHTED — confidence-sized dynamic positions
+# Position size = function of (predicted Sharpe, free cash, vol).
+# Reserves MIN_CASH_RESERVE_PCT of starting cash for opportunities.
+# Up to MAX_NEW_TRADES_PER_TIMESTEP simultaneous buys, each capped at
+# MAX_POS_FRACTION_OF_FREE_CASH of free cash.
+# ============================================================================
+MAX_POS_FRACTION_OF_FREE_CASH = 0.20  # never bet >20% of free cash on one trade
+MIN_CASH_RESERVE_PCT = 0.10           # keep 10% of starting cash unspent
+MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
+KELLY_SCALE = 0.5                     # half-Kelly aggressiveness
+WEIGHTED_HOLD_BARS = 60               # auto-sell after 1h
+WEIGHTED_MIN_TRADE_USD = 100.0        # too small → fee dominates
+
 
 class PickerBroker:
     """Single-name buyer: each buy is a fixed $ amount, throttled by cooldown.
@@ -791,6 +805,178 @@ def simulate_best_picker(model: PatchTransformer,
 
 
 # ============================================================================
+# Strategy 3: WEIGHTED — confidence-sized dynamic positions (exp32)
+# ============================================================================
+
+class WeightedBroker:
+    """Position-sized by % of free cash. Reserves min cash for opportunities.
+
+    No NOTIONAL_PER_SYMBOL constraint — buy in arbitrary $ amounts.
+    Long-only. Sells close entire position.
+    """
+    def __init__(self, starting_cash: float, min_reserve_frac: float = 0.10) -> None:
+        self.cash = starting_cash
+        self.starting_cash = starting_cash
+        self.min_reserve_usd = starting_cash * min_reserve_frac
+        self.positions: dict[str, float] = {}        # symbol -> qty
+        self.last_prices: dict[str, float] = {}
+        self.n_trades = 0
+        self.total_fees = 0.0
+        self.total_slippage = 0.0
+        self.equity_curve: list[tuple[pd.Timestamp, float]] = []
+        self.trades: list[tuple[pd.Timestamp, str, str]] = []
+
+    def free_cash(self) -> float:
+        """Cash available for new buys after subtracting reserve."""
+        return max(0.0, self.cash - self.min_reserve_usd)
+
+    def buy_usd(self, sym: str, price: float, ts: pd.Timestamp, dollar_amount: float) -> bool:
+        """Buy dollar_amount worth of sym at price. Returns True if executed."""
+        if dollar_amount < WEIGHTED_MIN_TRADE_USD:
+            return False
+        if dollar_amount > self.free_cash():
+            return False
+        fill_price = price * (1.0 + SLIPPAGE_BPS * 1e-4)
+        qty = dollar_amount / max(fill_price, 1e-9)
+        cost = qty * fill_price + FEE_PER_TRADE_USD
+        if cost > self.cash:
+            return False
+        slip_cost = qty * (fill_price - price)
+        self.cash -= cost
+        self.positions[sym] = self.positions.get(sym, 0.0) + qty
+        self.last_prices[sym] = price
+        self.n_trades += 1
+        self.total_fees += FEE_PER_TRADE_USD
+        self.total_slippage += slip_cost
+        self.trades.append((ts, sym, "BUY"))
+        return True
+
+    def sell_all(self, sym: str, price: float, ts: pd.Timestamp) -> bool:
+        qty = self.positions.get(sym, 0.0)
+        if qty <= 1e-9:
+            return False
+        fill_price = price * (1.0 - SLIPPAGE_BPS * 1e-4)
+        proceeds = qty * fill_price - FEE_PER_TRADE_USD
+        slip_cost = qty * (price - fill_price)
+        self.cash += proceeds
+        self.positions[sym] = 0.0
+        self.last_prices[sym] = price
+        self.n_trades += 1
+        self.total_fees += FEE_PER_TRADE_USD
+        self.total_slippage += slip_cost
+        self.trades.append((ts, sym, "SELL"))
+        return True
+
+    def equity(self, prices: dict[str, float]) -> float:
+        e = self.cash
+        for sym, qty in self.positions.items():
+            if qty > 0:
+                e += qty * prices.get(sym, self.last_prices.get(sym, 0.0))
+        return e
+
+    def mark_to_market(self, ts: pd.Timestamp, prices: dict[str, float]) -> float:
+        eq = self.equity(prices)
+        self.equity_curve.append((ts, eq))
+        return eq
+
+
+def simulate_weighted(model: PatchTransformer,
+                      features: dict[str, pd.DataFrame],
+                      device: str) -> WeightedBroker:
+    """Confidence-weighted dynamic-sizing strategy.
+
+    For each timestep:
+      1. Predict 1h-horizon Sharpe for each ready symbol via mh_head.
+      2. For symbols with positive predicted Sharpe, compute Kelly-like
+         dollar size = clip(sharpe * KELLY_SCALE, 0, MAX_POS_FRACTION) * free_cash.
+      3. Sort candidates by suggested size, take top MAX_NEW_TRADES_PER_TIMESTEP.
+      4. Execute (deducting from free cash sequentially).
+      5. Auto-sell positions held > WEIGHTED_HOLD_BARS.
+    """
+    broker = WeightedBroker(STARTING_CASH_USD, min_reserve_frac=MIN_CASH_RESERVE_PCT)
+    cols = USE_FEATURES
+    feat_arrays = {s: f[cols].to_numpy(np.float32) for s, f in features.items()}
+    close_arrays = {s: f["close"].to_numpy(np.float32) for s, f in features.items()}
+
+    events_by_ts: dict[pd.Timestamp, list[tuple[str, int]]] = {}
+    for sym, f in features.items():
+        for i, ts in enumerate(f["timestamp"]):
+            events_by_ts.setdefault(ts, []).append((sym, i))
+    sorted_ts = sorted(events_by_ts.keys())
+
+    C = model.context_len
+    last_idx_by_sym: dict[str, int] = {s: -1 for s in features}
+    bought_at_bar: dict[str, int] = {}
+    bar_count = 0
+
+    for ts in sorted_ts:
+        bar_count += 1
+        events_here = events_by_ts[ts]
+        for sym, i_now in events_here:
+            last_idx_by_sym[sym] = i_now
+
+        # 1) Auto-sell positions held > WEIGHTED_HOLD_BARS
+        to_close = []
+        for sym, b in bought_at_bar.items():
+            if (bar_count - b) >= WEIGHTED_HOLD_BARS and broker.positions.get(sym, 0.0) > 0:
+                to_close.append(sym)
+        for sym in to_close:
+            price = float(close_arrays[sym][last_idx_by_sym[sym]])
+            if broker.sell_all(sym, price, ts):
+                bought_at_bar.pop(sym, None)
+
+        # 2) Get predictions for all ready symbols at this timestamp
+        batch_X, batch_meta = [], []
+        for sym, i_now in events_here:
+            if i_now >= C - 1:
+                batch_X.append(feat_arrays[sym][i_now - C + 1 : i_now + 1])
+                batch_meta.append((sym, i_now))
+
+        if batch_X and model.horizons_minutes:
+            with torch.no_grad():
+                model.eval()
+                xb = torch.from_numpy(np.stack(batch_X)).to(device)
+                mh_mean, mh_log_std = model.forward_multi_horizon(xb)
+                # 1h horizon for sizing
+                h_mean = mh_mean[:, 1]
+                h_std = torch.exp(mh_log_std[:, 1])
+                pred_sharpe = (h_mean / (h_std + 1e-12)).cpu().tolist()
+            model.train()
+
+            # 3) Build candidates: only positive-Sharpe symbols
+            free_cash_now = broker.free_cash()
+            candidates = []
+            for (sym, i_now), ps in zip(batch_meta, pred_sharpe):
+                if ps <= 0:
+                    continue
+                base_frac = min(ps * KELLY_SCALE, MAX_POS_FRACTION_OF_FREE_CASH)
+                usd_size = base_frac * free_cash_now
+                if usd_size >= WEIGHTED_MIN_TRADE_USD:
+                    candidates.append((sym, i_now, usd_size, ps))
+
+            # 4) Sort by suggested $ size, take top N
+            candidates.sort(key=lambda t: -t[2])
+            candidates = candidates[:MAX_NEW_TRADES_PER_TIMESTEP]
+
+            # 5) Execute (re-check free cash each time since previous trades used some)
+            for sym, i_now, suggested_usd, ps in candidates:
+                # Re-cap at MAX_POS_FRACTION of CURRENT free cash
+                cap = MAX_POS_FRACTION_OF_FREE_CASH * broker.free_cash()
+                actual = min(suggested_usd, cap)
+                if actual < WEIGHTED_MIN_TRADE_USD:
+                    continue
+                price = float(close_arrays[sym][i_now])
+                if broker.buy_usd(sym, price, ts, actual):
+                    bought_at_bar[sym] = bar_count
+
+        prices = {s: float(close_arrays[s][last_idx_by_sym[s]])
+                  for s in features if last_idx_by_sym[s] >= 0}
+        broker.mark_to_market(ts, prices)
+
+    return broker
+
+
+# ============================================================================
 # CONTRACT — DO NOT change the signature
 # ============================================================================
 
@@ -834,26 +1020,33 @@ def train_and_eval(seed: int = 0) -> tuple:
     eval_broker = simulate(model, eval_feat, device, learn=False)
 
     # Phase 4: parallel evaluation with the BEST-STOCK PICKER strategy
-    # (uses the same trained model, different decision rule + broker)
     picker = simulate_best_picker(model, eval_feat, device)
 
-    # Return tuple: 5 primary + 4 picker = 9 elements (extends 5-tuple contract)
+    # Phase 5: WEIGHTED dynamic-sizing strategy (exp32)
+    weighted = simulate_weighted(model, eval_feat, device)
+
+    # Return tuple: 5 primary + 4 picker + 4 weighted = 13 elements
     return (
         eval_broker.equity_curve, eval_broker.n_trades,
         eval_broker.total_fees, eval_broker.total_slippage,
         eval_broker.trades,
         # ----- secondary: best-stock picker -----
         picker.equity_curve, picker.n_trades, picker.total_fees, picker.trades,
+        # ----- tertiary: weighted dynamic sizing -----
+        weighted.equity_curve, weighted.n_trades, weighted.total_fees, weighted.trades,
     )
 
 
 if __name__ == "__main__":
     t0 = time.time()
-    eq, nt, fees, slip, trades, p_eq, p_nt, p_fees, p_trades = train_and_eval(seed=0)
-    print(f"\n[primary] bars={len(eq)}  trades={nt}  fees=${fees:.2f}  slippage=${slip:.2f}")
-    if eq:
-        print(f"[primary] equity start=${eq[0][1]:,.2f}  end=${eq[-1][1]:,.2f}")
-    print(f"[picker]  bars={len(p_eq)}  trades={p_nt}  fees=${p_fees:.2f}")
-    if p_eq:
-        print(f"[picker]  equity start=${p_eq[0][1]:,.2f}  end=${p_eq[-1][1]:,.2f}")
+    result = train_and_eval(seed=0)
+    eq, nt, fees, slip, trades = result[:5]
+    p_eq, p_nt, p_fees, p_trades = result[5:9]
+    w_eq, w_nt, w_fees, w_trades = result[9:13]
+    print(f"\n[primary]  bars={len(eq)}  trades={nt}  fees=${fees:.2f}  slippage=${slip:.2f}")
+    if eq: print(f"[primary]  equity start=${eq[0][1]:,.2f}  end=${eq[-1][1]:,.2f}")
+    print(f"[picker]   bars={len(p_eq)}  trades={p_nt}  fees=${p_fees:.2f}")
+    if p_eq: print(f"[picker]   equity start=${p_eq[0][1]:,.2f}  end=${p_eq[-1][1]:,.2f}")
+    print(f"[weighted] bars={len(w_eq)}  trades={w_nt}  fees=${w_fees:.2f}")
+    if w_eq: print(f"[weighted] equity start=${w_eq[0][1]:,.2f}  end=${w_eq[-1][1]:,.2f}")
     print(f"[experiment] total wall: {time.time()-t0:.1f}s")
