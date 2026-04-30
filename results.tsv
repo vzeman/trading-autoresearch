@@ -1,0 +1,2 @@
+commit	sharpe	sharpe_ci_low	max_dd_pct	pnl_usd	trades	status	description
+1df9170	-0.3525	-4.5208	-0.22	-11.78	5	auto	Initial scaffold: Karpathy-style autoresearch for portfolio mgmt

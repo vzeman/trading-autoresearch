@@ -5,7 +5,35 @@ Karpathy-style [autoresearch](https://github.com/karpathy/autoresearch) harness,
 ## Latest results
 
 <!-- RESULTS_START -->
-_No experiments yet. Run `python evaluator.py` to populate this section._
+
+_Last updated: 2026-04-30 05:07 UTC_  
+_Total experiments: **1**  ·  kept: **0**  ·  latest commit: `1df9170`_
+
+### Latest experiment
+
+![equity curve](docs/equity_latest.png)
+
+| metric | value |
+|---|---|
+| Sharpe (median over seeds) | **-0.353** |
+| Sharpe — bootstrap CI low (5%) | **-4.521** |
+| Sharpe — bootstrap CI high (95%) | +5.292 |
+| Max drawdown | -0.22% |
+| Net PnL | $-11.78 (-0.024%) |
+| Trades | 5 |
+| Fees / slippage | $5.00 / $1.00 |
+| Wall time | 1244.6s |
+| Seeds completed | 2 |
+
+### Progress over all experiments
+
+![progress](docs/progress.png)
+
+### Leaderboard (top 5 kept by Sharpe CI-low)
+
+| # | commit | Sharpe | CI-low | DD% | PnL | Trades | Description |
+|---|---|---:|---:|---:|---:|---:|---|
+
 <!-- RESULTS_END -->
 
 ```
