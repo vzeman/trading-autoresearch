@@ -207,9 +207,9 @@ def featurize(bars: pd.DataFrame, context: dict[str, pd.DataFrame] | None = None
 
 PATCH_LEN = 8
 CONTEXT_PATCHES = 16            # context window = PATCH_LEN * CONTEXT_PATCHES = 128 bars
-D_MODEL = 128                   # exp17: bigger model (D_MODEL=64 failed; try the OTHER direction)
+D_MODEL = 96                    # exp11 KEPT; exp14 (64) and exp17 (128) both discarded
 N_HEADS = 4
-N_LAYERS = 3
+N_LAYERS = 4    # exp18: deeper model — width tested, try depth
 D_FF = 192
 DROPOUT = 0.1
 PRED_HORIZON = 5
