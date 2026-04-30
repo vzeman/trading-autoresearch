@@ -18,3 +18,4 @@ dff38d6	2.3128	-6.4862	-0.30	74.27	14	keep	exp10 KEEP 🎯 HOLD bias 1.0→1.5 �
 94f2940	2.3478	-6.4834	-0.30	75.39	13	discard	exp13: PRETRAIN_EPOCHS 2→3 — sharpe & ci_low IDENTICAL to exp11. Extra epoch wasted. Bottleneck isn't pretrain capacity. Reverted (simpler wins).
 da2cc8b	2.2552	-6.3273	-0.30	72.25	11	discard	exp14: D_MODEL 96→64 — sharpe -0.09. Smaller model CAN'T find the +2.348 equilibrium (capped at +2.255). 96 was doing useful work. Reverted.
 99613fa	-3.2960	-11.3641	-0.35	-106.62	19	discard	exp15: RL_EPOCHS 1→2 — CATASTROPHIC. 6/10 seeds at sharpe -3.3 to -3.7, pnl -$106 to -$121. 4/10 still profitable. Bimodal failure confirms RL=1 is the ceiling for this family. Same as exp2. Reverted.
+c17f86b	2.2552	-6.3273	-0.30	72.25	11	discard	exp16 (commit hash drift — was ENTROPY_COEF 0.01→0.05): sharpe +2.35→+2.26. Higher entropy pushed seeds OUT of the +2.348 optimum into the lower +2.255 equilibrium. Reverted.

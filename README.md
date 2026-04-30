@@ -2,12 +2,35 @@
 
 Karpathy-style [autoresearch](https://github.com/karpathy/autoresearch) harness, adapted for **portfolio management research**: an LLM agent autonomously iterates on a small intraday transformer + RL policy overnight, keeping changes that robustly improve risk-adjusted returns.
 
+## Reading the charts
+
+Two PNGs auto-regenerate on every experiment run:
+
+### `docs/equity_latest.png` — equity curve
+
+- **Each colored line is one of `N_SEEDS=10` random initializations of the same model.** Same architecture, same hyperparameters, same data — different starting weights and different RL action samples. Cross-seed variance shows how robust the result is.
+- **Dashed gray horizontal line** at `$50,000` = starting capital. Anything above is profit; below is loss.
+- **Vertical green dotted lines** = BUY trades on **seed 0** only (showing all 10 seeds' markers would be unreadable; seed 0 is representative).
+- **Vertical red dotted lines** = SELL trades on **seed 0** only.
+- **Title** shows: commit, median Sharpe + bootstrap CI low, max DD across seeds, median trade count.
+
+A **healthy** result: lines clustered tight (low cross-seed variance), all rising above the start line, modest trade-marker density.
+A **broken** result: lines fan out wildly, some up some down, dense forest of vertical markers (over-trading bleeds through fees).
+
+### `docs/progress.png` — progress over experiments
+
+- **Blue solid line** = median Sharpe per experiment (chronological order).
+- **Gray dashed line** = `sharpe_ci_low` (5% bootstrap quantile) per experiment.
+- **Green solid line** = running best of `sharpe_ci_low` across **kept** experiments — what the agent is actively ratcheting upward.
+- **Dot color** per experiment: green = kept, red = discarded, gray = crashed.
+- **Black horizontal line at 0** = breakeven Sharpe. Above the line = the model produces positive risk-adjusted returns on the held-out 2-week eval window.
+
 ## Latest results
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 08:20 UTC_  
-_Total experiments: **19**  ·  kept: **7**  ·  latest commit: `99613fa`_
+_Last updated: 2026-04-30 08:28 UTC_  
+_Total experiments: **20**  ·  kept: **7**  ·  latest commit: `c17f86b`_
 
 ### Latest experiment
 
@@ -15,14 +38,14 @@ _Total experiments: **19**  ·  kept: **7**  ·  latest commit: `99613fa`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **-3.296** |
-| Sharpe — bootstrap CI low (5%) | **-11.364** |
-| Sharpe — bootstrap CI high (95%) | +5.420 |
-| Max drawdown | -0.35% |
-| Net PnL | $-106.62 (-0.213%) |
-| Trades | 19 |
-| Fees / slippage | $19.00 / $3.81 |
-| Wall time | 511.4s |
+| Sharpe (median over seeds) | **+2.255** |
+| Sharpe — bootstrap CI low (5%) | **-6.327** |
+| Sharpe — bootstrap CI high (95%) | +10.013 |
+| Max drawdown | -0.30% |
+| Net PnL | $+72.25 (+0.145%) |
+| Trades | 11 |
+| Fees / slippage | $11.00 / $2.21 |
+| Wall time | 304.0s |
 | Seeds completed | 10 |
 
 ### Progress over all experiments

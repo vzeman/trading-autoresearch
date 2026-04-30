@@ -206,8 +206,8 @@ def featurize(bars: pd.DataFrame, context: dict[str, pd.DataFrame] | None = None
 # ============================================================================
 
 PATCH_LEN = 8
-CONTEXT_PATCHES = 24            # exp12: 24*8=192 bars (~3.2h) — more macro context
-D_MODEL = 64                    # exp14: smaller — less overfit on 14d eval
+CONTEXT_PATCHES = 16            # context window = PATCH_LEN * CONTEXT_PATCHES = 128 bars
+D_MODEL = 128                   # exp17: bigger model (D_MODEL=64 failed; try the OTHER direction)
 N_HEADS = 4
 N_LAYERS = 3
 D_FF = 192
@@ -222,7 +222,7 @@ PRETRAIN_LR = 3e-4
 RL_PRETRAIN_EPOCHS = 1          # offline RL pass(es) on TRAIN slice
 RL_LR = 2e-5     # exp7 KEPT setting (known stable, no rogue seeds)
 RL_COEF = 1.0
-ENTROPY_COEF = 0.05  # exp16: 5× more exploration — policy may have converged too early
+ENTROPY_COEF = 0.01
 SGD_BATCH = 64
 GRAD_CLIP = 1.0
 RL_STEP_EVERY_BARS = 5
