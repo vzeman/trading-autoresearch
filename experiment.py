@@ -158,10 +158,10 @@ PRED_HORIZON = 5
 RL_REWARD_HORIZON = 3
 ACTION_HEAD_HOLD_BIAS = 1.0     # softmax([-1,1,-1]) ≈ [13%,73%,13%]: explore but lean HOLD
 
-PRETRAIN_EPOCHS = 2             # supervised forecast pretrain on TRAIN slice
+PRETRAIN_EPOCHS = 4             # supervised forecast pretrain on TRAIN slice
 PRETRAIN_BATCH = 128
 PRETRAIN_LR = 3e-4
-RL_PRETRAIN_EPOCHS = 3          # offline RL pass(es) on TRAIN slice
+RL_PRETRAIN_EPOCHS = 1          # offline RL pass(es) on TRAIN slice
 RL_LR = 1e-5
 RL_COEF = 1.0
 ENTROPY_COEF = 0.01
