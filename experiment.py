@@ -224,6 +224,14 @@ RL_LR = 2e-5     # exp7 KEPT setting (known stable, no rogue seeds)
 RL_COEF = 1.0
 ENTROPY_COEF = 0.01
 VOL_PENALTY = 0.0   # exp20/21 showed: small penalty=invisible, large penalty=destabilizing. Off.
+
+# ============================================================================
+# STRATEGY-LEVEL "STICKINESS" — minimum time between portfolio moves.
+# Each strategy defines its own. Higher = more committed positions, less churn.
+# 1 = current behavior (can change every bar).
+# ============================================================================
+PRIMARY_MIN_HOLD_BARS = 1     # primary strategy: how many bars to hold before allowing position change
+# (Picker already has PICKER_BUY_COOLDOWN_S = 5 min between BUYs.)
 SGD_BATCH = 64
 GRAD_CLIP = 1.0
 RL_STEP_EVERY_BARS = 5
@@ -396,7 +404,10 @@ def simulate(model: PatchTransformer, features: dict[str, pd.DataFrame], device:
     fixed_cost_frac = 2.0 * FEE_PER_TRADE_USD / NOTIONAL_PER_SYMBOL_USD
 
     broker = PaperBroker()
-    sym_state: dict[str, dict] = {s: {"i": -1, "pending": [], "last_pos": 0.0} for s in features}
+    # last_change_idx tracks the bar index when this symbol's position last changed,
+    # so we can enforce PRIMARY_MIN_HOLD_BARS between consecutive position changes.
+    sym_state: dict[str, dict] = {s: {"i": -1, "pending": [], "last_pos": 0.0,
+                                       "last_change_idx": -10**9} for s in features}
 
     cols = USE_FEATURES
     feat_arrays: dict[str, np.ndarray] = {s: f[cols].to_numpy(np.float32) for s, f in features.items()}
@@ -453,7 +464,13 @@ def simulate(model: PatchTransformer, features: dict[str, pd.DataFrame], device:
             for (sym, i_now), a_idx, X_arr in zip(batch_meta, a_idx_list, batch_X):
                 st = sym_state[sym]
                 target = float(ACTION_TO_POS[a_idx])
+                # STICKINESS: if not enough bars since last position change, force HOLD
+                if (i_now - st["last_change_idx"]) < PRIMARY_MIN_HOLD_BARS:
+                    target = st["last_pos"]
+                    a_idx = 1   # HOLD
                 pos_change = abs(target - st["last_pos"])
+                if pos_change > 1e-9:
+                    st["last_change_idx"] = i_now
                 broker.update(sym, float(close_arrays[sym][i_now]), ts, target)
                 st["pending"].append({
                     "X": X_arr.copy(),
@@ -519,8 +536,8 @@ def simulate(model: PatchTransformer, features: dict[str, pd.DataFrame], device:
 
 PICKER_POSITION_USD = 1_000.0
 PICKER_BUY_COOLDOWN_S = 5 * 60     # max 1 buy per 5 minutes
-PICKER_BUY_THRESHOLD = 0.5         # action_logits[BUY] - HOLD must exceed this
-PICKER_SELL_THRESHOLD = 0.5        # action_logits[SELL] - HOLD must exceed this
+PICKER_HOLD_BARS = 60              # auto-sell after N bars (1 hour at 1-min bars)
+PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at once
 
 
 class PickerBroker:
@@ -596,9 +613,19 @@ class PickerBroker:
 def simulate_best_picker(model: PatchTransformer,
                          features: dict[str, pd.DataFrame],
                          device: str) -> PickerBroker:
-    """At each timestamp, pick the SINGLE highest-conviction BUY and execute
-    one $1k buy if cooldown permits. Sell entire position when SELL conviction
-    exceeds threshold for any held symbol.
+    """At each timestamp, RANK all ready symbols by P(BUY) (softmax of action head).
+
+    Buy logic: every PICKER_BUY_COOLDOWN_S, buy the TOP-1 ranked symbol's $1k
+    position, regardless of absolute level. Pure rank-based — works even when
+    HOLD bias makes all P(BUY) values low in absolute terms, because we only
+    care which symbol the model likes MOST relative to the others.
+
+    Sell logic: each held position auto-exits after PICKER_HOLD_BARS bars
+    (deterministic timer — no model decision needed for exits). This makes
+    the picker's behavior independent of SELL-logit calibration.
+
+    Concurrency: max PICKER_MAX_CONCURRENT positions held at once. Beyond
+    that, new buys wait for the cooldown AND a freed slot.
     """
     broker = PickerBroker()
     cols = USE_FEATURES
@@ -613,38 +640,48 @@ def simulate_best_picker(model: PatchTransformer,
 
     C = model.context_len
     last_idx_by_sym: dict[str, int] = {s: -1 for s in features}
+    # Track when each held position was bought (bar count since start of replay)
+    bought_at_bar: dict[str, int] = {}   # sym -> bar count
+    bar_count = 0
 
     for ts in sorted_ts:
+        bar_count += 1
         events_here = events_by_ts[ts]
         for sym, i_now in events_here:
             last_idx_by_sym[sym] = i_now
 
-        # Score every ready symbol with the model's action head
+        # 1) Auto-sell positions held longer than PICKER_HOLD_BARS
+        to_close = []
+        for sym, bought_bar in bought_at_bar.items():
+            if (bar_count - bought_bar) >= PICKER_HOLD_BARS and broker.positions.get(sym, 0.0) > 0:
+                to_close.append(sym)
+        for sym in to_close:
+            price = float(close_arrays[sym][last_idx_by_sym[sym]])
+            if broker.sell_all(sym, price, ts):
+                bought_at_bar.pop(sym, None)
+
+        # 2) Score every ready symbol; buy top-ranked if cooldown + slot available
         batch_X, batch_meta = [], []
         for sym, i_now in events_here:
             if i_now >= C - 1:
                 batch_X.append(feat_arrays[sym][i_now - C + 1 : i_now + 1])
                 batch_meta.append((sym, i_now))
 
-        if batch_X:
-            with torch.no_grad():
-                model.eval()
-                xb = torch.from_numpy(np.stack(batch_X)).to(device)
-                _, _, alog = model(xb)   # (B, 3): SELL=0, HOLD=1, BUY=2
-                buy_score = (alog[:, 2] - alog[:, 1]).cpu().tolist()
-                sell_score = (alog[:, 0] - alog[:, 1]).cpu().tolist()
-            model.train()
-
-            # 1) Sell first — for held positions, exit if model says SELL strongly
-            for (sym, i_now), bs, ss in zip(batch_meta, buy_score, sell_score):
-                if broker.positions.get(sym, 0.0) > 0 and ss > PICKER_SELL_THRESHOLD:
-                    broker.sell_all(sym, float(close_arrays[sym][i_now]), ts)
-
-            # 2) Buy second — pick BEST symbol, one buy per cooldown
-            best_idx = max(range(len(buy_score)), key=lambda k: buy_score[k])
-            if buy_score[best_idx] > PICKER_BUY_THRESHOLD:
+        if batch_X and broker._cooldown_ok(ts):
+            n_active = sum(1 for q in broker.positions.values() if q > 0)
+            if n_active < PICKER_MAX_CONCURRENT:
+                with torch.no_grad():
+                    model.eval()
+                    xb = torch.from_numpy(np.stack(batch_X)).to(device)
+                    _, _, alog = model(xb)   # (B, 3): SELL=0, HOLD=1, BUY=2
+                    # Rank by softmax P(BUY) — relative scoring, robust to HOLD bias
+                    p_buy = torch.softmax(alog, dim=-1)[:, 2].cpu().tolist()
+                model.train()
+                best_idx = max(range(len(p_buy)), key=lambda k: p_buy[k])
                 sym, i_now = batch_meta[best_idx]
-                broker.buy(sym, float(close_arrays[sym][i_now]), ts)
+                price = float(close_arrays[sym][i_now])
+                if broker.buy(sym, price, ts):
+                    bought_at_bar[sym] = bar_count
 
         # Mark to market every bar
         prices = {s: float(close_arrays[s][last_idx_by_sym[s]])

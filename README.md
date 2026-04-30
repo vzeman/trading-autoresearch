@@ -17,12 +17,12 @@ The same trained model can be evaluated under different "trading strategies." Ea
 
 ### Strategy 2 (secondary, evaluation only): **best-stock picker** ⭐ NEW
 
-- At each bar, score every symbol by its model's `BUY` confidence (`logit[BUY] − logit[HOLD]`).
-- Buy ONLY the single highest-scoring symbol — fixed $1k each, **max 1 buy per 5 minutes** (cooldown).
-- Sells: close any held position whose `SELL` confidence exceeds threshold.
-- Position can stack (multiple buys of same symbol if it stays the best).
-- **Pros:** concentration on strongest signal, lower per-trade fee drag, mimics discretionary trading workflow.
-- **Cons:** tail-risk from concentration, unused capital while held.
+- At each bar, **rank** all 5 symbols by softmax `P(BUY)` from the model's action head.
+- Buy logic: every `PICKER_BUY_COOLDOWN_S = 5min`, buy the **top-1 ranked** symbol's $1k position. Pure rank-based — works even when HOLD bias suppresses absolute BUY logits, because we only care which symbol the model likes MOST relative to others.
+- Sell logic: each held position auto-exits after `PICKER_HOLD_BARS = 60` bars (1 hour). Deterministic timer — no model decision needed for exits, makes behavior independent of SELL-logit calibration.
+- Concurrency cap: max `PICKER_MAX_CONCURRENT = 5` distinct positions held at once.
+- **Pros:** concentration on strongest signal, lower per-trade fee drag, robust to HOLD bias, mimics a discretionary trader's workflow.
+- **Cons:** tail-risk from concentration; unused capital while between buys.
 - **Currently used for evaluation only.** Each experiment now produces a SECOND chart (`docs/picker_latest.png`) showing what would happen if we used the model's outputs this way.
 
 ### Strategy 3 (planned): top-K picker
@@ -51,6 +51,17 @@ Multi-window walk-forward: train on weeks 1–2, eval on week 3; train on weeks 
 
 **Why this matters for RL:** each strategy provides a different reward shape. A model that's only "okay" under strategy 1 might be excellent under strategy 2 (e.g., it correctly identifies the single best opportunity even if its average prediction is mediocre). Future RL iterations can use a **combined** reward across strategies — encouraging the model to be useful in multiple trading contexts. This is the "sweet stack" of training signals.
 
+### Per-strategy "stickiness" parameters
+
+Every strategy can specify a minimum time between portfolio moves to discourage over-trading and force commitment:
+
+| Strategy | Knob | Default | What it does |
+|---|---|---|---|
+| Primary | `PRIMARY_MIN_HOLD_BARS` | `1` (no holding required) | After a position change, must hold ≥N bars before next change |
+| Picker | `PICKER_BUY_COOLDOWN_S` | `300` (5 min) | Minimum seconds between consecutive buys |
+
+These act as inductive priors: when a real edge exists, holding for longer is usually fine and saves fees. When there's no edge, stickiness prevents the model from churning through fees on noise. Each strategy can tune its own.
+
 ## Reading the charts
 
 Two PNGs auto-regenerate on every experiment run:
@@ -78,23 +89,38 @@ A **broken** result: lines fan out wildly, some up some down, dense forest of ve
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 09:55 UTC_  
-_Total experiments: **26**  ·  kept: **7**  ·  latest commit: `c7095f1`_
+_Last updated: 2026-04-30 10:07 UTC_  
+_Total experiments: **27**  ·  kept: **7**  ·  latest commit: `323240d`_
 
-### Latest experiment
+### Latest experiment — primary strategy (full portfolio)
 
 ![equity curve](docs/equity_latest.png)
 
+### Latest experiment — best-stock picker (secondary strategy)
+
+![picker equity](docs/picker_latest.png)
+
+### Strategy comparison @ this checkpoint
+
+| Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees |
+|---|---:|---:|---:|---:|---:|---:|
+| Primary (full portfolio every-bar) | **+2.348** 🏆 | **$+75.39** 🏆 | +0.151% | -0.30% | 13 | $13.00 |
+| Picker (best-stock, $1k cooldown 5min) | +0.000 | $+0.00 | +0.000% | **+0.00%** 🏆 | 0 | **$0.00** 🏆 |
+
+**Best by Sharpe:** Primary (full portfolio every-bar)
+
+### Detailed metrics — primary strategy
+
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **-194.085** |
-| Sharpe — bootstrap CI low (5%) | **-202.433** |
-| Sharpe — bootstrap CI high (95%) | -186.019 |
-| Max drawdown | -7.60% |
-| Net PnL | $-3,078.15 (-6.156%) |
-| Trades | 2558 |
-| Fees / slippage | $2558.00 / $511.60 |
-| Wall time | 299.9s |
+| Sharpe (median over seeds) | **+2.348** |
+| Sharpe — bootstrap CI low (5%) | **-6.483** |
+| Sharpe — bootstrap CI high (95%) | +10.170 |
+| Max drawdown | -0.30% |
+| Net PnL | $+75.39 (+0.151%) |
+| Trades | 13 |
+| Fees / slippage | $13.00 / $2.61 |
+| Wall time | 388.1s |
 | Seeds completed | 10 |
 
 ### Progress over all experiments
