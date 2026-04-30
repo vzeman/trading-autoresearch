@@ -89,6 +89,50 @@ def _pct_time_over_spy(strategy_curve: list, spy_curve: list) -> float:
     return float((s_v > spy_at).mean() * 100.0)
 
 
+def _allocation_curves(equity_curves: list[list], cash_curves: list[list]) -> list[list]:
+    """Per-seed allocation% = 100 * (equity - cash) / equity. Returns list of [(ts, pct)]."""
+    out = []
+    for eq, ca in zip(equity_curves, cash_curves):
+        if not eq or not ca or len(eq) != len(ca):
+            out.append([])
+            continue
+        alloc = []
+        for (t1, e), (t2, c) in zip(eq, ca):
+            denom = e if e > 1e-9 else 1e-9
+            pct = max(0.0, min(100.0, 100.0 * (e - c) / denom))
+            alloc.append((t1, pct))
+        out.append(alloc)
+    return out
+
+
+def _draw_allocation_axis(ax, equity_curves, cash_curves) -> float:
+    """Draw per-seed allocation% lines on a subplot. Returns avg allocation% across seeds."""
+    alloc_curves = _allocation_curves(equity_curves, cash_curves)
+    avg_alloc = 0.0
+    n_seen = 0
+    for i, ac in enumerate(alloc_curves):
+        if not ac:
+            continue
+        ts = [t for t, _ in ac]
+        vs = [v for _, v in ac]
+        ax.plot(ts, vs, alpha=0.6, linewidth=0.8, label=f"seed {i}")
+        avg_alloc += float(np.mean(vs))
+        n_seen += 1
+    if n_seen > 0:
+        avg_alloc /= n_seen
+    # median curve overlay
+    med = _median_curve(alloc_curves)
+    if med:
+        med_t = [t for t, _ in med]
+        med_v = [v for _, v in med]
+        ax.plot(med_t, med_v, color="#1f2937", linewidth=1.6, label="median", zorder=4)
+    ax.set_ylim(0, 100)
+    ax.set_ylabel("alloc %")
+    ax.grid(True, alpha=0.3)
+    ax.axhline(50, color="gray", linestyle=":", alpha=0.4)
+    return avg_alloc
+
+
 def _median_curve(curves: list[list]) -> list:
     """Build a 'median' equity curve across seeds, aligned to seed-0 timestamps."""
     valid = [c for c in curves if c and len(c) > 1]
@@ -173,13 +217,23 @@ def run(n_workers: int = 3) -> dict:
     weighted_fees_l: list[float] = []
     seeds_done = 0
 
+    primary_cash_curves: list[list[tuple]] = []
+    picker_cash_curves: list[list[tuple]] = []
+    weighted_cash_curves: list[list[tuple]] = []
+
     seed_results = _maybe_parallel_seeds(n_workers)
     for seed, result in seed_results:
-        # Backward-compat: 4/5/9/13 tuple lengths supported.
-        # 13-tuple = primary + picker + weighted (Strategy 3).
+        # Backward-compat: 4/5/9/13/16 tuple lengths supported.
+        # 16-tuple = 13 + 3 parallel cash_curves for allocation%.
         picker_eq, picker_nt, picker_fees, picker_trades = [], 0, 0.0, []
         weighted_eq, weighted_nt, weighted_fees, weighted_trades = [], 0, 0.0, []
-        if len(result) == 13:
+        primary_cash, picker_cash, weighted_cash = [], [], []
+        if len(result) == 16:
+            (eq, n_trades, fees, slip, trades,
+             picker_eq, picker_nt, picker_fees, picker_trades,
+             weighted_eq, weighted_nt, weighted_fees, weighted_trades,
+             primary_cash, picker_cash, weighted_cash) = result
+        elif len(result) == 13:
             (eq, n_trades, fees, slip, trades,
              picker_eq, picker_nt, picker_fees, picker_trades,
              weighted_eq, weighted_nt, weighted_fees, weighted_trades) = result
@@ -223,6 +277,9 @@ def run(n_workers: int = 3) -> dict:
             weighted_pnls.append(0.0); weighted_sharpes.append(0.0); weighted_dds.append(0.0)
         weighted_trades_n.append(weighted_nt)
         weighted_fees_l.append(weighted_fees)
+        primary_cash_curves.append(primary_cash)
+        picker_cash_curves.append(picker_cash)
+        weighted_cash_curves.append(weighted_cash)
         seeds_done += 1
         print(f"[evaluator] seed {seed}: sharpe={s:+.3f}  dd={dd:+.2f}%  pnl=${pnl:+,.2f}  trades={n_trades}", flush=True)
 
@@ -297,7 +354,8 @@ def run(n_workers: int = 3) -> dict:
     commit = _git_short_hash()
     desc = _last_commit_subject()
     status = "discard" if dd_worst < MAX_DD_FLOOR_PCT else "auto"  # agent overwrites this
-    _render_equity_chart(equity_curves, commit, summary, trades_per_seed=trades_per_seed)
+    _render_equity_chart(equity_curves, commit, summary, trades_per_seed=trades_per_seed,
+                         cash_curves=primary_cash_curves)
 
     # Picker (secondary strategy) — separate chart
     if any(picker_curves):
@@ -306,7 +364,8 @@ def run(n_workers: int = 3) -> dict:
             "trades_med": int(np.median(picker_trades_n)) if picker_trades_n else 0,
         }
         _render_picker_chart(picker_curves, commit, picker_summary,
-                             picker_trades_per_seed=picker_trades_per_seed)
+                             picker_trades_per_seed=picker_trades_per_seed,
+                             cash_curves=picker_cash_curves)
     # Weighted (Strategy 3) — separate chart
     if any(weighted_curves):
         w_summary = {
@@ -315,7 +374,8 @@ def run(n_workers: int = 3) -> dict:
             "trades_med": int(np.median(weighted_trades_n)) if weighted_trades_n else 0,
         }
         _render_weighted_chart(weighted_curves, commit, w_summary,
-                               trades_per_seed=weighted_trades_per_seed)
+                               trades_per_seed=weighted_trades_per_seed,
+                               cash_curves=weighted_cash_curves)
     _append_results_row(commit, summary, status, desc)
     _render_progress_chart()
     _update_readme(summary, commit)
@@ -344,21 +404,24 @@ def _last_commit_subject() -> str:
 
 
 def _render_equity_chart(curves: list[list[tuple]], commit: str, summary: dict,
-                         trades_per_seed: list[list[tuple]] | None = None) -> None:
+                         trades_per_seed: list[list[tuple]] | None = None,
+                         cash_curves: list[list[tuple]] | None = None) -> None:
     """Per-experiment equity curve PNG → docs/equity_latest.png + docs/equity_<commit>.png.
 
-    Overlays:
-      - Each per-seed equity line (thin, colored)
-      - SP500 (SPY) buy-and-hold reference line (thick black dashed)
-      - Start-cash horizontal line
-      - Trade markers (vertical lines, seed 0): green=BUY, red=SELL
+    Top subplot: equity vs SPY benchmark, shading where strategy beats SPY, trade markers.
+    Bottom subplot: per-seed portfolio allocation% over time.
     """
     if not curves:
         return
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(figsize=(10, 5))
+    if cash_curves and any(cash_curves):
+        fig, (ax, ax2) = plt.subplots(2, 1, figsize=(10, 6.5),
+                                       gridspec_kw={"height_ratios": [3, 1]}, sharex=True)
+    else:
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax2 = None
     for i, eq in enumerate(curves):
         if not eq:
             continue
@@ -406,15 +469,22 @@ def _render_equity_chart(curves: list[list[tuple]], commit: str, summary: dict,
     else:
         ax.legend(loc="best", fontsize=8)
 
+    avg_alloc = 0.0
+    if ax2 is not None:
+        avg_alloc = _draw_allocation_axis(ax2, curves, cash_curves)
+        ax2.set_xlabel("time (UTC)")
+
     title_extra = f" · {n_trades_drawn} trade markers (seed 0)" if n_trades_drawn else ""
+    alloc_extra = f"  ·  avg alloc {avg_alloc:.0f}%" if ax2 is not None else ""
     ax.set_title(
         f"Equity — commit {commit}  ·  "
         f"sharpe {summary['sharpe']:+.2f} (CI low {summary['sharpe_ci_low']:+.2f})  ·  "
         f"DD {summary['max_dd_pct']:+.1f}%  ·  {summary['trades']} trades  ·  "
-        f"over SPY {pct_over:.0f}% of time{title_extra}",
+        f"over SPY {pct_over:.0f}% of time{alloc_extra}{title_extra}",
         fontsize=10,
     )
-    ax.set_xlabel("time (UTC)")
+    if ax2 is None:
+        ax.set_xlabel("time (UTC)")
     ax.set_ylabel("portfolio equity ($)")
     ax.grid(True, alpha=0.3)
     fig.autofmt_xdate()
@@ -425,14 +495,20 @@ def _render_equity_chart(curves: list[list[tuple]], commit: str, summary: dict,
 
 
 def _render_picker_chart(curves: list[list[tuple]], commit: str, summary: dict,
-                         picker_trades_per_seed: list[list[tuple]] | None = None) -> None:
+                         picker_trades_per_seed: list[list[tuple]] | None = None,
+                         cash_curves: list[list[tuple]] | None = None) -> None:
     """Best-stock picker equity curve PNG → docs/picker_latest.png + docs/picker_<commit>.png."""
     if not any(curves):
         return
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(figsize=(10, 5))
+    if cash_curves and any(cash_curves):
+        fig, (ax, ax2) = plt.subplots(2, 1, figsize=(10, 6.5),
+                                       gridspec_kw={"height_ratios": [3, 1]}, sharex=True)
+    else:
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax2 = None
     for i, eq in enumerate(curves):
         if not eq:
             continue
@@ -476,14 +552,21 @@ def _render_picker_chart(curves: list[list[tuple]], commit: str, summary: dict,
     else:
         ax.legend(loc="best", fontsize=8)
 
+    avg_alloc_p = 0.0
+    if ax2 is not None:
+        avg_alloc_p = _draw_allocation_axis(ax2, curves, cash_curves)
+        ax2.set_xlabel("time (UTC)")
+
+    alloc_extra = f"  ·  avg alloc {avg_alloc_p:.0f}%" if ax2 is not None else ""
     ax.set_title(
         f"Best-Stock Picker — commit {commit}  ·  "
         f"median PnL ${summary.get('pnl_med', 0):+,.2f}  ·  "
         f"{summary.get('trades_med', 0)} trades  ·  "
-        f"over SPY {pct_over_p:.0f}% of time  ·  {n_picker_trades} markers (seed 0)",
+        f"over SPY {pct_over_p:.0f}%{alloc_extra}  ·  {n_picker_trades} markers (seed 0)",
         fontsize=10,
     )
-    ax.set_xlabel("time (UTC)")
+    if ax2 is None:
+        ax.set_xlabel("time (UTC)")
     ax.set_ylabel("portfolio equity ($)")
     ax.grid(True, alpha=0.3)
     fig.autofmt_xdate()
@@ -494,14 +577,20 @@ def _render_picker_chart(curves: list[list[tuple]], commit: str, summary: dict,
 
 
 def _render_weighted_chart(curves: list[list[tuple]], commit: str, summary: dict,
-                           trades_per_seed: list[list[tuple]] | None = None) -> None:
+                           trades_per_seed: list[list[tuple]] | None = None,
+                           cash_curves: list[list[tuple]] | None = None) -> None:
     """Confidence-weighted strategy equity curve → docs/weighted_latest.png + commit copy."""
     if not any(curves):
         return
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(figsize=(10, 5))
+    if cash_curves and any(cash_curves):
+        fig, (ax, ax2) = plt.subplots(2, 1, figsize=(10, 6.5),
+                                       gridspec_kw={"height_ratios": [3, 1]}, sharex=True)
+    else:
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax2 = None
     for i, eq in enumerate(curves):
         if not eq:
             continue
@@ -544,15 +633,22 @@ def _render_weighted_chart(curves: list[list[tuple]], commit: str, summary: dict
     else:
         ax.legend(loc="best", fontsize=8)
 
+    avg_alloc_w = 0.0
+    if ax2 is not None:
+        avg_alloc_w = _draw_allocation_axis(ax2, curves, cash_curves)
+        ax2.set_xlabel("time (UTC)")
+
+    alloc_extra = f"  ·  avg alloc {avg_alloc_w:.0f}%" if ax2 is not None else ""
     ax.set_title(
         f"Weighted Dynamic Sizing — commit {commit}  ·  "
         f"sharpe {summary.get('sharpe_med', 0):+.2f}  ·  "
         f"median PnL ${summary.get('pnl_med', 0):+,.2f}  ·  "
         f"{summary.get('trades_med', 0)} trades  ·  "
-        f"over SPY {pct_over_w:.0f}% of time  ·  {n_w_trades} markers (seed 0)",
+        f"over SPY {pct_over_w:.0f}%{alloc_extra}  ·  {n_w_trades} markers (seed 0)",
         fontsize=10,
     )
-    ax.set_xlabel("time (UTC)")
+    if ax2 is None:
+        ax.set_xlabel("time (UTC)")
     ax.set_ylabel("portfolio equity ($)")
     ax.grid(True, alpha=0.3)
     fig.autofmt_xdate()

@@ -474,7 +474,15 @@ def simulate(model: PatchTransformer, features: dict[str, pd.DataFrame], device:
     round_trip_var_cost = 2.0 * SLIPPAGE_BPS * 1e-4
     fixed_cost_frac = 2.0 * FEE_PER_TRADE_USD / NOTIONAL_PER_SYMBOL_USD
 
-    broker = PaperBroker()
+    class _CashTrackingPaperBroker(PaperBroker):
+        def __init__(self):
+            super().__init__()
+            self.cash_curve: list[tuple[pd.Timestamp, float]] = []
+        def mark_to_market(self, ts, prices):
+            eq = super().mark_to_market(ts, prices)
+            self.cash_curve.append((ts, self.cash))
+            return eq
+    broker = _CashTrackingPaperBroker()
     # last_change_idx tracks the bar index when this symbol's position last changed,
     # so we can enforce PRIMARY_MIN_HOLD_BARS between consecutive position changes.
     sym_state: dict[str, dict] = {s: {"i": -1, "pending": [], "last_pos": 0.0,
@@ -720,6 +728,9 @@ class PickerBroker:
     def mark_to_market(self, ts: pd.Timestamp, prices: dict[str, float]) -> float:
         eq = self.equity(prices)
         self.equity_curve.append((ts, eq))
+        if not hasattr(self, "cash_curve"):
+            self.cash_curve = []
+        self.cash_curve.append((ts, self.cash))
         return eq
 
 
@@ -877,6 +888,9 @@ class WeightedBroker:
     def mark_to_market(self, ts: pd.Timestamp, prices: dict[str, float]) -> float:
         eq = self.equity(prices)
         self.equity_curve.append((ts, eq))
+        if not hasattr(self, "cash_curve"):
+            self.cash_curve = []
+        self.cash_curve.append((ts, self.cash))
         return eq
 
 
@@ -1015,7 +1029,7 @@ def train_and_eval(seed: int = 0) -> tuple:
     # Phase 5: WEIGHTED dynamic-sizing strategy (exp32)
     weighted = simulate_weighted(model, eval_feat, device)
 
-    # Return tuple: 5 primary + 4 picker + 4 weighted = 13 elements
+    # Return tuple: 5 primary + 4 picker + 4 weighted + 3 cash_curves = 16 elements
     return (
         eval_broker.equity_curve, eval_broker.n_trades,
         eval_broker.total_fees, eval_broker.total_slippage,
@@ -1024,6 +1038,10 @@ def train_and_eval(seed: int = 0) -> tuple:
         picker.equity_curve, picker.n_trades, picker.total_fees, picker.trades,
         # ----- tertiary: weighted dynamic sizing -----
         weighted.equity_curve, weighted.n_trades, weighted.total_fees, weighted.trades,
+        # ----- cash curves for allocation % charting -----
+        getattr(eval_broker, "cash_curve", []),
+        getattr(picker, "cash_curve", []),
+        getattr(weighted, "cash_curve", []),
     )
 
 
