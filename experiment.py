@@ -645,7 +645,7 @@ PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at on
 # Up to MAX_NEW_TRADES_PER_TIMESTEP simultaneous buys, each capped at
 # MAX_POS_FRACTION_OF_FREE_CASH of free cash.
 # ============================================================================
-MAX_POS_FRACTION_OF_FREE_CASH = 0.50  # exp35: bump further — diminishing returns expected
+MAX_POS_FRACTION_OF_FREE_CASH = 0.60  # exp36: keep ratcheting — exp35 (0.50) was best ever
 MIN_CASH_RESERVE_PCT = 0.10           # keep 10% of starting cash unspent
 MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
 KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effect — cap saturates)
