@@ -156,7 +156,7 @@ D_FF = 192
 DROPOUT = 0.1
 PRED_HORIZON = 5
 RL_REWARD_HORIZON = 3
-ACTION_HEAD_HOLD_BIAS = 3.0     # initial logit bias toward HOLD (anti-churn)
+ACTION_HEAD_HOLD_BIAS = 1.0     # softmax([-1,1,-1]) ≈ [13%,73%,13%]: explore but lean HOLD
 
 PRETRAIN_EPOCHS = 2             # supervised forecast pretrain on TRAIN slice
 PRETRAIN_BATCH = 128
