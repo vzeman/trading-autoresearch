@@ -2,3 +2,5 @@ commit	sharpe	sharpe_ci_low	max_dd_pct	pnl_usd	trades	status	description
 4a6dea7	-0.3158	-5.6080	-9.18	-10.56	5	keep	baseline (v2 features, HOLD bias 3.0)
 aeff147	-0.3913	-4.6270	-0.31	-13.06	7	keep	exp1: HOLD bias 3.0→1.0 — ci_low improved -5.61→-4.63, DD -9.18→-0.31%
 1975ba9	-0.4780	-5.7125	-6.35	-15.83	43	discard	exp2: RL_EPOCHS 1→2 — overfit, 6× turnover, ci_low -4.63→-5.71. Reverted.
+0ea0aed	-0.3913	-4.5217	-0.22	-13.06	7	discard	exp3: PRETRAIN_EPOCHS 2→4 — equiv to exp1 (within noise), simpler wins. Reverted.
+9dd7191	-2.5269	-11.7003	-0.26	-49.90	29	infra	infra: batch sim per timestamp (4.5× speedup); RNG path differs. v3 baseline; old rows not apples-to-apples.

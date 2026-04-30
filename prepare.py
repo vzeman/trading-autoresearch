@@ -39,7 +39,7 @@ SLIPPAGE_BPS = 2.0           # per side
 MIN_TRADE_NOTIONAL_USD = 100.0
 
 # ---- Multi-seed eval (no wall-time budget — let each seed finish on this hardware) ----
-N_SEEDS = 3                  # multi-seed runs to combat eval noise
+N_SEEDS = 10                 # 10 seeds × ~40s each → ~7 min/experiment, tight median
 
 
 # ----------------------------------------------------------------------
