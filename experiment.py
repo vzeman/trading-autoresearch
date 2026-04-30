@@ -156,13 +156,13 @@ D_FF = 192
 DROPOUT = 0.1
 PRED_HORIZON = 5
 RL_REWARD_HORIZON = 3
-ACTION_HEAD_HOLD_BIAS = 1.0     # softmax([-1,1,-1]) ≈ [13%,73%,13%]: explore but lean HOLD
+ACTION_HEAD_HOLD_BIAS = 0.5     # exp9: softmax([-0.5,0.5,-0.5]) ≈ [21%,58%,21%]: trade more
 
 PRETRAIN_EPOCHS = 2             # supervised forecast pretrain on TRAIN slice
 PRETRAIN_BATCH = 128
 PRETRAIN_LR = 3e-4
 RL_PRETRAIN_EPOCHS = 1          # offline RL pass(es) on TRAIN slice
-RL_LR = 2.5e-5   # exp8: probe between 2e-5 (stable) and 3e-5 (1/10 blew up)
+RL_LR = 2e-5     # exp7: pulled back from 3e-5 — runaway in 1/10 seeds at longer eval
 RL_COEF = 1.0
 ENTROPY_COEF = 0.01
 SGD_BATCH = 64

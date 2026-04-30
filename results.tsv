@@ -10,3 +10,4 @@ c3775f2	-1.0839	-10.1241	-0.23	-21.57	14	keep	exp4 KEEP: drop signed_log_vol + v
 ed1886c	-0.6490	-9.6965	-0.31	-12.98	8	keep	exp6 KEEP: RL_LR 1e-5→3e-5 — sharpe -1.08→-0.65 (+0.43), per-seed range tightened to [-0.78,-0.43], trades 5-11. Best so far.
 541478d	2.1311	-6.6427	-17.20	68.34	19	discard	v4 baseline @ 2wk eval: 9/10 seeds POSITIVE sharpe (+1.9 to +2.3, +$60-$73 pnl, 15-23 trades). 1 rogue seed: 6169 trades, -17.2% DD, -$8.6k. Auto-discard for DD violation. RL_LR=3e-5 too aggressive on longer train slice — runaway risk.
 8616861	2.0601	-6.6581	-0.32	66.02	21	keep	exp7 KEEP 🚀 RL_LR 3e-5→2e-5 — ALL 10 SEEDS POSITIVE. Median sharpe +2.06, all DD ≤-0.32%, pnl +$56-$73, trades 15-27. First profitable AND stable config.
+765ca93	2.0939	-6.6229	-0.31	67.14	20	discard	exp8: RL_LR 2.5e-5 — sharpe +2.06→+2.09 (within noise). 2e-5 is known-stable (exp7), 3e-5 had rogue seed. Keep safer side. Reverted.

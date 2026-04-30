@@ -6,8 +6,8 @@ Karpathy-style [autoresearch](https://github.com/karpathy/autoresearch) harness,
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 07:19 UTC_  
-_Total experiments: **11**  ·  kept: **4**  ·  latest commit: `8616861`_
+_Last updated: 2026-04-30 07:26 UTC_  
+_Total experiments: **12**  ·  kept: **5**  ·  latest commit: `765ca93`_
 
 ### Latest experiment
 
@@ -15,14 +15,14 @@ _Total experiments: **11**  ·  kept: **4**  ·  latest commit: `8616861`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+2.060** |
-| Sharpe — bootstrap CI low (5%) | **-6.658** |
-| Sharpe — bootstrap CI high (95%) | +9.851 |
-| Max drawdown | -0.32% |
-| Net PnL | $+66.02 (+0.132%) |
-| Trades | 21 |
-| Fees / slippage | $21.00 / $4.22 |
-| Wall time | 300.7s |
+| Sharpe (median over seeds) | **+2.094** |
+| Sharpe — bootstrap CI low (5%) | **-6.623** |
+| Sharpe — bootstrap CI high (95%) | +9.871 |
+| Max drawdown | -0.31% |
+| Net PnL | $+67.14 (+0.134%) |
+| Trades | 20 |
+| Fees / slippage | $20.00 / $4.02 |
+| Wall time | 298.7s |
 | Seeds completed | 10 |
 
 ### Progress over all experiments
@@ -35,8 +35,9 @@ _Total experiments: **11**  ·  kept: **4**  ·  latest commit: `8616861`_
 |---|---|---:|---:|---:|---:|---:|---|
 | 1 | `aeff147` | -0.39 | -4.63 | -0.31 | $-13.06 | 7 | exp1: HOLD bias 3.0→1.0 — ci_low improved -5.61→-4.63, DD -9.18→-0.31% |
 | 2 | `4a6dea7` | -0.32 | -5.61 | -9.18 | $-10.56 | 5 | baseline (v2 features, HOLD bias 3.0) |
-| 3 | `ed1886c` | -0.65 | -9.70 | -0.31 | $-12.98 | 8 | exp6 KEEP: RL_LR 1e-5→3e-5 — sharpe -1.08→-0.65 (+0.43), per-seed range tightened to [-0.78,-0.43], trades 5-11. Best so far. |
-| 4 | `c3775f2` | -1.08 | -10.12 | -0.23 | $-21.57 | 14 | exp4 KEEP: drop signed_log_vol + vol_z_15 — sharpe -2.39→-1.08 (+1.30), per-seed variance 6× tighter, trades 13-51→11-17. Big win. |
+| 3 | `8616861` | +2.06 | -6.66 | -0.32 | $+66.02 | 21 | exp7 KEEP 🚀 RL_LR 3e-5→2e-5 — ALL 10 SEEDS POSITIVE. Median sharpe +2.06, all DD ≤-0.32%, pnl +$56-$73, trades 15-27. First profitable AND stable config. |
+| 4 | `ed1886c` | -0.65 | -9.70 | -0.31 | $-12.98 | 8 | exp6 KEEP: RL_LR 1e-5→3e-5 — sharpe -1.08→-0.65 (+0.43), per-seed range tightened to [-0.78,-0.43], trades 5-11. Best so far. |
+| 5 | `c3775f2` | -1.08 | -10.12 | -0.23 | $-21.57 | 14 | exp4 KEEP: drop signed_log_vol + vol_z_15 — sharpe -2.39→-1.08 (+1.30), per-seed variance 6× tighter, trades 13-51→11-17. Big win. |
 
 <!-- RESULTS_END -->
 
