@@ -124,8 +124,8 @@ A **broken** result: lines fan out wildly, some up some down, dense forest of ve
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 17:17 UTC_  
-_Total experiments: **37**  ·  kept: **10**  ·  latest commit: `152a21e`_
+_Last updated: 2026-04-30 19:32 UTC_  
+_Total experiments: **38**  ·  kept: **10**  ·  latest commit: `535c7ca`_
 
 ### Latest experiment — primary strategy (full portfolio)
 
@@ -145,10 +145,10 @@ _Total experiments: **37**  ·  kept: **10**  ·  latest commit: `152a21e`_
 |---|---:|---:|---:|---:|---:|---:|
 | Primary (full portfolio every-bar) | +0.961 | $+193.93 | +0.388% | **-1.34%** 🏆 | 12 | $12.00 |
 | Picker (best-stock, $1k cooldown 5min) | -6.330 | $-6,882.72 | -13.765% | -17.59% | 4365 | $4365.00 |
-| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | +1.034 | $+1,302.61 | +2.605% | -8.57% | 5 | $5.00 |
-| **SP500 (SPY) buy-and-hold** — passive benchmark | **+1.204** 🏆 | **$+1,964.67** 🏆 | +3.929% | -9.45% | 1 | **$1.00** 🏆 |
+| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+1.237** 🏆 | **$+2,370.37** 🏆 | +4.741% | -12.57% | 5 | $5.00 |
+| **SP500 (SPY) buy-and-hold** — passive benchmark | +1.204 | $+1,964.67 | +3.929% | -9.45% | 1 | **$1.00** 🏆 |
 
-**Best by Sharpe:** **SP500 (SPY) buy-and-hold** — passive benchmark
+**Best by Sharpe:** Weighted (Kelly-sized, max 20% free cash, ≤5/step)
 
 ### Detailed metrics — primary strategy
 
@@ -161,7 +161,7 @@ _Total experiments: **37**  ·  kept: **10**  ·  latest commit: `152a21e`_
 | Net PnL | $+193.93 (+0.388%) |
 | Trades | 12 |
 | Fees / slippage | $12.00 / $1.14 |
-| Wall time | 1106.4s |
+| Wall time | 1028.5s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
