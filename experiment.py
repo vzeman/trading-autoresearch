@@ -206,7 +206,7 @@ def featurize(bars: pd.DataFrame, context: dict[str, pd.DataFrame] | None = None
 # ============================================================================
 
 PATCH_LEN = 8
-CONTEXT_PATCHES = 24            # exp12: 24*8=192 bars (~3.2h) — more macro context
+CONTEXT_PATCHES = 16            # context window = PATCH_LEN * CONTEXT_PATCHES = 128 bars
 D_MODEL = 96                    # bumped from 64 — more features now
 N_HEADS = 4
 N_LAYERS = 3
@@ -216,7 +216,7 @@ PRED_HORIZON = 5
 RL_REWARD_HORIZON = 3
 ACTION_HEAD_HOLD_BIAS = 1.5     # exp10: softmax([-1.5,1.5,-1.5]) ≈ [4.7%,90.6%,4.7%]: be even more selective
 
-PRETRAIN_EPOCHS = 2             # supervised forecast pretrain on TRAIN slice
+PRETRAIN_EPOCHS = 3             # exp13: more supervised pretraining now that we have 18 features
 PRETRAIN_BATCH = 128
 PRETRAIN_LR = 3e-4
 RL_PRETRAIN_EPOCHS = 1          # offline RL pass(es) on TRAIN slice
