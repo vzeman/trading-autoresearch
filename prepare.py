@@ -129,6 +129,8 @@ class PaperBroker:
         self.total_fees = 0.0
         self.total_slippage = 0.0
         self.equity_curve: list[tuple[pd.Timestamp, float]] = []
+        # (ts, symbol, side) — side is "BUY" or "SELL" based on sign(delta)
+        self.trades: list[tuple[pd.Timestamp, str, str]] = []
 
     def _pos(self, sym: str) -> _Position:
         if sym not in self.positions:
@@ -163,6 +165,7 @@ class PaperBroker:
         self.n_trades += 1
         self.total_fees += FEE_PER_TRADE_USD
         self.total_slippage += slip_cost
+        self.trades.append((ts, symbol, "BUY" if delta > 0 else "SELL"))
         result["delta"] = delta
         result["fee"] = FEE_PER_TRADE_USD
         return result

@@ -71,12 +71,19 @@ def run() -> dict:
     fees_list: list[float] = []
     slip_list: list[float] = []
     equity_curves: list[list[tuple]] = []
+    trades_per_seed: list[list[tuple]] = []
     seeds_done = 0
 
     for seed in range(N_SEEDS):
         print(f"\n[evaluator] === seed {seed+1}/{N_SEEDS} ===", flush=True)
         seed_t0 = time.time()
-        eq, n_trades, fees, slip = train_and_eval(seed=seed)
+        result = train_and_eval(seed=seed)
+        # backward-compat: accept 4-tuple OR 5-tuple (with trades list)
+        if len(result) == 5:
+            eq, n_trades, fees, slip, trades = result
+        else:
+            eq, n_trades, fees, slip = result
+            trades = []
         seed_elapsed = time.time() - seed_t0
         if seed_elapsed > MAX_SECONDS_PER_SEED:
             print(f"[evaluator] WARNING seed {seed} took {seed_elapsed:.0f}s "
@@ -93,6 +100,7 @@ def run() -> dict:
         dds.append(dd); pnls.append(pnl); trades_list.append(n_trades)
         fees_list.append(fees); slip_list.append(slip)
         equity_curves.append(eq)
+        trades_per_seed.append(trades)
         seeds_done += 1
         print(f"[evaluator] seed {seed}: sharpe={s:+.3f}  dd={dd:+.2f}%  pnl=${pnl:+,.2f}  trades={n_trades}", flush=True)
 
@@ -147,7 +155,7 @@ def run() -> dict:
     commit = _git_short_hash()
     desc = _last_commit_subject()
     status = "discard" if dd_worst < MAX_DD_FLOOR_PCT else "auto"  # agent overwrites this
-    _render_equity_chart(equity_curves, commit, summary)
+    _render_equity_chart(equity_curves, commit, summary, trades_per_seed=trades_per_seed)
     _append_results_row(commit, summary, status, desc)
     _render_progress_chart()
     _update_readme(summary, commit)
@@ -175,8 +183,13 @@ def _last_commit_subject() -> str:
         return "(no commit)"
 
 
-def _render_equity_chart(curves: list[list[tuple]], commit: str, summary: dict) -> None:
-    """Per-experiment equity curve PNG → docs/equity_latest.png + docs/equity_<commit>.png."""
+def _render_equity_chart(curves: list[list[tuple]], commit: str, summary: dict,
+                         trades_per_seed: list[list[tuple]] | None = None) -> None:
+    """Per-experiment equity curve PNG → docs/equity_latest.png + docs/equity_<commit>.png.
+
+    If `trades_per_seed` is provided, vertical markers at each trade timestamp
+    of seed 0 are drawn (BUY = green dotted, SELL = red dotted).
+    """
     if not curves:
         return
     import matplotlib
@@ -190,14 +203,35 @@ def _render_equity_chart(curves: list[list[tuple]], commit: str, summary: dict) 
         vals = [e[1] for e in eq]
         ax.plot(ts, vals, alpha=0.7, label=f"seed {i}")
     ax.axhline(y=STARTING_CASH_USD, linestyle="--", color="gray", alpha=0.5, label="start")
+
+    # Trade markers — show seed 0's trades only (chart would be too busy with all 10).
+    n_trades_drawn = 0
+    if trades_per_seed and trades_per_seed[0]:
+        seed0_trades = trades_per_seed[0]
+        for ts, sym, side in seed0_trades:
+            color = "#22c55e" if side == "BUY" else "#ef4444"
+            ax.axvline(ts, color=color, alpha=0.35, linewidth=0.7, linestyle=":")
+        n_trades_drawn = len(seed0_trades)
+        # Add legend handles for the markers
+        from matplotlib.lines import Line2D
+        marker_handles = [
+            Line2D([0], [0], color="#22c55e", linestyle=":", label=f"BUY (seed 0)"),
+            Line2D([0], [0], color="#ef4444", linestyle=":", label=f"SELL (seed 0)"),
+        ]
+        existing = ax.get_legend_handles_labels()
+        ax.legend(handles=existing[0] + marker_handles, loc="best", fontsize=7, ncol=2)
+    else:
+        ax.legend(loc="best", fontsize=8)
+
+    title_extra = f" · {n_trades_drawn} trade markers (seed 0)" if n_trades_drawn else ""
     ax.set_title(
-        f"Equity curve — commit {commit}  ·  "
+        f"Equity — commit {commit}  ·  "
         f"sharpe {summary['sharpe']:+.2f} (CI low {summary['sharpe_ci_low']:+.2f})  ·  "
-        f"DD {summary['max_dd_pct']:+.1f}%  ·  {summary['trades']} trades"
+        f"DD {summary['max_dd_pct']:+.1f}%  ·  {summary['trades']} trades{title_extra}",
+        fontsize=10,
     )
     ax.set_xlabel("time (UTC)")
     ax.set_ylabel("portfolio equity ($)")
-    ax.legend(loc="best", fontsize=8)
     ax.grid(True, alpha=0.3)
     fig.autofmt_xdate()
     fig.tight_layout()

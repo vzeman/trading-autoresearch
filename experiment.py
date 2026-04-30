@@ -541,12 +541,13 @@ def train_and_eval(seed: int = 0) -> tuple:
     # Phase 3: deterministic eval on the held-out slice
     eval_broker = simulate(model, eval_feat, device, learn=False)
     return (eval_broker.equity_curve, eval_broker.n_trades,
-            eval_broker.total_fees, eval_broker.total_slippage)
+            eval_broker.total_fees, eval_broker.total_slippage,
+            eval_broker.trades)   # 5th: list of (ts, symbol, side) for chart markers
 
 
 if __name__ == "__main__":
     t0 = time.time()
-    eq, nt, fees, slip = train_and_eval(seed=0)
+    eq, nt, fees, slip, trades = train_and_eval(seed=0)
     print(f"\n[experiment] eval bars={len(eq)}  trades={nt}  fees=${fees:.2f}  slippage=${slip:.2f}")
     if eq:
         print(f"[experiment] equity start=${eq[0][1]:,.2f}  end=${eq[-1][1]:,.2f}")
