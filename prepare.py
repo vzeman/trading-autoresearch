@@ -28,7 +28,7 @@ UNIVERSE = ["SPY", "QQQ", "NVDA", "AAPL", "TSLA"]
 
 # ---- Fixed window. yfinance free tier exposes ~30d of 1-min bars. ----
 DAYS = 28                    # calendar days fetched
-EVAL_FRACTION = 0.30         # last 30% used as held-out eval
+EVAL_FRACTION = 0.50         # last 50% (~14 cal days, ~10 trading days = 2 weeks) used as held-out eval
 SEED = 0                     # for any deterministic shuffles in evaluator
 
 # ---- Fixed economic constants for the simulator (the broker is the evaluator) ----
