@@ -29,8 +29,8 @@ A **broken** result: lines fan out wildly, some up some down, dense forest of ve
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 09:34 UTC_  
-_Total experiments: **23**  ·  kept: **7**  ·  latest commit: `ce1fdab`_
+_Last updated: 2026-04-30 09:41 UTC_  
+_Total experiments: **24**  ·  kept: **7**  ·  latest commit: `c47ec0f`_
 
 ### Latest experiment
 
@@ -45,7 +45,7 @@ _Total experiments: **23**  ·  kept: **7**  ·  latest commit: `ce1fdab`_
 | Net PnL | $+75.39 (+0.151%) |
 | Trades | 13 |
 | Fees / slippage | $13.00 / $2.61 |
-| Wall time | 294.3s |
+| Wall time | 291.6s |
 | Seeds completed | 10 |
 
 ### Progress over all experiments
