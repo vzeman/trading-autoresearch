@@ -244,7 +244,7 @@ LONG_ONLY = True              # if True: SELL action is treated as HOLD
 # denser signal than REINFORCE and may have real predictive value.
 USE_FORECAST_POLICY = True            # exp28: re-test now that we have multi-horizon predictions
 FORECAST_BUY_SHARPE_THRESHOLD = 0.5   # |predicted_sharpe| above this triggers a position
-FORECAST_HORIZON_IDX = 1              # which horizon drives the policy: 0=1m, 1=1h, 2=1d, 3=1w
+FORECAST_HORIZON_IDX = 2              # exp29: try 1-day horizon — more directional, less noise
 SGD_BATCH = 64
 GRAD_CLIP = 1.0
 RL_STEP_EVERY_BARS = 5
