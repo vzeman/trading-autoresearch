@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.cache/
+~/.cache/
+data/
+parquet/
+checkpoints/
+logs/
+run.log
+*.pt
+*.html
+.DS_Store
+.env
+# results.tsv and docs/*.png are TRACKED — they are the public progress log.
+*.egg-info/
+build/
+dist/

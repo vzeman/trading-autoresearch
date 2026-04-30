@@ -1,0 +1,17 @@
+[project]
+name = "trading-autoresearch"
+version = "0.1.0"
+description = "Karpathy-style autoresearch harness for an intraday trading transformer + RL policy"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.2",
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "pyarrow>=15.0",
+    "yfinance>=0.2.40",
+    "matplotlib>=3.8",
+    "typer>=0.12",
+]
+
+[tool.setuptools]
+py-modules = ["prepare", "experiment", "evaluator"]
