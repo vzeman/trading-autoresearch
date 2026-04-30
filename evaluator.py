@@ -38,7 +38,7 @@ from pathlib import Path
 import numpy as np
 
 from prepare import (
-    N_SEEDS, TIME_BUDGET_SECONDS, STARTING_CASH_USD,
+    N_SEEDS, STARTING_CASH_USD,
     sharpe_ratio, max_drawdown_pct, bootstrap_sharpe_ci,
 )
 
@@ -50,6 +50,12 @@ README = REPO / "README.md"
 
 # Constraint: an experiment that draws down more than this is auto-rejected
 MAX_DD_FLOOR_PCT = -10.0
+
+# Per-seed safety ceiling (NOT a tight budget — only stops genuinely runaway runs).
+# Each seed runs to completion regardless of wall time; we only abort if a single
+# seed exceeds this. Default: 1 hour. The agent should generally pick configs
+# that finish faster, but slow hardware should not cause partial results.
+MAX_SECONDS_PER_SEED = 3600
 
 
 def run() -> dict:
@@ -68,11 +74,14 @@ def run() -> dict:
     seeds_done = 0
 
     for seed in range(N_SEEDS):
-        if time.time() - t0 > TIME_BUDGET_SECONDS:
-            print(f"[evaluator] time budget hit after {seeds_done} seeds", flush=True)
-            break
         print(f"\n[evaluator] === seed {seed+1}/{N_SEEDS} ===", flush=True)
+        seed_t0 = time.time()
         eq, n_trades, fees, slip = train_and_eval(seed=seed)
+        seed_elapsed = time.time() - seed_t0
+        if seed_elapsed > MAX_SECONDS_PER_SEED:
+            print(f"[evaluator] WARNING seed {seed} took {seed_elapsed:.0f}s "
+                  f"(safety ceiling {MAX_SECONDS_PER_SEED}s) — consider a smaller config",
+                  flush=True)
         if not eq or len(eq) < 5:
             print(f"[evaluator] seed {seed}: empty equity curve, skipping", flush=True)
             continue

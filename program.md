@@ -11,8 +11,8 @@ robustly improve a portfolio's risk-adjusted return.
 2. `git checkout -b autoresearch/<tag>` from `main`.
 3. **Read these files** for full context:
    - `README.md` — repo overview
-   - `prepare.py` — frozen data prep, broker, metrics. **Do not modify.**
-   - `experiment.py` — the file you edit. Model, RL policy, train loop.
+   - `prepare.py` — frozen: data download, broker, metrics, train/eval split. **Do not modify.**
+   - `experiment.py` — the file you edit. Features, model, RL policy, train loop.
    - `evaluator.py` — frozen evaluator harness. **Do not modify.**
 4. **Verify data is cached**: run `python prepare.py`. Should print 5 symbols ×
    ~7,000 1-min bars each. If yfinance throttles you, wait and retry.
@@ -54,17 +54,23 @@ LOOP FOREVER:
 
 ## What you CAN do (in `experiment.py`)
 
+- **Edit `featurize()` and `ALL_FEATURES`** — add new causal features, modify
+  rolling-window sizes, drop features by editing `USE_FEATURES`.
 - Change architecture (depth, width, head count, attention variant, normalization)
 - Change optimizer (AdamW → SGD/Adam/Lion/Sophia; LR; weight decay; schedule)
-- Change hyperparameters (epochs, batch size, dropout, EWC lambda, RL coef)
+- Change hyperparameters (epochs, batch size, dropout, RL coef)
 - Change horizons (`PRED_HORIZON`, `RL_REWARD_HORIZON`)
-- Change features used (`USE_FEATURES`) — drop features that hurt
 - Change exploration (entropy bonus schedule, sampling temperature, ε-greedy)
 - Change reward shaping (e.g. add Sharpe-style risk penalty, vol penalty)
 - Change action-head bias / initialization
-- Add new derived features as long as they're CAUSAL
 - Replace any internal class with a different design
 - Refactor / simplify (deletions that don't hurt are great)
+
+If you add a new feature, you MUST:
+1. Add its name to `ALL_FEATURES`.
+2. Compute it inside `featurize()` and include it in the returned DataFrame.
+3. Optionally add it to `USE_FEATURES` (if not, it's defined but unused — fine).
+4. Make absolutely sure it's CAUSAL — only depends on bars at or before time t.
 
 ## What you CANNOT do
 
@@ -75,8 +81,10 @@ LOOP FOREVER:
 - **Change `train_and_eval(seed)` signature** — the evaluator calls it.
 - **Use future-information features** — anything you compute must depend only
   on bars at or before time t. NO peeking.
-- **Lengthen the time budget** — `prepare.TIME_BUDGET_SECONDS` is fixed for
-  comparability. Each experiment should fit in ~5 min wall-clock.
+- **Force experiments to be slow.** There is NO hard time budget — each seed
+  runs to completion. But experiments that take many minutes per seed slow the
+  agent loop dramatically. Aim for ~3 min per seed; if your config is much
+  slower, reduce model size, fewer epochs, or smaller batch.
 - **Touch the eval slice during training.** `prepare.split()` produces a strict
   chronological split. Train on the head, eval on the tail. No leakage.
 

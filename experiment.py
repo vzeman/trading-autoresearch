@@ -1,28 +1,26 @@
 """THE FILE THE AGENT MODIFIES.
 
 Single self-contained file with:
+  - FEATURE ENGINEERING (multi-scale returns, EMA distances, vol windows, etc.)
   - Model (PatchTST-style transformer, forecast head + 3-action head)
   - Replay buffers
-  - Train loop (supervised pretrain on train slice + offline RL pretrain)
-  - Policy (acts on the action head; portfolio-weighted reward)
+  - Train loop (supervised pretrain + offline RL pretrain on TRAIN slice)
+  - Eval loop on the held-out EVAL slice
 
 `evaluator.py` imports `train_and_eval(seed)` from this file. Everything else
-the agent decides — architecture, optimizer, hyperparameters, features used,
-reward shaping, exploration schedule, anything — as long as the contract holds:
+the agent decides — features, architecture, optimizer, hyperparameters,
+reward shaping, exploration schedule — as long as the contract holds.
 
 CONTRACT (do not break):
   - `train_and_eval(seed: int) -> (equity_curve, n_trades, total_fees, total_slippage)`
-    where equity_curve is what the broker accumulated during the EVAL slice.
-  - Use `prepare.PaperBroker` as-is for fills + fees + slippage. No custom broker.
-  - Use `prepare.split(...)` for train/eval split. No leakage.
-  - Use the FROZEN constants in `prepare.py` (cash, fees, etc.).
-
-If you need to change the contract, talk to the human (edit program.md).
+    where equity_curve is broker.equity_curve from the EVAL slice run.
+  - Use `prepare.PaperBroker` for fills + fees + slippage.
+  - Use `prepare.split(bars)` for the chronological train/eval split. NO leakage.
+  - All features must be CAUSAL (only depend on bars at or before time t).
 """
 from __future__ import annotations
 import math
 import time
-from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
@@ -30,10 +28,120 @@ import torch
 from torch import nn
 
 from prepare import (
-    UNIVERSE, FEATURE_NAMES, N_FEATURES, NOTIONAL_PER_SYMBOL_USD,
-    STARTING_CASH_USD, FEE_PER_TRADE_USD, SLIPPAGE_BPS,
-    PaperBroker, prepare_all, featurize, split,
+    UNIVERSE, NOTIONAL_PER_SYMBOL_USD, STARTING_CASH_USD,
+    FEE_PER_TRADE_USD, SLIPPAGE_BPS,
+    PaperBroker, prepare_all, split,
 )
+
+# ============================================================================
+# FEATURE ENGINEERING — agent edits freely. Must remain causal.
+# ============================================================================
+
+# Available feature names. Add a name here AND implement it in featurize().
+# `USE_FEATURES` controls which subset feeds the model.
+ALL_FEATURES = [
+    # Returns at multiple horizons
+    "log_return_1", "log_return_5", "log_return_15", "log_return_60",
+    # EMA distances (price vs trend)
+    "ema_dev_20", "ema_dev_60",
+    # Volume features
+    "log_volume_dev_60",
+    "vol_z_15", "vol_z_60",
+    "signed_log_vol",
+    # Realized vol at multiple windows + ratio
+    "rv_15", "rv_60", "rv_15_div_60",
+    # Range features (intraday volatility proxy)
+    "hl_range",
+    # Time of day
+    "tod_sin", "tod_cos",
+]
+
+USE_FEATURES = list(ALL_FEATURES)   # agent can drop entries that don't help
+
+
+def _ema(x: np.ndarray, span: int) -> np.ndarray:
+    """Causal EMA via pandas."""
+    return pd.Series(x).ewm(span=span, adjust=False).mean().to_numpy()
+
+
+def featurize(bars: pd.DataFrame) -> pd.DataFrame:
+    """OHLCV bars → causal feature dataframe + the close price (broker needs it).
+
+    Returns a frame with columns ['timestamp', 'close', *ALL_FEATURES].
+    """
+    df = bars[["timestamp", "open", "high", "low", "close", "volume"]].copy()
+    df = df.sort_values("timestamp").reset_index(drop=True)
+
+    close = df["close"].to_numpy(np.float64)
+    high = df["high"].to_numpy(np.float64)
+    low = df["low"].to_numpy(np.float64)
+    vol = df["volume"].to_numpy(np.float64)
+
+    # ---- multi-horizon log returns ----
+    def lret(k: int) -> np.ndarray:
+        out = np.zeros_like(close)
+        out[k:] = np.log(close[k:] / np.maximum(close[:-k], 1e-12))
+        return out
+
+    log_return_1 = lret(1)
+    log_return_5 = lret(5)
+    log_return_15 = lret(15)
+    log_return_60 = lret(60)
+
+    # ---- EMA distances ----
+    ema_20 = _ema(close, 20)
+    ema_60 = _ema(close, 60)
+    ema_dev_20 = (close - ema_20) / np.maximum(close, 1e-12)
+    ema_dev_60 = (close - ema_60) / np.maximum(close, 1e-12)
+
+    # ---- volume features ----
+    log_vol = np.log1p(vol)
+    log_vol_mean_60 = pd.Series(log_vol).rolling(60, min_periods=1).mean().to_numpy()
+    log_vol_std_15 = pd.Series(log_vol).rolling(15, min_periods=2).std(ddof=0).fillna(1e-6).to_numpy()
+    log_vol_mean_15 = pd.Series(log_vol).rolling(15, min_periods=1).mean().to_numpy()
+    log_vol_std_60 = pd.Series(log_vol).rolling(60, min_periods=2).std(ddof=0).fillna(1e-6).to_numpy()
+    log_volume_dev_60 = log_vol - log_vol_mean_60
+    vol_z_15 = (log_vol - log_vol_mean_15) / np.maximum(log_vol_std_15, 1e-6)
+    vol_z_60 = (log_vol - log_vol_mean_60) / np.maximum(log_vol_std_60, 1e-6)
+    signed_log_vol = log_volume_dev_60 * np.sign(log_return_1)
+
+    # ---- realized vol ----
+    rv_15 = pd.Series(log_return_1).rolling(15, min_periods=2).std(ddof=0).fillna(0.0).to_numpy()
+    rv_60 = pd.Series(log_return_1).rolling(60, min_periods=2).std(ddof=0).fillna(0.0).to_numpy()
+    rv_15_div_60 = rv_15 / np.maximum(rv_60, 1e-9)
+
+    # ---- range features ----
+    hl_range = (high - low) / np.maximum(close, 1e-12)
+
+    # ---- time of day (regular session 09:30-16:00 ET, i.e. 23,400 sec) ----
+    et = df["timestamp"].dt.tz_convert("America/New_York")
+    sec = ((et.dt.hour - 9) * 3600 + (et.dt.minute - 30) * 60 + et.dt.second).to_numpy(np.float64)
+    period = 6.5 * 3600
+    tod_sin = np.sin(2 * math.pi * sec / period)
+    tod_cos = np.cos(2 * math.pi * sec / period)
+
+    feat = pd.DataFrame({
+        "timestamp": df["timestamp"],
+        "close": df["close"].astype(np.float32),
+        "log_return_1": log_return_1.astype(np.float32),
+        "log_return_5": log_return_5.astype(np.float32),
+        "log_return_15": log_return_15.astype(np.float32),
+        "log_return_60": log_return_60.astype(np.float32),
+        "ema_dev_20": ema_dev_20.astype(np.float32),
+        "ema_dev_60": ema_dev_60.astype(np.float32),
+        "log_volume_dev_60": log_volume_dev_60.astype(np.float32),
+        "vol_z_15": vol_z_15.astype(np.float32),
+        "vol_z_60": vol_z_60.astype(np.float32),
+        "signed_log_vol": signed_log_vol.astype(np.float32),
+        "rv_15": rv_15.astype(np.float32),
+        "rv_60": rv_60.astype(np.float32),
+        "rv_15_div_60": rv_15_div_60.astype(np.float32),
+        "hl_range": hl_range.astype(np.float32),
+        "tod_sin": tod_sin.astype(np.float32),
+        "tod_cos": tod_cos.astype(np.float32),
+    })
+    return feat
+
 
 # ============================================================================
 # HYPERPARAMETERS — agent edits freely
@@ -41,27 +149,25 @@ from prepare import (
 
 PATCH_LEN = 8
 CONTEXT_PATCHES = 16            # context window = PATCH_LEN * CONTEXT_PATCHES = 128 bars
-D_MODEL = 64
+D_MODEL = 96                    # bumped from 64 — more features now
 N_HEADS = 4
 N_LAYERS = 3
-D_FF = 128
+D_FF = 192
 DROPOUT = 0.1
-PRED_HORIZON = 5                # supervised: predict next-5 bars
-RL_REWARD_HORIZON = 3           # RL: reward measured over next-3 bars
+PRED_HORIZON = 5
+RL_REWARD_HORIZON = 3
 ACTION_HEAD_HOLD_BIAS = 3.0     # initial logit bias toward HOLD (anti-churn)
 
-PRETRAIN_EPOCHS = 3             # supervised forecast pretrain on TRAIN slice
+PRETRAIN_EPOCHS = 2             # supervised forecast pretrain on TRAIN slice
 PRETRAIN_BATCH = 128
 PRETRAIN_LR = 3e-4
 RL_PRETRAIN_EPOCHS = 1          # offline RL pass(es) on TRAIN slice
 RL_LR = 1e-5
 RL_COEF = 1.0
 ENTROPY_COEF = 0.01
-EWC_LAMBDA = 0.0                # 0 = no EWC anchor; agent can turn this on
 SGD_BATCH = 64
 GRAD_CLIP = 1.0
-RL_STEP_EVERY_BARS = 5          # backward pass cadence inside RL replay
-USE_FEATURES = list(FEATURE_NAMES)  # agent can drop features
+RL_STEP_EVERY_BARS = 5
 
 
 def pick_device() -> str:
@@ -154,13 +260,13 @@ class PatchTransformer(nn.Module):
 
 
 # ============================================================================
-# DATA WINDOWS
+# WINDOWING
 # ============================================================================
 
 def windows_from_features(feat: pd.DataFrame, context_len: int, pred_horizon: int):
     cols = USE_FEATURES
     arr = feat[cols].to_numpy(np.float32)
-    log_ret = feat["log_return"].to_numpy(np.float32)
+    log_ret = feat["log_return_1"].to_numpy(np.float32)
     n = len(feat) - context_len - pred_horizon
     if n <= 0:
         return np.empty((0, context_len, len(cols)), np.float32), np.empty((0, pred_horizon), np.float32)
@@ -215,30 +321,28 @@ ACTION_TO_POS = np.array([-1.0, 0.0, 1.0], dtype=np.float32)
 
 
 def simulate(model: PatchTransformer, features: dict[str, pd.DataFrame], device: str,
-             learn: bool, anchor: dict | None = None) -> PaperBroker:
+             learn: bool) -> PaperBroker:
     """Replay merged events through the model. If learn=True, also train action head."""
     portfolio_weight = NOTIONAL_PER_SYMBOL_USD / STARTING_CASH_USD
     round_trip_var_cost = 2.0 * SLIPPAGE_BPS * 1e-4
     fixed_cost_frac = 2.0 * FEE_PER_TRADE_USD / NOTIONAL_PER_SYMBOL_USD
 
     broker = PaperBroker()
-    sym_state: dict[str, dict] = {s: {"bars": [], "pending": [], "last_pos": 0.0} for s in features}
+    sym_state: dict[str, dict] = {s: {"i": 0, "pending": [], "last_pos": 0.0} for s in features}
+
+    cols = USE_FEATURES
+    feat_arrays: dict[str, np.ndarray] = {s: f[cols].to_numpy(np.float32) for s, f in features.items()}
+    close_arrays: dict[str, np.ndarray] = {s: f["close"].to_numpy(np.float32) for s, f in features.items()}
+    ts_arrays: dict[str, list] = {s: list(f["timestamp"]) for s, f in features.items()}
 
     # merge events chronologically
-    rows: list[tuple[pd.Timestamp, str, dict]] = []
-    cols = USE_FEATURES
-    for sym, feat in features.items():
-        arr = feat[cols].to_numpy(np.float32)
-        for i, ts in enumerate(feat["timestamp"]):
-            rows.append((ts, sym, {"i": i, "feat": arr, "ts": ts,
-                                   "close": _approx_close_from_logret(feat, i)}))
+    rows: list[tuple[pd.Timestamp, str, int]] = []
+    for sym, ts_list in ts_arrays.items():
+        for i, ts in enumerate(ts_list):
+            rows.append((ts, sym, i))
     rows.sort(key=lambda r: r[0])
 
-    opt = None
-    if learn:
-        opt = torch.optim.AdamW(model.parameters(), lr=RL_LR, weight_decay=0.0)
-
-    # RL replay buffer (in-memory, reset per call)
+    opt = torch.optim.AdamW(model.parameters(), lr=RL_LR, weight_decay=0.0) if learn else None
     buf_X: list[np.ndarray] = []
     buf_a: list[int] = []
     buf_r: list[float] = []
@@ -246,53 +350,46 @@ def simulate(model: PatchTransformer, features: dict[str, pd.DataFrame], device:
     H_max = max(model.pred_horizon, RL_REWARD_HORIZON)
     n_decisions = 0
 
-    for ev_i, (ts, sym, payload) in enumerate(rows):
+    for ev_i, (ts, sym, i_now) in enumerate(rows):
         st = sym_state[sym]
-        st["bars"].append(payload)
-        if len(st["bars"]) > model.context_len * 4:
-            drop = len(st["bars"]) - model.context_len * 4
-            st["bars"] = st["bars"][drop:]
-            for p in st["pending"]:
-                p["idx"] -= drop
+        st["i"] = i_now
+        feat = feat_arrays[sym]
+        close = close_arrays[sym]
 
-        if len(st["bars"]) >= model.context_len + 1:
-            arr = payload["feat"]
-            i_now = payload["i"]
-            if i_now >= model.context_len - 1:
-                # window of features ending at this bar
-                X = arr[i_now - model.context_len + 1 : i_now + 1].copy()
-                with torch.no_grad():
-                    model.eval()
-                    xb = torch.from_numpy(X).unsqueeze(0).to(device)
-                    _, _, alog = model(xb)
-                    if learn:
-                        a_idx = int(torch.distributions.Categorical(probs=torch.softmax(alog[0], dim=-1)).sample().item())
-                    else:
-                        a_idx = int(torch.argmax(alog[0]).item())
-                model.train()
-                target = float(ACTION_TO_POS[a_idx])
-                pos_change = abs(target - st["last_pos"])
-                broker.update(sym, payload["close"], ts, target)
-                st["pending"].append({"X": X, "a": a_idx, "target": target,
-                                      "entry": payload["close"], "idx": len(st["bars"]) - 1,
-                                      "pos_change": pos_change})
-                st["last_pos"] = target
-                n_decisions += 1
+        if i_now >= model.context_len - 1:
+            X = feat[i_now - model.context_len + 1 : i_now + 1].copy()
+            with torch.no_grad():
+                model.eval()
+                xb = torch.from_numpy(X).unsqueeze(0).to(device)
+                _, _, alog = model(xb)
+                if learn:
+                    a_idx = int(torch.distributions.Categorical(probs=torch.softmax(alog[0], dim=-1)).sample().item())
+                else:
+                    a_idx = int(torch.argmax(alog[0]).item())
+            model.train()
+            target = float(ACTION_TO_POS[a_idx])
+            pos_change = abs(target - st["last_pos"])
+            broker.update(sym, float(close[i_now]), ts, target)
+            st["pending"].append({"X": X, "a": a_idx, "target": target,
+                                  "entry": float(close[i_now]), "i": i_now,
+                                  "pos_change": pos_change})
+            st["last_pos"] = target
+            n_decisions += 1
 
         # mark portfolio
-        prices = {s: ss["bars"][-1]["close"] for s, ss in sym_state.items() if ss["bars"]}
+        prices = {s: float(close_arrays[s][sym_state[s]["i"]]) for s in sym_state if sym_state[s]["i"] > 0}
         broker.mark_to_market(ts, prices)
 
-        # resolve pending
-        while st["pending"] and st["pending"][0]["idx"] + H_max < len(st["bars"]):
+        # resolve pending whose horizon arrived
+        while st["pending"] and st["pending"][0]["i"] + H_max <= i_now:
             p_ = st["pending"].pop(0)
-            future_close = st["bars"][p_["idx"] + RL_REWARD_HORIZON]["close"]
+            future_close = float(close[p_["i"] + RL_REWARD_HORIZON])
             log_ret = math.log(max(future_close, 1e-12) / max(p_["entry"], 1e-12))
             cost_charge = 0.5 * (round_trip_var_cost + fixed_cost_frac) * p_["pos_change"]
             reward = portfolio_weight * (p_["target"] * log_ret - cost_charge)
             buf_X.append(p_["X"]); buf_a.append(p_["a"]); buf_r.append(reward)
 
-        # periodic SGD step (only if learn=True)
+        # periodic SGD step
         if learn and (ev_i + 1) % RL_STEP_EVERY_BARS == 0 and len(buf_X) >= SGD_BATCH:
             idx = np.random.choice(len(buf_X), size=SGD_BATCH, replace=False)
             Xb = torch.from_numpy(np.stack([buf_X[i] for i in idx])).to(device)
@@ -312,23 +409,6 @@ def simulate(model: PatchTransformer, features: dict[str, pd.DataFrame], device:
     return broker
 
 
-def _approx_close_from_logret(feat: pd.DataFrame, i: int) -> float:
-    """Reconstruct close from cumulative log returns (drops absolute price level scale).
-
-    We need true closes for broker fills. featurize() drops them, so we re-derive
-    here from log returns + a normalized starting price of 100.
-    """
-    if not hasattr(_approx_close_from_logret, "_cache"):
-        _approx_close_from_logret._cache = {}
-    cache = _approx_close_from_logret._cache
-    key = id(feat)
-    if key not in cache:
-        log_ret = feat["log_return"].to_numpy(np.float64)
-        cum = np.cumsum(log_ret)
-        cache[key] = 100.0 * np.exp(cum)
-    return float(cache[key][i])
-
-
 # ============================================================================
 # CONTRACT — DO NOT change the signature
 # ============================================================================
@@ -343,11 +423,13 @@ def train_and_eval(seed: int = 0) -> tuple:
     train_feat: dict[str, pd.DataFrame] = {}
     eval_feat: dict[str, pd.DataFrame] = {}
     for sym in UNIVERSE:
-        feat = featurize(bars_by_sym[sym])
-        tr, ev = split(feat)
-        if len(tr) > 200 and len(ev) > 50:
-            train_feat[sym] = tr
-            eval_feat[sym] = ev
+        bars = bars_by_sym[sym]
+        tr_bars, ev_bars = split(bars)
+        # featurize each slice independently — strict no-leakage
+        if len(tr_bars) > 200:
+            train_feat[sym] = featurize(tr_bars)
+        if len(ev_bars) > 50:
+            eval_feat[sym] = featurize(ev_bars)
 
     n_features = len(USE_FEATURES)
     model = PatchTransformer(
@@ -355,7 +437,7 @@ def train_and_eval(seed: int = 0) -> tuple:
         d_model=D_MODEL, n_heads=N_HEADS, n_layers=N_LAYERS, d_ff=D_FF,
         dropout=DROPOUT, pred_horizon=PRED_HORIZON,
     ).to(device)
-    print(f"[experiment] device={device}  params={model.num_parameters():,}", flush=True)
+    print(f"[experiment] device={device}  features={n_features}  params={model.num_parameters():,}", flush=True)
 
     # Phase 1: supervised forecast-head pretrain
     supervised_pretrain(model, train_feat, device)

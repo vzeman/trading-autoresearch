@@ -1,2 +1,2 @@
 commit	sharpe	sharpe_ci_low	max_dd_pct	pnl_usd	trades	status	description
-1df9170	-0.3525	-4.5208	-0.22	-11.78	5	auto	Initial scaffold: Karpathy-style autoresearch for portfolio mgmt
+4a6dea7	-0.3158	-5.6080	-9.18	-10.56	5	auto	Baseline run: Sharpe -0.35 (CI low -4.52), 5 trades, -0.02% PnL

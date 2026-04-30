@@ -6,8 +6,8 @@ Karpathy-style [autoresearch](https://github.com/karpathy/autoresearch) harness,
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 05:07 UTC_  
-_Total experiments: **1**  ·  kept: **0**  ·  latest commit: `1df9170`_
+_Last updated: 2026-04-30 05:25 UTC_  
+_Total experiments: **1**  ·  kept: **0**  ·  latest commit: `4a6dea7`_
 
 ### Latest experiment
 
@@ -15,15 +15,15 @@ _Total experiments: **1**  ·  kept: **0**  ·  latest commit: `1df9170`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **-0.353** |
-| Sharpe — bootstrap CI low (5%) | **-4.521** |
-| Sharpe — bootstrap CI high (95%) | +5.292 |
-| Max drawdown | -0.22% |
-| Net PnL | $-11.78 (-0.024%) |
+| Sharpe (median over seeds) | **-0.316** |
+| Sharpe — bootstrap CI low (5%) | **-5.608** |
+| Sharpe — bootstrap CI high (95%) | +4.076 |
+| Max drawdown | -9.18% |
+| Net PnL | $-10.56 (-0.021%) |
 | Trades | 5 |
 | Fees / slippage | $5.00 / $1.00 |
-| Wall time | 1244.6s |
-| Seeds completed | 2 |
+| Wall time | 506.0s |
+| Seeds completed | 3 |
 
 ### Progress over all experiments
 
@@ -64,7 +64,8 @@ prepare.py     # frozen — data download, broker, metrics, train/eval split
 experiment.py  # the file the agent edits — model + RL policy + train loop
 evaluator.py   # frozen — runs experiment with N seeds, prints canonical metrics
 program.md     # the agent's instructions (the "skill")
-results.tsv    # append-only log of every experiment (gitignored)
+results.tsv    # append-only public log of every experiment (committed)
+docs/          # auto-generated equity + progress charts (committed)
 pyproject.toml # uv / pip dependencies
 ```
 
@@ -117,7 +118,7 @@ It runs until you interrupt it (Ctrl-C). On wake-up, sort `results.tsv` by `shar
 
 ## What the agent CAN and CANNOT change
 
-See `program.md` — short version: the agent owns `experiment.py` (model + policy + training); it must NEVER touch `prepare.py` (the simulator) or `evaluator.py` (the contract). Adding new pip dependencies or extending the time budget is forbidden.
+See `program.md` — short version: the agent owns `experiment.py` (features + model + policy + training); it must NEVER touch `prepare.py` (the simulator) or `evaluator.py` (the contract). Adding new pip dependencies is forbidden. There's no hard time budget per experiment, but the agent should aim for ~3 min per seed (~10 min total) so the loop iterates quickly.
 
 ## The contract
 

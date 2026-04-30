@@ -1,19 +1,21 @@
 """Frozen data prep + utilities. AGENT MUST NOT MODIFY THIS FILE.
 
-Downloads 1-minute bars for a small fixed universe via yfinance into a local
-cache, then exposes a deterministic train/eval split + paper-broker simulator
-that experiment.py and evaluator.py both rely on.
+Downloads 1-minute OHLCV bars for a small fixed universe via yfinance into a
+local cache, then exposes a deterministic train/eval split + paper-broker
+simulator + metrics that experiment.py and evaluator.py both rely on.
 
-The cache, the universe, and the split are intentionally fixed so that every
-experiment is comparable.
+The cache, the universe, the split, the broker, and the metrics are
+intentionally frozen so every experiment is comparable across runs.
+
+FEATURE ENGINEERING IS NOT FROZEN — it lives in experiment.py so the agent
+can iterate on which features to compute and feed the model.
 """
 from __future__ import annotations
 import os
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
 
 import numpy as np
 import pandas as pd
@@ -36,13 +38,8 @@ FEE_PER_TRADE_USD = 1.0      # IBKR Pro Fixed minimum
 SLIPPAGE_BPS = 2.0           # per side
 MIN_TRADE_NOTIONAL_USD = 100.0
 
-# ---- Fixed eval budget ----
-TIME_BUDGET_SECONDS = 300.0  # ~5 min per experiment, like Karpathy's autoresearch
+# ---- Multi-seed eval (no wall-time budget — let each seed finish on this hardware) ----
 N_SEEDS = 3                  # multi-seed runs to combat eval noise
-
-# ---- Feature schema (fixed; experiment can choose to use fewer) ----
-FEATURE_NAMES = ["log_return", "log_volume_dev", "rolling_vol", "tod_sin", "tod_cos"]
-N_FEATURES = len(FEATURE_NAMES)
 
 
 # ----------------------------------------------------------------------
@@ -105,43 +102,11 @@ def prepare_all(force: bool = False) -> dict[str, pd.DataFrame]:
     return {s: fetch_bars(s, force=force) for s in UNIVERSE}
 
 
-# ----------------------------------------------------------------------
-# Causal feature engineering — fixed schema; agent picks which subset to USE
-# ----------------------------------------------------------------------
-
-def featurize(bars: pd.DataFrame, vol_window: int = 60) -> pd.DataFrame:
-    """Bars → causal feature dataframe. No look-ahead."""
-    df = bars[["timestamp", "close", "volume"]].sort_values("timestamp").reset_index(drop=True)
-    close = df["close"].to_numpy(np.float64)
-    log_ret = np.zeros_like(close)
-    log_ret[1:] = np.log(close[1:] / np.maximum(close[:-1], 1e-12))
-
-    log_vol = np.log1p(df["volume"].to_numpy(np.float64))
-    log_vol_dev = log_vol - pd.Series(log_vol).rolling(vol_window, min_periods=1).mean().to_numpy()
-
-    rolling_vol = pd.Series(log_ret).rolling(vol_window, min_periods=1).std(ddof=0).fillna(0.0).to_numpy()
-
-    et = df["timestamp"].dt.tz_convert("America/New_York")
-    sec = ((et.dt.hour - 9) * 3600 + (et.dt.minute - 30) * 60 + et.dt.second).to_numpy(np.float64)
-    period = 6.5 * 3600
-    tod_sin = np.sin(2 * math.pi * sec / period)
-    tod_cos = np.cos(2 * math.pi * sec / period)
-
-    return pd.DataFrame({
-        "timestamp": df["timestamp"],
-        "log_return": log_ret.astype(np.float32),
-        "log_volume_dev": log_vol_dev.astype(np.float32),
-        "rolling_vol": rolling_vol.astype(np.float32),
-        "tod_sin": tod_sin.astype(np.float32),
-        "tod_cos": tod_cos.astype(np.float32),
-    })
-
-
-def split(feat: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+def split(bars: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Chronological train/eval split. Eval is the LAST EVAL_FRACTION of bars."""
-    n = len(feat)
+    n = len(bars)
     cut = int(n * (1.0 - EVAL_FRACTION))
-    return feat.iloc[:cut].reset_index(drop=True), feat.iloc[cut:].reset_index(drop=True)
+    return bars.iloc[:cut].reset_index(drop=True), bars.iloc[cut:].reset_index(drop=True)
 
 
 # ----------------------------------------------------------------------
