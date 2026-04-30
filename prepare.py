@@ -26,9 +26,9 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 # ---- Fixed universe (do not modify in agent loop). 5 highly liquid names. ----
 UNIVERSE = ["SPY", "QQQ", "NVDA", "AAPL", "TSLA"]
 
-# ---- v5: Alpaca free tier serves 1-min IEX bars going back YEARS. ----
-DAYS = 365                   # 1 year of 1-min bars
-EVAL_FRACTION = 0.20         # last 20% (~73 days) used as held-out eval — much longer window
+# ---- v6: extended to 6 years for much longer eval window. ----
+DAYS = 2190                  # 6 years of 1-min bars (Alpaca IEX serves back to ~2016)
+EVAL_FRACTION = 0.20         # last 20% (~438 days) used as held-out eval
 SEED = 0                     # for any deterministic shuffles in evaluator
 
 # ---- Fixed economic constants for the simulator (the broker is the evaluator) ----
