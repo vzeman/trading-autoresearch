@@ -1,2 +1,3 @@
 commit	sharpe	sharpe_ci_low	max_dd_pct	pnl_usd	trades	status	description
-4a6dea7	-0.3158	-5.6080	-9.18	-10.56	5	auto	Baseline run: Sharpe -0.35 (CI low -4.52), 5 trades, -0.02% PnL
+4a6dea7	-0.3158	-5.6080	-9.18	-10.56	5	keep	baseline (v2 features, HOLD bias 3.0)
+aeff147	-0.3913	-4.6270	-0.31	-13.06	7	keep	exp1: HOLD bias 3.0→1.0 — ci_low improved -5.61→-4.63, DD -9.18→-0.31%
