@@ -649,7 +649,7 @@ MAX_POS_FRACTION_OF_FREE_CASH = 0.20  # never bet >20% of free cash on one trade
 MIN_CASH_RESERVE_PCT = 0.10           # keep 10% of starting cash unspent
 MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
 KELLY_SCALE = 0.5                     # half-Kelly aggressiveness
-WEIGHTED_HOLD_BARS = 60               # auto-sell after 1h
+WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
 WEIGHTED_MIN_TRADE_USD = 100.0        # too small → fee dominates
 
 
@@ -887,11 +887,10 @@ def simulate_weighted(model: PatchTransformer,
 
     For each timestep:
       1. Predict 1h-horizon Sharpe for each ready symbol via mh_head.
-      2. For symbols with positive predicted Sharpe, compute Kelly-like
-         dollar size = clip(sharpe * KELLY_SCALE, 0, MAX_POS_FRACTION) * free_cash.
-      3. Sort candidates by suggested size, take top MAX_NEW_TRADES_PER_TIMESTEP.
-      4. Execute (deducting from free cash sequentially).
-      5. Auto-sell positions held > WEIGHTED_HOLD_BARS.
+      2. SELL pass: close any held position whose Sharpe < WEIGHTED_SELL_SHARPE.
+      3. BUY pass: for symbols with positive predicted Sharpe (not already held),
+         compute Kelly-like dollar size and execute up to MAX_NEW_TRADES_PER_TIMESTEP.
+    No time-based exit — the model decides when to sell.
     """
     broker = WeightedBroker(STARTING_CASH_USD, min_reserve_frac=MIN_CASH_RESERVE_PCT)
     cols = USE_FEATURES
@@ -906,26 +905,13 @@ def simulate_weighted(model: PatchTransformer,
 
     C = model.context_len
     last_idx_by_sym: dict[str, int] = {s: -1 for s in features}
-    bought_at_bar: dict[str, int] = {}
-    bar_count = 0
 
     for ts in sorted_ts:
-        bar_count += 1
         events_here = events_by_ts[ts]
         for sym, i_now in events_here:
             last_idx_by_sym[sym] = i_now
 
-        # 1) Auto-sell positions held > WEIGHTED_HOLD_BARS
-        to_close = []
-        for sym, b in bought_at_bar.items():
-            if (bar_count - b) >= WEIGHTED_HOLD_BARS and broker.positions.get(sym, 0.0) > 0:
-                to_close.append(sym)
-        for sym in to_close:
-            price = float(close_arrays[sym][last_idx_by_sym[sym]])
-            if broker.sell_all(sym, price, ts):
-                bought_at_bar.pop(sym, None)
-
-        # 2) Get predictions for all ready symbols at this timestamp
+        # Get predictions for all ready symbols at this timestamp (one batched forward).
         batch_X, batch_meta = [], []
         for sym, i_now in events_here:
             if i_now >= C - 1:
@@ -937,37 +923,41 @@ def simulate_weighted(model: PatchTransformer,
                 model.eval()
                 xb = torch.from_numpy(np.stack(batch_X)).to(device)
                 mh_mean, mh_log_std = model.forward_multi_horizon(xb)
-                # 1h horizon for sizing
-                h_mean = mh_mean[:, 1]
+                h_mean = mh_mean[:, 1]   # 1h horizon
                 h_std = torch.exp(mh_log_std[:, 1])
-                pred_sharpe = (h_mean / (h_std + 1e-12)).cpu().tolist()
+                pred_sharpe_list = (h_mean / (h_std + 1e-12)).cpu().tolist()
             model.train()
+            sym_to_sharpe = {sym: ps for (sym, _), ps in zip(batch_meta, pred_sharpe_list)}
 
-            # 3) Build candidates: only positive-Sharpe symbols
+            # 1) SELL pass — close held positions whose 1h Sharpe dropped below threshold
+            for sym, ps in sym_to_sharpe.items():
+                if broker.positions.get(sym, 0.0) > 0 and ps < WEIGHTED_SELL_SHARPE:
+                    i_now = last_idx_by_sym[sym]
+                    broker.sell_all(sym, float(close_arrays[sym][i_now]), ts)
+
+            # 2) BUY pass — for symbols not currently held, size by Kelly
             free_cash_now = broker.free_cash()
             candidates = []
-            for (sym, i_now), ps in zip(batch_meta, pred_sharpe):
+            for (sym, i_now), ps in zip(batch_meta, pred_sharpe_list):
                 if ps <= 0:
                     continue
+                if broker.positions.get(sym, 0.0) > 0:
+                    continue   # already long, don't double up
                 base_frac = min(ps * KELLY_SCALE, MAX_POS_FRACTION_OF_FREE_CASH)
                 usd_size = base_frac * free_cash_now
                 if usd_size >= WEIGHTED_MIN_TRADE_USD:
                     candidates.append((sym, i_now, usd_size, ps))
 
-            # 4) Sort by suggested $ size, take top N
             candidates.sort(key=lambda t: -t[2])
             candidates = candidates[:MAX_NEW_TRADES_PER_TIMESTEP]
 
-            # 5) Execute (re-check free cash each time since previous trades used some)
             for sym, i_now, suggested_usd, ps in candidates:
-                # Re-cap at MAX_POS_FRACTION of CURRENT free cash
                 cap = MAX_POS_FRACTION_OF_FREE_CASH * broker.free_cash()
                 actual = min(suggested_usd, cap)
                 if actual < WEIGHTED_MIN_TRADE_USD:
                     continue
                 price = float(close_arrays[sym][i_now])
-                if broker.buy_usd(sym, price, ts, actual):
-                    bought_at_bar[sym] = bar_count
+                broker.buy_usd(sym, price, ts, actual)
 
         prices = {s: float(close_arrays[s][last_idx_by_sym[s]])
                   for s in features if last_idx_by_sym[s] >= 0}
