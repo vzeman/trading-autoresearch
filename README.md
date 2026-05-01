@@ -16,23 +16,23 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-02 00:11 UTC** · `09119c6` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_052_09119c6.md](iterations/iter_052_09119c6.md)** · 📁 [all iterations](iterations/)
+_Last iteration: **2026-05-02 00:14 UTC** · `e243765` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_053_e243765.md](iterations/iter_053_e243765.md)** · 📁 [all iterations](iterations/)
 
-### Latest iteration: iter 052 — 09119c6
+### Latest iteration: iter 053 — e243765
 
-🔴 DISCARD · exp52: WEIGHTED_MAX_CONCURRENT=5 — DISASTER (DD -89%, fees $26k from over-rotation)
+🔴 DISCARD · exp53: SWAP_MARGIN 0.15→1.0 + cached pretrain (5min iteration)
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **-57.870** |
-| Sharpe CI low (5%) | -61.706 |
-| Net PnL | **$-44800.91** (-89.602%) |
-| Max drawdown | -89.62% |
-| Trades | 26412 |
-| Wall time | 2104.6s |
+| Sharpe (median) | **+1.080** |
+| Sharpe CI low (5%) | -1.582 |
+| Net PnL | **$+2391.43** (+4.783%) |
+| Max drawdown | -9.75% |
+| Trades | 40 |
+| Wall time | 79.5s |
 
-![iteration equity](docs/weighted_09119c6.png)
+![iteration equity](docs/weighted_e243765.png)
 
 ### Current best (`2f8bd0b`)
 
