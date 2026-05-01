@@ -4,6 +4,7 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
+| 🟢 | [iter 050 — 2f8bd0b](iter_050_2f8bd0b.md) | exp51: SPY-alpha reward (coef=0.5) | **+1.629** | **$+3597.60** (+7.195%) |
 | 🟢 | [iter 049 — 29c9eaf](iter_049_29c9eaf.md) | exp50: ENTROPY_COEF 0.005 + SWAP_MARGIN 0.15 + holdout eval enabled | **+1.626** | **$+3505.58** (+7.011%) |
 | 🔴 | [iter 048 — e9a95a5](iter_048_e9a95a5.md) | exp49: SWAP_MARGIN 0.20→0.15 at cap=0.50 (more rotations) | **+1.548** | **$+3442.85** (+6.886%) |
 | 🔴 | [iter 047 — 37994af](iter_047_37994af.md) | exp48: SWAP + cap 0.50→0.55 | **+1.510** | **$+3135.88** (+6.272%) |
