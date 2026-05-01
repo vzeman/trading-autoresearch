@@ -287,15 +287,20 @@ def update_iterations_index() -> None:
     (ITERATIONS_DIR / "README.md").write_text("\n".join(out) + "\n")
 
 
-def next_iter_number() -> int:
-    """Iteration number = number of rows in results.tsv (excluding header).
+def next_iter_number(description: str = "") -> int:
+    """Extract the experiment number from the description ('exp52: ...') so the
+    iteration filename matches what the agent calls the experiment.
 
-    Increments monotonically across runs. Used purely for filenames.
+    Falls back to results.tsv row count if no expN: prefix is found.
     """
+    import re
+    m = re.search(r"\bexp(\d+)\b", description or "")
+    if m:
+        return int(m.group(1))
     if not RESULTS_TSV.exists():
         return 1
     with open(RESULTS_TSV) as f:
-        return max(1, sum(1 for _ in f))  # header counts as 1; first row → 1, etc.
+        return max(1, sum(1 for _ in f))
 
 
 def write_iteration_md(
@@ -457,9 +462,15 @@ def main() -> None:
     print(f"=== iter @ {commit}  {description}", flush=True)
 
     t0 = time.time()
+    # Speedup #2: bump per-worker thread count from evaluator's default 2 → 4.
+    # M-series Macs have 8-12 perf cores; 3 workers × 4 threads = 12 active threads.
+    # evaluator.py uses os.environ.setdefault, so pre-set env vars win.
+    env = os.environ.copy()
+    env.setdefault("OMP_NUM_THREADS", "4")
+    env.setdefault("MKL_NUM_THREADS", "4")
     proc = subprocess.run(
         [str(REPO / ".venv" / "bin" / "python"), str(REPO / "evaluator.py")],
-        cwd=REPO, capture_output=True, text=True, timeout=12 * 3600,
+        cwd=REPO, capture_output=True, text=True, timeout=12 * 3600, env=env,
     )
     elapsed = time.time() - t0
     RUN_LOG.write_text(proc.stdout + "\n--STDERR--\n" + proc.stderr)
@@ -482,7 +493,7 @@ def main() -> None:
         safe_reset_head_minus_1()
         return
 
-    iter_num = next_iter_number()
+    iter_num = next_iter_number(description)
     prior_best = best_kept_ci_low()
     if dd < DD_FLOOR:
         status, reason = "discard", f"dd={dd:+.2f} < {DD_FLOOR}"

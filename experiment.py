@@ -20,6 +20,7 @@ CONTRACT (do not break):
 """
 from __future__ import annotations
 import math
+import os
 import time
 from pathlib import Path
 
@@ -30,6 +31,11 @@ from torch import nn
 
 CHECKPOINT_DIR = Path(__file__).parent / "checkpoints"
 CHECKPOINT_DIR.mkdir(exist_ok=True)
+
+# Speedup #1: skip pretrain when only post-training params (cap, SWAP_MARGIN, etc.)
+# changed between iterations. Loads checkpoints/last_seed{seed}.pt instead.
+# Set USE_CACHED_PRETRAIN=1 in the env when launching the driver.
+USE_CACHED_PRETRAIN = os.environ.get("USE_CACHED_PRETRAIN", "0") == "1"
 
 from prepare import (
     UNIVERSE, NOTIONAL_PER_SYMBOL_USD, STARTING_CASH_USD,
@@ -274,9 +280,13 @@ def pick_device() -> str:
       - Empirically MPS is ~6× slower than CPU on this exact workload
         (verified at d_model=96, batch=5).
       - For larger models or batches, MPS would win — re-enable then.
+      - Speedup #4: opt-in MPS via TRY_MPS=1 env var so we can re-test with
+        current config (larger pretrain batches may now favor MPS).
     """
     if torch.cuda.is_available():
         return "cuda"
+    if os.environ.get("TRY_MPS", "0") == "1" and torch.backends.mps.is_available():
+        return "mps"
     return "cpu"
 
 
@@ -1110,17 +1120,33 @@ def train_and_eval(seed: int = 0) -> tuple:
     ).to(device)
     print(f"[experiment] device={device}  features={n_features}  params={model.num_parameters():,}", flush=True)
 
-    # Phase 1: supervised forecast-head pretrain (trains multi-horizon head).
-    supervised_pretrain(model, train_feat, device)
+    cached_ckpt = CHECKPOINT_DIR / f"last_seed{seed}.pt"
+    if USE_CACHED_PRETRAIN and cached_ckpt.exists():
+        # Speedup: skip both pretrain phases (~25 min savings per iteration).
+        # Use when only post-training params changed (cap, SWAP_MARGIN, etc).
+        print(f"[experiment] USE_CACHED_PRETRAIN — loading {cached_ckpt}, SKIPPING pretrain", flush=True)
+        try:
+            ck = torch.load(cached_ckpt, map_location=device)
+            model.load_state_dict(ck["state_dict"])
+            print(f"[experiment] cached pretrain loaded", flush=True)
+        except Exception as e:
+            print(f"[experiment] cache load failed ({e}); falling back to full pretrain", flush=True)
+            supervised_pretrain(model, train_feat, device)
+            for ep in range(RL_PRETRAIN_EPOCHS):
+                print(f"[rl_pretrain] epoch {ep+1}/{RL_PRETRAIN_EPOCHS} (encoder-warming)", flush=True)
+                _ = simulate(model, train_feat, device, learn=True)
+    else:
+        # Phase 1: supervised forecast-head pretrain (trains multi-horizon head).
+        supervised_pretrain(model, train_feat, device)
 
-    # Phase 2: offline RL on the train slice — KEPT for its side-effect of
-    # warming the shared transformer encoder via gradient flow. Removing it
-    # in exp39 dropped weighted sharpe +1.79 → +0.97. The action head it
-    # trains is unused (primary/picker gone), but the encoder updates are
-    # load-bearing for forecast-head confidence in the weighted strategy.
-    for ep in range(RL_PRETRAIN_EPOCHS):
-        print(f"[rl_pretrain] epoch {ep+1}/{RL_PRETRAIN_EPOCHS} (encoder-warming)", flush=True)
-        _ = simulate(model, train_feat, device, learn=True)
+        # Phase 2: offline RL on the train slice — KEPT for its side-effect of
+        # warming the shared transformer encoder via gradient flow. Removing it
+        # in exp39 dropped weighted sharpe +1.79 → +0.97. The action head it
+        # trains is unused (primary/picker gone), but the encoder updates are
+        # load-bearing for forecast-head confidence in the weighted strategy.
+        for ep in range(RL_PRETRAIN_EPOCHS):
+            print(f"[rl_pretrain] epoch {ep+1}/{RL_PRETRAIN_EPOCHS} (encoder-warming)", flush=True)
+            _ = simulate(model, train_feat, device, learn=True)
 
     # Phases 3-4 (primary + picker eval) stay removed — they didn't beat passive.
 

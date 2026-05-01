@@ -16,12 +16,12 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-02 00:09 UTC** · `09119c6` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_051_09119c6.md](iterations/iter_051_09119c6.md)** · 📁 [all iterations](iterations/)
+_Last iteration: **2026-05-02 00:11 UTC** · `09119c6` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_052_09119c6.md](iterations/iter_052_09119c6.md)** · 📁 [all iterations](iterations/)
 
-### Latest iteration: iter 051 — 09119c6
+### Latest iteration: iter 052 — 09119c6
 
-🔴 DISCARD · exp52: WEIGHTED_MAX_CONCURRENT=5 — force selectivity, fix buy-and-hold bug
+🔴 DISCARD · exp52: WEIGHTED_MAX_CONCURRENT=5 — DISASTER (DD -89%, fees $26k from over-rotation)
 
 | metric | value |
 |---|---|
