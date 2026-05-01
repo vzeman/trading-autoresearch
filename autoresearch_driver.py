@@ -56,7 +56,11 @@ def parse_canonical(text: str) -> dict[str, str]:
 
 
 def best_kept_ci_low() -> float:
-    """Highest sharpe_ci_low across all status=keep rows. Returns -inf if none."""
+    """Highest sharpe_ci_low across status=keep rows with REAL trades.
+
+    Skips rows with trades==0 (their ci_low=0.0 is artificial — bootstrap on
+    an empty equity curve returns 0, which would set an unbeatable bar).
+    """
     if not RESULTS_TSV.exists():
         return float("-inf")
     best = float("-inf")
@@ -67,6 +71,9 @@ def best_kept_ci_low() -> float:
             if len(parts) < 8 or parts[6] != "keep":
                 continue
             try:
+                trades = int(parts[5])
+                if trades <= 0:
+                    continue
                 v = float(parts[2])
                 best = max(best, v)
             except ValueError:
