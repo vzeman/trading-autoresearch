@@ -35,7 +35,11 @@ UNIVERSE = [
 
 # ---- v6: extended to 6 years for much longer eval window. ----
 DAYS = 2190                  # 6 years of 1-min bars (Alpaca IEX serves back to ~2016)
-EVAL_FRACTION = 0.20         # last 20% (~438 days) used as held-out eval
+# v7: day-based eval window (90 days). User directive: train on 6 years of
+# bars, evaluate on the LAST 90 calendar days. Switching from a fraction-based
+# split (which was 0.20 → ~438 days) gives a tighter, fixed eval horizon that
+# matches a typical "last quarter" out-of-sample window.
+EVAL_DAYS = 90
 SEED = 0                     # for any deterministic shuffles in evaluator
 
 # ---- Fixed economic constants for the simulator (the broker is the evaluator) ----
@@ -152,10 +156,20 @@ def prepare_all(force: bool = False) -> dict[str, pd.DataFrame]:
 
 
 def split(bars: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Chronological train/eval split. Eval is the LAST EVAL_FRACTION of bars."""
-    n = len(bars)
-    cut = int(n * (1.0 - EVAL_FRACTION))
-    return bars.iloc[:cut].reset_index(drop=True), bars.iloc[cut:].reset_index(drop=True)
+    """Chronological train/eval split. Eval = last EVAL_DAYS calendar days.
+
+    Day-based slicing (rather than a fixed fraction) ensures the eval window
+    has a stable temporal length regardless of how much training data is
+    available — important for cross-experiment comparability.
+    """
+    if len(bars) == 0:
+        return bars, bars
+    bars = bars.sort_values("timestamp").reset_index(drop=True)
+    last_ts = bars["timestamp"].iloc[-1]
+    cutoff = last_ts - pd.Timedelta(days=EVAL_DAYS)
+    train = bars[bars["timestamp"] < cutoff].reset_index(drop=True)
+    eval_ = bars[bars["timestamp"] >= cutoff].reset_index(drop=True)
+    return train, eval_
 
 
 # ----------------------------------------------------------------------
