@@ -21,11 +21,15 @@ CONTRACT (do not break):
 from __future__ import annotations
 import math
 import time
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import torch
 from torch import nn
+
+CHECKPOINT_DIR = Path(__file__).parent / "checkpoints"
+CHECKPOINT_DIR.mkdir(exist_ok=True)
 
 from prepare import (
     UNIVERSE, NOTIONAL_PER_SYMBOL_USD, STARTING_CASH_USD,
@@ -248,6 +252,9 @@ FORECAST_HORIZON_IDX = 1              # 1h horizon (exp31 ensemble was a disaste
 SGD_BATCH = 64
 GRAD_CLIP = 1.0
 RL_STEP_EVERY_BARS = 5
+# Bound replay buffer for RL pretrain — at 6yr × 20 symbols an unbounded
+# buffer reaches ~100 GB (each entry is ~9 KB). 100k entries ≈ 900 MB.
+RL_BUFFER_MAX = 100_000
 
 
 def pick_device() -> str:
@@ -366,41 +373,79 @@ class PatchTransformer(nn.Module):
 
 
 # ============================================================================
-# WINDOWING
+# WINDOWING — on-demand (lazy) batch builder
 # ============================================================================
+# History note: pre-materializing all training windows as one (N, C, F) float32
+# tensor exploded RAM at the 6yr × 20-symbol × 128-context × 18-feature config
+# (~100 GB per worker, OOM'd a 96 GB Mac when evaluator ran 3 parallel workers).
+# Now we keep only per-symbol (N_bars, F) feature arrays (~1 GB total) and slice
+# (B, C, F) batches per minibatch via index gather.
 
-def windows_from_features(feat: pd.DataFrame, context_len: int, pred_horizon: int,
-                          horizons_minutes: list[int] | None = None):
-    """Returns (X, y_per_step, y_multi_horizon) where:
-      - X: (N, context_len, F)
-      - y_per_step: (N, pred_horizon)  — next pred_horizon per-bar log returns
-      - y_multi_horizon: (N, len(horizons_minutes)) — cumulative log return at
-        each horizon (e.g. close[t+H]/close[t]) — None if horizons_minutes empty.
+class WindowDataset:
+    """Lazy windowed dataset for supervised pretrain.
+
+    Per window index `(sym_idx, i)`:
+      - X      = feat[i : i + context_len]                    (C, F)
+      - y_step = log_return_1[i + C : i + C + pred_horizon]    (H,)
+      - y_mh   = [log(close[i + C + h] / close[i + C])  for h in horizons]
     """
-    cols = USE_FEATURES
-    arr = feat[cols].to_numpy(np.float32)
-    log_ret = feat["log_return_1"].to_numpy(np.float32)
-    close = feat["close"].to_numpy(np.float32) if "close" in feat.columns else None
-    horizons = horizons_minutes or []
-    max_h = max([pred_horizon] + horizons) if horizons else pred_horizon
-    n = len(feat) - context_len - max_h
-    if n <= 0:
-        return (np.empty((0, context_len, len(cols)), np.float32),
-                np.empty((0, pred_horizon), np.float32),
-                np.empty((0, len(horizons)), np.float32) if horizons else None)
-    X = np.empty((n, context_len, len(cols)), np.float32)
-    y_step = np.empty((n, pred_horizon), np.float32)
-    y_mh = np.empty((n, len(horizons)), np.float32) if horizons else None
-    for i in range(n):
-        X[i] = arr[i : i + context_len]
-        y_step[i] = log_ret[i + context_len : i + context_len + pred_horizon]
-        if horizons:
-            t = i + context_len
-            base = float(close[t]) if close is not None else 1.0
-            for j, H in enumerate(horizons):
-                future_close = float(close[t + H]) if close is not None else 1.0
-                y_mh[i, j] = math.log(max(future_close, 1e-12) / max(base, 1e-12))
-    return X, y_step, y_mh
+
+    def __init__(self, features: dict[str, pd.DataFrame], context_len: int,
+                 pred_horizon: int, horizons_minutes: list[int] | None) -> None:
+        self.context_len = context_len
+        self.pred_horizon = pred_horizon
+        self.horizons = list(horizons_minutes or [])
+        self.max_h = max([pred_horizon] + self.horizons) if self.horizons else pred_horizon
+        cols = USE_FEATURES
+        self.n_features = len(cols)
+        self.feat_arrs: list[np.ndarray] = []
+        self.lr_arrs: list[np.ndarray] = []
+        self.close_arrs: list[np.ndarray] = []
+        # Flat index of valid windows: parallel arrays for cheap fancy-indexing.
+        sym_ids: list[int] = []
+        starts: list[int] = []
+        for sym, feat in features.items():
+            arr = feat[cols].to_numpy(np.float32)
+            lr = feat["log_return_1"].to_numpy(np.float32)
+            cl = feat["close"].to_numpy(np.float32)
+            n = len(feat) - context_len - self.max_h
+            if n <= 0:
+                continue
+            local = len(self.feat_arrs)
+            self.feat_arrs.append(arr)
+            self.lr_arrs.append(lr)
+            self.close_arrs.append(cl)
+            sym_ids.extend([local] * n)
+            starts.extend(range(n))
+        self.sym_idx = np.asarray(sym_ids, dtype=np.int32)
+        self.start = np.asarray(starts, dtype=np.int64)
+
+    def __len__(self) -> int:
+        return int(self.start.shape[0])
+
+    def get_batch(self, idxs: np.ndarray):
+        """idxs: 1-D int array. Returns (X, y_step, y_mh|None) numpy float32 arrays."""
+        B = idxs.shape[0]
+        C = self.context_len
+        H = self.pred_horizon
+        F = self.n_features
+        X = np.empty((B, C, F), np.float32)
+        y_step = np.empty((B, H), np.float32)
+        y_mh = np.empty((B, len(self.horizons)), np.float32) if self.horizons else None
+        for k in range(B):
+            idx = idxs[k]
+            s = int(self.sym_idx[idx])
+            i = int(self.start[idx])
+            X[k] = self.feat_arrs[s][i : i + C]
+            y_step[k] = self.lr_arrs[s][i + C : i + C + H]
+            if y_mh is not None:
+                cl = self.close_arrs[s]
+                t = i + C
+                base = max(float(cl[t]), 1e-12)
+                for j, h in enumerate(self.horizons):
+                    fc = max(float(cl[t + h]), 1e-12)
+                    y_mh[k, j] = math.log(fc / base)
+        return X, y_step, y_mh
 
 
 # ============================================================================
@@ -409,35 +454,25 @@ def windows_from_features(feat: pd.DataFrame, context_len: int, pred_horizon: in
 
 def supervised_pretrain(model: PatchTransformer, train_features: dict[str, pd.DataFrame], device: str):
     horizons = model.horizons_minutes
-    Xs, ys, ymhs = [], [], []
-    for sym, feat in train_features.items():
-        X, y, y_mh = windows_from_features(feat, model.context_len, model.pred_horizon, horizons)
-        if len(X) > 0:
-            Xs.append(X); ys.append(y)
-            if horizons:
-                ymhs.append(y_mh)
-    if not Xs:
+    ds = WindowDataset(train_features, model.context_len, model.pred_horizon, horizons)
+    n = len(ds)
+    if n == 0:
         return
-    X = torch.from_numpy(np.concatenate(Xs))
-    y = torch.from_numpy(np.concatenate(ys))
-    y_mh = torch.from_numpy(np.concatenate(ymhs)) if (horizons and ymhs) else None
-    n = len(X)
-    perm = torch.randperm(n)
-    X, y = X[perm], y[perm]
-    if y_mh is not None:
-        y_mh = y_mh[perm]
     opt = torch.optim.AdamW(model.parameters(), lr=PRETRAIN_LR, weight_decay=1e-4)
     model.train()
     for ep in range(PRETRAIN_EPOCHS):
+        perm = np.random.permutation(n)   # uses global np.random state seeded by train_and_eval
         losses, losses_mh = [], []
         for i in range(0, n - SGD_BATCH, PRETRAIN_BATCH):
-            xb = X[i : i + PRETRAIN_BATCH].to(device)
-            yb = y[i : i + PRETRAIN_BATCH].to(device)
+            batch_idxs = perm[i : i + PRETRAIN_BATCH]
+            X_np, y_np, y_mh_np = ds.get_batch(batch_idxs)
+            xb = torch.from_numpy(X_np).to(device)
+            yb = torch.from_numpy(y_np).to(device)
             opt.zero_grad(set_to_none=True)
             mean, log_std, _ = model(xb)
             loss = PatchTransformer.gaussian_nll(mean, log_std, yb)
-            if y_mh is not None:
-                ymh_b = y_mh[i : i + PRETRAIN_BATCH].to(device)
+            if y_mh_np is not None:
+                ymh_b = torch.from_numpy(y_mh_np).to(device)
                 mh_mean, mh_log_std = model.forward_multi_horizon(xb)
                 loss_mh = PatchTransformer.gaussian_nll(mh_mean, mh_log_std, ymh_b)
                 loss = loss + loss_mh
@@ -604,6 +639,12 @@ def simulate(model: PatchTransformer, features: dict[str, pd.DataFrame], device:
                 pos_ret = p_["target"] * log_ret
                 reward = portfolio_weight * (pos_ret - cost_charge - VOL_PENALTY * pos_ret * pos_ret)
                 buf_X.append(p_["X"]); buf_a.append(p_["a"]); buf_r.append(reward)
+
+        # Bound replay buffer — trim oldest in batches to avoid per-append cost.
+        if learn and len(buf_X) > RL_BUFFER_MAX + 1000:
+            buf_X = buf_X[-RL_BUFFER_MAX:]
+            buf_a = buf_a[-RL_BUFFER_MAX:]
+            buf_r = buf_r[-RL_BUFFER_MAX:]
 
         # periodic SGD step (counted in timestamps now, not in events)
         if learn and ts_count % RL_STEP_EVERY_BARS == 0 and len(buf_X) >= SGD_BATCH:
@@ -1028,6 +1069,23 @@ def train_and_eval(seed: int = 0) -> tuple:
 
     # Phase 5: WEIGHTED dynamic-sizing strategy (the only one that works).
     weighted = simulate_weighted(model, eval_feat, device)
+
+    # Save trained weights for this seed. Agent loop promotes last_*.pt → best_*.pt
+    # whenever sharpe_ci_low improves on the prior best.
+    try:
+        ckpt_path = CHECKPOINT_DIR / f"last_seed{seed}.pt"
+        torch.save({
+            "state_dict": model.state_dict(),
+            "n_features": n_features,
+            "patch_len": PATCH_LEN, "context_patches": CONTEXT_PATCHES,
+            "d_model": D_MODEL, "n_heads": N_HEADS, "n_layers": N_LAYERS, "d_ff": D_FF,
+            "dropout": DROPOUT, "pred_horizon": PRED_HORIZON,
+            "horizons_minutes": HORIZONS_MINUTES,
+            "use_features": USE_FEATURES,
+        }, ckpt_path)
+        print(f"[checkpoint] saved {ckpt_path}", flush=True)
+    except Exception as e:
+        print(f"[checkpoint] save failed: {e}", flush=True)
 
     # Return 6-element tuple: weighted_eq, n_trades, fees, slip, trades, cash_curve.
     return (
