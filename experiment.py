@@ -1120,6 +1120,26 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[checkpoint] save failed: {e}", flush=True)
 
+    # Dump per-seed trade list so the autoresearch driver can include it in
+    # the iteration .md file (each BUY/SELL with timestamp + symbol).
+    try:
+        import json as _json
+        trades_path = CHECKPOINT_DIR / f"last_seed{seed}_trades.json"
+        end_eq = float(weighted.equity_curve[-1][1]) if weighted.equity_curve else 0.0
+        trades_payload = {
+            "seed": seed,
+            "n_trades": int(weighted.n_trades),
+            "starting_cash": float(STARTING_CASH_USD),
+            "ending_equity": end_eq,
+            "trades": [
+                {"ts": str(ts), "symbol": sym, "side": side}
+                for (ts, sym, side) in weighted.trades
+            ],
+        }
+        trades_path.write_text(_json.dumps(trades_payload, indent=2))
+    except Exception as e:
+        print(f"[trades-dump] seed {seed} failed: {e}", flush=True)
+
     # Return 6-element tuple: weighted_eq, n_trades, fees, slip, trades, cash_curve.
     return (
         weighted.equity_curve, weighted.n_trades,

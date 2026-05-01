@@ -306,6 +306,43 @@ def write_iteration_md(
     md.append("")
     md.append(f"![weighted 1m]({weighted_1m})")
     md.append("")
+
+    # Per-seed transactions
+    md.append("## Transactions")
+    md.append("")
+    trades_blocks = []
+    for trades_file in sorted(CHECKPOINTS.glob("last_seed*_trades.json")):
+        try:
+            payload = json.loads(trades_file.read_text())
+            seed = payload.get("seed", "?")
+            trades = payload.get("trades", [])
+            n = payload.get("n_trades", len(trades))
+            ending_eq = payload.get("ending_equity", 0.0)
+            starting = payload.get("starting_cash", 0.0)
+            trades_blocks.append((seed, trades, n, ending_eq, starting))
+        except Exception:
+            continue
+    if not trades_blocks:
+        md.append("_(no per-seed trade JSON found — driver/experiment.py mismatch?)_")
+        md.append("")
+    else:
+        for seed, trades, n, ending_eq, starting in trades_blocks:
+            pnl = ending_eq - starting if starting else 0.0
+            pnl_pct = (pnl / starting * 100) if starting else 0.0
+            md.append(f"### Seed {seed} — {n} trades · ending equity ${ending_eq:,.2f} ({pnl:+,.2f} = {pnl_pct:+.2f}%)")
+            md.append("")
+            if not trades:
+                md.append("_(no trades executed)_")
+                md.append("")
+                continue
+            md.append("| # | timestamp (UTC) | symbol | side |")
+            md.append("|---:|---|---|---|")
+            for i, t in enumerate(trades[:200], 1):  # cap for readability
+                ts = str(t.get("ts", "?"))[:19]
+                md.append(f"| {i} | {ts} | {t.get('symbol','?')} | {t.get('side','?')} |")
+            if len(trades) > 200:
+                md.append(f"| … | _{len(trades)-200} more truncated_ | | |")
+            md.append("")
     md.append("## Diff vs previous experiment")
     md.append("")
     md.append("```diff")
