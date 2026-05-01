@@ -12,55 +12,48 @@ Karpathy-style [autoresearch](https://github.com/karpathy/autoresearch) harness,
 
 ## Latest results
 
-<!-- RESULTS_START -->
+The autoresearch driver writes a fresh per-iteration report under [`iterations/`](iterations/) every run and pushes to GitHub. The block below shows the most recent iteration.
 
-_Last updated: 2026-05-01 18:56 UTC_  
-_Total experiments: **45**  ·  kept: **15**  ·  latest commit: `6e143de`_
+<!-- LATEST_ITER_START -->
 
-### Weighted strategy — full eval window (~73 days)
+_Last iteration: **2026-05-01 20:56 UTC** · `6e143de` · 🟢 KEEP — new best_  
+📄 **[Full iteration report → iterations/iter_002_6e143de.md](iterations/iter_002_6e143de.md)** · 📁 [all iterations](iterations/)
 
-![weighted equity](docs/weighted_latest.png)
+### Latest iteration: iter 002 — 6e143de
 
-### Weighted strategy — first month of eval
-
-![weighted 1m](docs/weighted_1m_latest.png)
-
-### Strategy vs SPY benchmark
-
-| Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees | % time > SPY |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+1.535** 🏆 | **$+3,260.33** 🏆 | +6.521% | **-8.70%** 🏆 | 48 | $48.00 | **66%** 🏆 |
-| **SP500 (SPY) buy-and-hold** — passive benchmark | +1.011 | $+2,017.61 | +4.035% | -9.73% | 1 | **$1.00** 🏆 | 0% |
-
-**Best by Sharpe:** Weighted (Kelly-sized, max 20% free cash, ≤5/step)
-
-### Detailed metrics — weighted strategy
+🟢 KEEP — new best · SWAP pass + cap 0.65 → 0.50
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+1.535** |
-| Net PnL | $+3,260.33 (+6.521%) |
+| Sharpe (median) | **+1.535** |
+| Sharpe CI low (5%) | -1.513 |
+| Net PnL | **$+3,260.33** (+6.521%) |
+| Max drawdown | **-8.70%** |
+| Trades | 48 |
+| Wall time | 2022.2s |
+
+![iteration equity](docs/weighted_6e143de.png)
+
+### Current best (`6e143de`)
+
+| metric | value |
+|---|---|
+| Sharpe (median) | **+1.535** |
+| Sharpe CI low (5%) | -1.513 |
+| Net PnL | **$+3,260.33** (+6.521%) |
 | Max drawdown | -8.70% |
 | Trades | 48 |
-| % time above SPY | 66% |
-| Wall time | 2022.2s |
-| Seeds completed | 3 |
+| Saved at | 2026-05-01 20:56:36 |
+
+![weighted equity, current best](docs/weighted_latest.png)
+
+![first month](docs/weighted_1m_latest.png)
 
 ### Progress over all experiments
 
 ![progress](docs/progress.png)
 
-### Leaderboard (top 5 kept by Sharpe CI-low)
-
-| # | commit | Sharpe | CI-low | DD% | PnL | Trades | Description |
-|---|---|---:|---:|---:|---:|---:|---|
-| 1 | `d38cd93` | +0.00 | +0.00 | -1.34 | $+0.00 | 0 | exp26 KEEP: LONG_ONLY=True. Per-seed: 1/3 keeps profitable +$194, 2/3 don't trade ($0 vs v5's -$220 each). Mean pnl +$65 (vs v5's -$82). Killed catastrophic SELL-dominant equilibrium. Still loses to passive but no longer to v5. |
-| 2 | `86d13f0` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp28 KEEP 🎯 MULTI-HORIZON prediction (1m/1h/1d/1w). First positive median sharpe on year-of-data (+0.96 vs v5's -1.08). 2/3 seeds find profitable equilibrium (was 1/3). Now ~85% of passive SPY (+0.96 vs +1.17). |
-| 3 | `a82ee98` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp32 KEEP 🎯🎯 STRATEGY 3 WEIGHTED dynamic sizing — primary unchanged but WEIGHTED strategy: sharpe +1.03, pnl +$1303 (+2.6%), 5 trades, DD -8.6%. SIX TIMES the PnL of best passive ($217 equal-wt). First strategy that meaningfully beats passive on absolute return. |
-| 4 | `535c7ca` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp34 KEEP 🎯🎯🎯 cap 0.20→0.40 — weighted: sharpe +1.03→+1.24, pnl +$1303→+$2370 (+82%), DD -8.6→-12.6%. Nearly doubled PnL for 50% more DD — Kelly behaving as expected. New best. |
-| 5 | `e32c804` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp35 KEEP 🎯🎯🎯🎯 cap 0.40→0.50 — weighted: sharpe +1.24→+1.37, pnl +$2370→+$2948 (+24%), DD -12.6→-13.7%. BEST RESULT EVER. Beats SPY B&H by 50% on PnL (+$2948 vs +$1965). Cap still binding — keep ratcheting. |
-
-<!-- RESULTS_END -->
+<!-- LATEST_ITER_END -->
 
 ## The strategy: weighted dynamic sizing
 
@@ -70,17 +63,19 @@ For each 1-minute bar:
 
 1. **Predict** 1-hour-horizon Sharpe for every ready symbol via the multi-horizon head.
 2. **SELL pass** — close any held position whose 1-h Sharpe drops below `WEIGHTED_SELL_SHARPE = 0.0`.
-3. **BUY pass** — for each non-held symbol with positive predicted Sharpe, size by `min(pred_sharpe × KELLY_SCALE, MAX_POS_FRACTION_OF_FREE_CASH) × free_cash`. Sort by suggested $ descending; take up to `MAX_NEW_TRADES_PER_TIMESTEP = 5`.
-4. **Mark to market.**
+3. **SWAP pass** (exp44+) — rotate the weakest held position into the strongest unheld candidate when the pred-Sharpe edge clears `WEIGHTED_SWAP_MARGIN = 0.20`, which comfortably covers a round-trip transaction cost (~0.24 % per $1 k position). This was the breakthrough that took median sharpe from +0.99 → +1.54.
+4. **BUY pass** — for each non-held symbol with positive predicted Sharpe, size by `min(pred_sharpe × KELLY_SCALE, MAX_POS_FRACTION_OF_FREE_CASH) × free_cash`. Sort by suggested $ descending; take up to `MAX_NEW_TRADES_PER_TIMESTEP = 5`.
+5. **Mark to market.**
 
 `free_cash = cash − MIN_CASH_RESERVE_PCT × starting_cash`. Long-only (`LONG_ONLY = True`) — shorts caused a destructive equilibrium in earlier experiments.
 
-Current tuned defaults (best so far at `8988cee`):
+Current tuned defaults (best so far at `6e143de`, exp47 — sharpe **+1.535**, pnl **+$3,260 / +6.5 %**, DD **−8.7 %**):
 
 | Param | Value | Notes |
 |---|---|---|
-| `MAX_POS_FRACTION_OF_FREE_CASH` | `0.85` | exp42 found 0.80 was safe; exp43 ratchets to 0.85 |
-| `MIN_CASH_RESERVE_PCT` | `0.10` | keep 10% reserve for opportunities |
+| `MAX_POS_FRACTION_OF_FREE_CASH` | `0.50` | exp47: smaller cap controls DD when SWAP pass is active |
+| `WEIGHTED_SWAP_MARGIN` | `0.20` | exp44+: rotate held → unheld only when pred-Sharpe edge clears this (covers ~0.24 % round-trip cost) |
+| `MIN_CASH_RESERVE_PCT` | `0.10` | keep 10 % reserve for opportunities |
 | `KELLY_SCALE` | `0.5` | half-Kelly |
 | `MAX_NEW_TRADES_PER_TIMESTEP` | `5` | diversify timing |
 | `WEIGHTED_MIN_TRADE_USD` | `100` | below this, fee dominates |
