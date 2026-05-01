@@ -240,6 +240,7 @@ RL_LR = 2e-5     # exp7 KEPT setting (known stable, no rogue seeds)
 RL_COEF = 1.0
 ENTROPY_COEF = 0.005   # exp50: 0.01→0.005. exp49 (SWAP_MARGIN=0.15) had best raw sharpe (+1.548) and PnL (+$3,442) but ci_low -1.523 missed exp47's -1.513 by 0.01 — wider per-seed variance suggested too much exploration. Tighter convergence should narrow CI.
 VOL_PENALTY = 0.0   # exp20/21 showed: small penalty=invisible, large penalty=destabilizing. Off.
+SPY_ALPHA_COEF = 0.5   # exp51: weight on alpha-vs-SPY bonus added to RL reward. 0=ignore, 1=full alpha. 0.5=balanced (keep absolute reward base + half-weight alpha bonus). Trains the model to seek positions that BEAT the market, not just predict positive returns.
 
 # ============================================================================
 # STRATEGY-LEVEL "STICKINESS" — minimum time between portfolio moves.
@@ -535,6 +536,13 @@ def simulate(model: PatchTransformer, features: dict[str, pd.DataFrame], device:
     cols = USE_FEATURES
     feat_arrays: dict[str, np.ndarray] = {s: f[cols].to_numpy(np.float32) for s, f in features.items()}
     close_arrays: dict[str, np.ndarray] = {s: f["close"].to_numpy(np.float32) for s, f in features.items()}
+    # exp51: per-symbol SPY 1-min log-returns (forward-filled in featurize), used
+    # in the RL reward to compute alpha-vs-SPY over RL_REWARD_HORIZON bars.
+    spy_arrays: dict[str, np.ndarray] = {
+        s: f["spy_logret_1"].to_numpy(np.float32) if "spy_logret_1" in f.columns
+        else np.zeros(len(f), dtype=np.float32)
+        for s, f in features.items()
+    }
 
     # Group events by timestamp. One model.forward per group, batch = #symbols ready.
     events_by_ts: dict[pd.Timestamp, list[tuple[str, int]]] = {}
@@ -640,13 +648,21 @@ def simulate(model: PatchTransformer, features: dict[str, pd.DataFrame], device:
         for sym, i_now in events_here:
             st = sym_state[sym]
             close = close_arrays[sym]
+            spy_lr = spy_arrays[sym]
             while st["pending"] and st["pending"][0]["i"] + H_max <= i_now:
                 p_ = st["pending"].pop(0)
                 future_close = float(close[p_["i"] + RL_REWARD_HORIZON])
                 log_ret = math.log(max(future_close, 1e-12) / max(p_["entry"], 1e-12))
                 cost_charge = 0.5 * (round_trip_var_cost + fixed_cost_frac) * p_["pos_change"]
                 pos_ret = p_["target"] * log_ret
-                reward = portfolio_weight * (pos_ret - cost_charge - VOL_PENALTY * pos_ret * pos_ret)
+                # exp51: SPY-alpha bonus. spy_lr[t+1 : t+1+H] sums to SPY's H-bar
+                # log return at this symbol's timestamp. Reward beating it (when long).
+                t_after = p_["i"] + 1
+                spy_h_ret = float(spy_lr[t_after : t_after + RL_REWARD_HORIZON].sum())
+                alpha_bonus = SPY_ALPHA_COEF * (pos_ret - p_["target"] * spy_h_ret)
+                reward = portfolio_weight * (pos_ret - cost_charge
+                                              - VOL_PENALTY * pos_ret * pos_ret
+                                              + alpha_bonus)
                 buf_X.append(p_["X"]); buf_a.append(p_["a"]); buf_r.append(reward)
 
         # Bound replay buffer — trim oldest in batches to avoid per-append cost.
