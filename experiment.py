@@ -695,12 +695,13 @@ PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at on
 # Up to MAX_NEW_TRADES_PER_TIMESTEP simultaneous buys, each capped at
 # MAX_POS_FRACTION_OF_FREE_CASH of free cash.
 # ============================================================================
-MAX_POS_FRACTION_OF_FREE_CASH = 0.80  # exp42: 0.95→0.80. exp41 was profitable (+$2,679 median, sharpe +0.95) but DD -10.03% just barely violated floor. Smaller positions should keep DD under -10% with similar PnL.
+MAX_POS_FRACTION_OF_FREE_CASH = 0.50  # exp47: SWAP + cap 0.50. exp46 (SWAP+0.65) gave best sharpe yet (+1.42) but DD -10.85% over floor on seed 1 only. Drop cap from 0.65 to 0.50 to bring worst-seed DD comfortably under -10%.
 MIN_CASH_RESERVE_PCT = 0.10           # keep 10% of starting cash unspent
 MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
 KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effect — cap saturates)
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
 WEIGHTED_MIN_TRADE_USD = 100.0        # too small → fee dominates
+WEIGHTED_SWAP_MARGIN = 0.20           # exp47: rotate held→unheld only when pred_sharpe edge exceeds this. Covers round-trip cost (~0.24%/$1k) in Sharpe-equivalent units.
 
 
 class PickerBroker:
@@ -944,7 +945,9 @@ def simulate_weighted(model: PatchTransformer,
     For each timestep:
       1. Predict 1h-horizon Sharpe for each ready symbol via mh_head.
       2. SELL pass: close any held position whose Sharpe < WEIGHTED_SELL_SHARPE.
-      3. BUY pass: for symbols with positive predicted Sharpe (not already held),
+      3. SWAP pass (exp47): rotate weakest held → strongest unheld when the
+         pred_sharpe edge exceeds WEIGHTED_SWAP_MARGIN (covers round-trip cost).
+      4. BUY pass: for symbols with positive predicted Sharpe (not already held),
          compute Kelly-like dollar size and execute up to MAX_NEW_TRADES_PER_TIMESTEP.
     No time-based exit — the model decides when to sell.
     """
@@ -990,6 +993,28 @@ def simulate_weighted(model: PatchTransformer,
                 if broker.positions.get(sym, 0.0) > 0 and ps < WEIGHTED_SELL_SHARPE:
                     i_now = last_idx_by_sym[sym]
                     broker.sell_all(sym, float(close_arrays[sym][i_now]), ts)
+
+            # 1.5) SWAP pass (exp47) — rotate weakest held → strongest unheld
+            # only when the pred_sharpe edge clears WEIGHTED_SWAP_MARGIN. Covers
+            # the round-trip transaction cost (fee + 2bps slippage × 2) so we
+            # only churn when relative model conviction is meaningful.
+            held_with_sharpe = [
+                (sym, sym_to_sharpe[sym])
+                for sym, qty in broker.positions.items()
+                if qty > 0 and sym in sym_to_sharpe
+            ]
+            unheld_with_sharpe = [
+                (sym, ps) for (sym, _), ps in zip(batch_meta, pred_sharpe_list)
+                if broker.positions.get(sym, 0.0) <= 0 and ps > 0
+            ]
+            if held_with_sharpe and unheld_with_sharpe:
+                weak_sym, weak_ps = min(held_with_sharpe, key=lambda t: t[1])
+                strong_sym, strong_ps = max(unheld_with_sharpe, key=lambda t: t[1])
+                if (strong_ps - weak_ps) > WEIGHTED_SWAP_MARGIN:
+                    i_now_weak = last_idx_by_sym[weak_sym]
+                    broker.sell_all(weak_sym, float(close_arrays[weak_sym][i_now_weak]), ts)
+                    # BUY pass below will deploy the freed cash to strong_sym
+                    # since it's still in pred_sharpe_list with positive ps.
 
             # 2) BUY pass — for symbols not currently held, size by Kelly
             free_cash_now = broker.free_cash()
