@@ -45,6 +45,14 @@ from prepare import (
 CONTEXT_SYMBOLS = ["^VIX", "TLT", "UUP", "SPY"]   # VIX, 20yr Treasury, USD-index proxy, SPY (cross-asset)
 
 # ============================================================================
+# HOLDOUT UNIVERSE — stocks the model NEVER trains on. After the in-symbol eval
+# completes, the same trained model is run on these names' last-90d bars to
+# test out-of-symbol generalization. A model that learned real signal should
+# produce a comparable (within ~30%) sharpe here vs in-sample.
+# ============================================================================
+HOLDOUT_UNIVERSE = ["JPM", "WMT", "V", "DIS", "JNJ"]
+
+# ============================================================================
 # FEATURE ENGINEERING — agent edits freely. Must remain causal.
 # ============================================================================
 
@@ -1139,6 +1147,47 @@ def train_and_eval(seed: int = 0) -> tuple:
         trades_path.write_text(_json.dumps(trades_payload, indent=2))
     except Exception as e:
         print(f"[trades-dump] seed {seed} failed: {e}", flush=True)
+
+    # --- Out-of-symbol HOLDOUT eval (exp50) -------------------------------
+    # Run the trained model on stocks it never saw. Generalization check.
+    holdout_metrics = {"sharpe": 0.0, "pnl": 0.0, "trades": 0, "dd_pct": 0.0,
+                       "symbols": [], "ending_equity": 0.0}
+    try:
+        from prepare import sharpe_ratio as _sr, max_drawdown_pct as _dd
+        holdout_feat: dict[str, pd.DataFrame] = {}
+        for sym in HOLDOUT_UNIVERSE:
+            try:
+                bars = fetch_bars(sym)
+            except Exception as e:
+                print(f"[holdout] {sym}: fetch failed ({e})", flush=True)
+                continue
+            _, ev_bars = split(bars)
+            if len(ev_bars) > 50:
+                holdout_feat[sym] = featurize(ev_bars, context=context)
+        if holdout_feat:
+            holdout_broker = simulate_weighted(model, holdout_feat, device)
+            end_eq_h = float(holdout_broker.equity_curve[-1][1]) if holdout_broker.equity_curve else 0.0
+            start_eq_h = float(holdout_broker.equity_curve[0][1]) if holdout_broker.equity_curve else 0.0
+            holdout_metrics = {
+                "sharpe": float(_sr(holdout_broker.equity_curve)),
+                "pnl": end_eq_h - start_eq_h,
+                "trades": int(holdout_broker.n_trades),
+                "dd_pct": float(_dd(holdout_broker.equity_curve)),
+                "symbols": list(holdout_feat.keys()),
+                "ending_equity": end_eq_h,
+            }
+            print(f"[holdout] sharpe={holdout_metrics['sharpe']:+.3f} "
+                  f"pnl=${holdout_metrics['pnl']:+,.2f} trades={holdout_metrics['trades']} "
+                  f"dd={holdout_metrics['dd_pct']:+.2f}% on {holdout_metrics['symbols']}", flush=True)
+    except Exception as e:
+        print(f"[holdout] failed: {e}", flush=True)
+
+    try:
+        import json as _json
+        holdout_path = CHECKPOINT_DIR / f"last_seed{seed}_holdout.json"
+        holdout_path.write_text(_json.dumps(holdout_metrics, indent=2, default=str))
+    except Exception as e:
+        print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
     # Return 6-element tuple: weighted_eq, n_trades, fees, slip, trades, cash_curve.
     return (

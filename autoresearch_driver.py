@@ -233,6 +233,60 @@ def update_readme_for_iteration(
         readme.write_text(txt.rstrip() + "\n\n" + block)
 
 
+def update_iterations_index() -> None:
+    """Rebuild iterations/README.md from all iter_*.md files in the folder.
+
+    GitHub renders README.md when you navigate to a folder, so this becomes the
+    landing page when someone clicks the iterations/ link in the project README.
+    """
+    if not ITERATIONS_DIR.exists():
+        return
+    rows = []
+    for md_file in sorted(ITERATIONS_DIR.glob("iter_*.md"), reverse=True):
+        try:
+            text = md_file.read_text()
+            lines = text.splitlines()
+            first = lines[0] if lines else ""
+            second = lines[2] if len(lines) > 2 else ""
+            status_emoji = "⚪"
+            if "🟢" in second: status_emoji = "🟢"
+            elif "🔴" in second: status_emoji = "🔴"
+            elif "💥" in second: status_emoji = "💥"
+            desc = second.split("·", 1)[-1].strip() if "·" in second else second
+            desc = desc.replace("**", "").strip()
+            sharpe, pnl = "", ""
+            for ln in lines:
+                if "Sharpe (median)" in ln and "|" in ln:
+                    sharpe = ln.split("|")[2].strip()
+                if "Net PnL" in ln and "|" in ln:
+                    pnl = ln.split("|")[2].strip()
+                if sharpe and pnl:
+                    break
+            rows.append({
+                "filename": md_file.name,
+                "status": status_emoji,
+                "title": first.lstrip("# ").strip(),
+                "desc": desc[:80],
+                "sharpe": sharpe,
+                "pnl": pnl,
+            })
+        except Exception:
+            continue
+    out = ["# Iteration log", "",
+           "Every autoresearch iteration writes a full report here. Most recent first.",
+           "",
+           "| status | iter | description | sharpe | PnL |",
+           "|---|---|---|---:|---:|"]
+    for r in rows:
+        out.append(
+            f"| {r['status']} | [{r['title']}]({r['filename']}) | {r['desc']} | "
+            f"{r['sharpe']} | {r['pnl']} |"
+        )
+    out.append("")
+    out.append("← [back to project README](../README.md)")
+    (ITERATIONS_DIR / "README.md").write_text("\n".join(out) + "\n")
+
+
 def next_iter_number() -> int:
     """Iteration number = number of rows in results.tsv (excluding header).
 
@@ -306,6 +360,36 @@ def write_iteration_md(
     md.append("")
     md.append(f"![weighted 1m]({weighted_1m})")
     md.append("")
+
+    # Out-of-symbol holdout eval
+    md.append("## Out-of-symbol holdout eval")
+    md.append("")
+    holdout_blocks = []
+    for hf in sorted(CHECKPOINTS.glob("last_seed*_holdout.json")):
+        try:
+            payload = json.loads(hf.read_text())
+            holdout_blocks.append(payload)
+        except Exception:
+            continue
+    if not holdout_blocks:
+        md.append("_(no holdout data — experiment.py / driver mismatch)_")
+        md.append("")
+    else:
+        syms = holdout_blocks[0].get("symbols", [])
+        md.append(f"Tested on **{', '.join(syms) or '(none)'}** — large-caps the model NEVER saw during training.")
+        md.append("")
+        md.append("| seed | sharpe | PnL | trades | DD% |")
+        md.append("|---:|---:|---:|---:|---:|")
+        for i, p in enumerate(holdout_blocks):
+            md.append(
+                f"| {i} | {p.get('sharpe', 0):+.3f} | ${p.get('pnl', 0):+,.2f} | "
+                f"{p.get('trades', 0)} | {p.get('dd_pct', 0):+.2f}% |"
+            )
+        sharpes = sorted(p.get("sharpe", 0) for p in holdout_blocks)
+        med = sharpes[len(sharpes) // 2] if sharpes else 0.0
+        md.append("")
+        md.append(f"**Median holdout sharpe: {med:+.3f}** (vs in-symbol {metrics.get('sharpe', '—')})")
+        md.append("")
 
     # Per-seed transactions
     md.append("## Transactions")
@@ -404,6 +488,7 @@ def main() -> None:
         status, reason = "discard", f"dd={dd:+.2f} < {DD_FLOOR}"
         update_last_row_status(status, description)
         write_iteration_md(iter_num, commit, description, status, reason, metrics, elapsed, proc.stdout)
+        update_iterations_index()
         safe_reset_head_minus_1()
     elif trades <= 0 or abs(sharpe) < 1e-9:
         # 0-trade results are uninformative; never KEEP them even if ci_low=0
@@ -412,6 +497,7 @@ def main() -> None:
         status, reason = "discard", f"trades={trades} sharpe={sharpe:+.3f} — strategy didn't trade"
         update_last_row_status(status, description)
         write_iteration_md(iter_num, commit, description, status, reason, metrics, elapsed, proc.stdout)
+        update_iterations_index()
         safe_reset_head_minus_1()
     elif ci_low > prior_best:
         status, reason = "keep", f"ci_low={ci_low:+.4f} > prior best {prior_best:+.4f}"
@@ -419,12 +505,14 @@ def main() -> None:
         promoted = promote_checkpoints(commit, ci_low)
         write_best_json(commit, metrics)
         write_iteration_md(iter_num, commit, description, status, reason, metrics, elapsed, proc.stdout)
+        update_iterations_index()
         update_readme_for_iteration(iter_num, commit, description, status, metrics)
         print(f"  promoted {len(promoted)} checkpoint(s) → {BEST_DIR}", flush=True)
     else:
         status, reason = "discard", f"ci_low={ci_low:+.4f} ≤ prior best {prior_best:+.4f}"
         update_last_row_status(status, description)
         write_iteration_md(iter_num, commit, description, status, reason, metrics, elapsed, proc.stdout)
+        update_iterations_index()
         safe_reset_head_minus_1()
 
     # For non-keep iterations, still update README to show the latest iteration page link
