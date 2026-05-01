@@ -124,6 +124,39 @@ def write_best_json(commit: str, metrics: dict[str, str]) -> None:
     }, indent=2))
 
 
+def safe_reset_head_minus_1() -> None:
+    """git reset --hard HEAD~1 BUT preserve results.tsv.
+
+    results.tsv is tracked, so a reset would wipe the row evaluator just
+    appended (and that we just status-stamped). Capture it, reset, restore.
+    """
+    backup = RESULTS_TSV.read_text() if RESULTS_TSV.exists() else None
+    git(["reset", "--hard", "HEAD~1"])
+    if backup is not None:
+        RESULTS_TSV.write_text(backup)
+
+
+def push_to_origin() -> None:
+    """Push current state + auto-generated docs to origin/main. Idempotent.
+
+    Stages docs/*.png + README.md + results.tsv (if changed), commits with
+    a generic message if there's something to commit, then pushes.
+    Failures are non-fatal — printed and swallowed.
+    """
+    try:
+        subprocess.run(["git", "add", "README.md", "docs", "results.tsv"], cwd=REPO, check=False)
+        # Commit only if there are staged changes
+        diff = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=REPO).returncode
+        if diff != 0:
+            subprocess.run(
+                ["git", "commit", "-m", "docs: refresh charts + results after iter"],
+                cwd=REPO, check=False, capture_output=True,
+            )
+        subprocess.run(["git", "push", "origin", "main"], cwd=REPO, check=False, capture_output=True)
+    except Exception as e:
+        print(f"  push_to_origin failed: {e}", flush=True)
+
+
 def main() -> None:
     description = sys.argv[1] if len(sys.argv) > 1 else "(no description)"
     commit = git(["rev-parse", "--short=7", "HEAD"])
@@ -140,7 +173,7 @@ def main() -> None:
     if proc.returncode != 0:
         print(f"STATUS=crash exit={proc.returncode} elapsed={elapsed:.0f}s", flush=True)
         append_crash_row(commit, description)
-        git(["reset", "--hard", "HEAD~1"])
+        safe_reset_head_minus_1()
         return
 
     metrics = parse_canonical(proc.stdout)
@@ -148,17 +181,25 @@ def main() -> None:
         ci_low = float(metrics["sharpe_ci_low"])
         dd = float(metrics["max_dd_pct"])
         sharpe = float(metrics.get("sharpe", "0"))
+        trades = int(metrics.get("trades", "0"))
     except (KeyError, ValueError) as e:
         print(f"STATUS=crash reason=parse_failed: {e}", flush=True)
         append_crash_row(commit, description)
-        git(["reset", "--hard", "HEAD~1"])
+        safe_reset_head_minus_1()
         return
 
     prior_best = best_kept_ci_low()
     if dd < DD_FLOOR:
         status, reason = "discard", f"dd={dd:+.2f} < {DD_FLOOR}"
         update_last_row_status(status, description)
-        git(["reset", "--hard", "HEAD~1"])
+        safe_reset_head_minus_1()
+    elif trades <= 0 or abs(sharpe) < 1e-9:
+        # 0-trade results are uninformative; never KEEP them even if ci_low=0
+        # technically "improves" over -2.5. Discard so the experiment doesn't
+        # become a poison-pill baseline.
+        status, reason = "discard", f"trades={trades} sharpe={sharpe:+.3f} — strategy didn't trade"
+        update_last_row_status(status, description)
+        safe_reset_head_minus_1()
     elif ci_low > prior_best:
         status, reason = "keep", f"ci_low={ci_low:+.4f} > prior best {prior_best:+.4f}"
         update_last_row_status(status, description)
@@ -168,7 +209,10 @@ def main() -> None:
     else:
         status, reason = "discard", f"ci_low={ci_low:+.4f} ≤ prior best {prior_best:+.4f}"
         update_last_row_status(status, description)
-        git(["reset", "--hard", "HEAD~1"])
+        safe_reset_head_minus_1()
+
+    # Auto-push docs + README + results.tsv so GitHub stays in sync.
+    push_to_origin()
 
     print(
         f"STATUS={status}  COMMIT={commit}  SHARPE={sharpe:+.3f}  "
