@@ -16,23 +16,23 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-01 21:42 UTC** · `37994af` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_047_37994af.md](iterations/iter_047_37994af.md)** · 📁 [all iterations](iterations/)
+_Last iteration: **2026-05-01 22:17 UTC** · `e9a95a5` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_048_e9a95a5.md](iterations/iter_048_e9a95a5.md)** · 📁 [all iterations](iterations/)
 
-### Latest iteration: iter 047 — 37994af
+### Latest iteration: iter 048 — e9a95a5
 
-🔴 DISCARD · exp48: SWAP + cap 0.50→0.55
+🔴 DISCARD · exp49: SWAP_MARGIN 0.20→0.15 at cap=0.50 (more rotations)
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **+1.510** |
-| Sharpe CI low (5%) | -1.512 |
-| Net PnL | **$+3135.88** (+6.272%) |
-| Max drawdown | -10.21% |
-| Trades | 46 |
-| Wall time | 2025.9s |
+| Sharpe (median) | **+1.548** |
+| Sharpe CI low (5%) | -1.523 |
+| Net PnL | **$+3442.85** (+6.886%) |
+| Max drawdown | -8.69% |
+| Trades | 50 |
+| Wall time | 1974.1s |
 
-![iteration equity](docs/weighted_37994af.png)
+![iteration equity](docs/weighted_e9a95a5.png)
 
 ### Current best (`6e143de`)
 
