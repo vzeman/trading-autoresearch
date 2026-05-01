@@ -380,10 +380,10 @@ def write_iteration_md(
         md.append("")
         md.append("| seed | sharpe | PnL | trades | DD% |")
         md.append("|---:|---:|---:|---:|---:|")
-        for i, p in enumerate(holdout_blocks):
+        for i, hp in enumerate(holdout_blocks):
             md.append(
-                f"| {i} | {p.get('sharpe', 0):+.3f} | ${p.get('pnl', 0):+,.2f} | "
-                f"{p.get('trades', 0)} | {p.get('dd_pct', 0):+.2f}% |"
+                f"| {i} | {hp.get('sharpe', 0):+.3f} | ${hp.get('pnl', 0):+,.2f} | "
+                f"{hp.get('trades', 0)} | {hp.get('dd_pct', 0):+.2f}% |"
             )
         sharpes = sorted(p.get("sharpe", 0) for p in holdout_blocks)
         med = sharpes[len(sharpes) // 2] if sharpes else 0.0

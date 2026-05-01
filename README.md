@@ -16,34 +16,34 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-01 22:17 UTC** · `e9a95a5` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_048_e9a95a5.md](iterations/iter_048_e9a95a5.md)** · 📁 [all iterations](iterations/)
+_Last iteration: **2026-05-01 22:58 UTC** · `29c9eaf` · 🟢 KEEP — new best_  
+📄 **[Full iteration report → iterations/iter_049_29c9eaf.md](iterations/iter_049_29c9eaf.md)** · 📁 [all iterations](iterations/)
 
-### Latest iteration: iter 048 — e9a95a5
+### Latest iteration: iter 049 — 29c9eaf
 
-🔴 DISCARD · exp49: SWAP_MARGIN 0.20→0.15 at cap=0.50 (more rotations)
-
-| metric | value |
-|---|---|
-| Sharpe (median) | **+1.548** |
-| Sharpe CI low (5%) | -1.523 |
-| Net PnL | **$+3442.85** (+6.886%) |
-| Max drawdown | -8.69% |
-| Trades | 50 |
-| Wall time | 1974.1s |
-
-![iteration equity](docs/weighted_e9a95a5.png)
-
-### Current best (`6e143de`)
+🟢 KEEP — new best · exp50: ENTROPY_COEF 0.005 + SWAP_MARGIN 0.15 + holdout eval enabled
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **+1.535** |
-| Sharpe CI low (5%) | -1.513 |
-| Net PnL | **$+3260.33** (+6.521%) |
-| Max drawdown | -8.70% |
+| Sharpe (median) | **+1.626** |
+| Sharpe CI low (5%) | -1.403 |
+| Net PnL | **$+3505.58** (+7.011%) |
+| Max drawdown | -9.85% |
 | Trades | 48 |
-| Saved at | 2026-05-01 20:56:36 |
+| Wall time | 2184.2s |
+
+![iteration equity](docs/weighted_29c9eaf.png)
+
+### Current best (`29c9eaf`)
+
+| metric | value |
+|---|---|
+| Sharpe (median) | **+1.626** |
+| Sharpe CI low (5%) | -1.403 |
+| Net PnL | **$+3505.58** (+7.011%) |
+| Max drawdown | -9.85% |
+| Trades | 48 |
+| Saved at | 2026-05-01 22:57:57 |
 
 ![weighted equity, current best](docs/weighted_latest.png)
 
@@ -233,3 +233,53 @@ Validated: peak per-process RSS dropped from ~100 GB to **3.3 GB** at full scale
 ## License
 
 MIT — copy, fork, modify, anything.
+
+<!-- RESULTS_START -->
+
+_Last updated: 2026-05-01 20:56 UTC_  
+_Total experiments: **48**  ·  kept: **16**  ·  latest commit: `29c9eaf`_
+
+### Weighted strategy — full eval window (~73 days)
+
+![weighted equity](docs/weighted_latest.png)
+
+### Weighted strategy — first month of eval
+
+![weighted 1m](docs/weighted_1m_latest.png)
+
+### Strategy vs SPY benchmark
+
+| Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees | % time > SPY |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+1.626** 🏆 | **$+3,505.58** 🏆 | +7.011% | -9.85% | 48 | $48.00 | **59%** 🏆 |
+| **SP500 (SPY) buy-and-hold** — passive benchmark | +1.011 | $+2,017.61 | +4.035% | **-9.73%** 🏆 | 1 | **$1.00** 🏆 | 0% |
+
+**Best by Sharpe:** Weighted (Kelly-sized, max 20% free cash, ≤5/step)
+
+### Detailed metrics — weighted strategy
+
+| metric | value |
+|---|---|
+| Sharpe (median over seeds) | **+1.626** |
+| Net PnL | $+3,505.58 (+7.011%) |
+| Max drawdown | -9.85% |
+| Trades | 48 |
+| % time above SPY | 59% |
+| Wall time | 2184.2s |
+| Seeds completed | 3 |
+
+### Progress over all experiments
+
+![progress](docs/progress.png)
+
+### Leaderboard (top 5 kept by Sharpe CI-low)
+
+| # | commit | Sharpe | CI-low | DD% | PnL | Trades | Description |
+|---|---|---:|---:|---:|---:|---:|---|
+| 1 | `d38cd93` | +0.00 | +0.00 | -1.34 | $+0.00 | 0 | exp26 KEEP: LONG_ONLY=True. Per-seed: 1/3 keeps profitable +$194, 2/3 don't trade ($0 vs v5's -$220 each). Mean pnl +$65 (vs v5's -$82). Killed catastrophic SELL-dominant equilibrium. Still loses to passive but no longer to v5. |
+| 2 | `6e143de` | +1.53 | -1.51 | -8.70 | $+3,260.33 | 48 | exp47: SWAP pass + cap 0.65→0.50 |
+| 3 | `86d13f0` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp28 KEEP 🎯 MULTI-HORIZON prediction (1m/1h/1d/1w). First positive median sharpe on year-of-data (+0.96 vs v5's -1.08). 2/3 seeds find profitable equilibrium (was 1/3). Now ~85% of passive SPY (+0.96 vs +1.17). |
+| 4 | `a82ee98` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp32 KEEP 🎯🎯 STRATEGY 3 WEIGHTED dynamic sizing — primary unchanged but WEIGHTED strategy: sharpe +1.03, pnl +$1303 (+2.6%), 5 trades, DD -8.6%. SIX TIMES the PnL of best passive ($217 equal-wt). First strategy that meaningfully beats passive on absolute return. |
+| 5 | `535c7ca` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp34 KEEP 🎯🎯🎯 cap 0.20→0.40 — weighted: sharpe +1.03→+1.24, pnl +$1303→+$2370 (+82%), DD -8.6→-12.6%. Nearly doubled PnL for 50% more DD — Kelly behaving as expected. New best. |
+
+<!-- RESULTS_END -->
