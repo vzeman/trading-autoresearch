@@ -16,23 +16,23 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-02 00:19 UTC** · `91b0b60` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_054_91b0b60.md](iterations/iter_054_91b0b60.md)** · 📁 [all iterations](iterations/)
+_Last iteration: **2026-05-02 00:23 UTC** · `56c1960` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_055_56c1960.md](iterations/iter_055_56c1960.md)** · 📁 [all iterations](iterations/)
 
-### Latest iteration: iter 054 — 91b0b60
+### Latest iteration: iter 055 — 56c1960
 
-🔴 DISCARD · exp54: BUY_THRESHOLD=0.5 (model picks any high-conviction names) + SWAP disabled
+🔴 DISCARD · exp55: 1-hour min hold per position (no slot cap, BUY > 0, SWAP > 0.20)
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **+1.080** |
-| Sharpe CI low (5%) | -1.582 |
-| Net PnL | **$+2391.43** (+4.783%) |
-| Max drawdown | -8.05% |
-| Trades | 8 |
-| Wall time | 79.1s |
+| Sharpe (median) | **+1.092** |
+| Sharpe CI low (5%) | -1.734 |
+| Net PnL | **$+2122.31** (+4.245%) |
+| Max drawdown | -9.76% |
+| Trades | 28 |
+| Wall time | 75.6s |
 
-![iteration equity](docs/weighted_91b0b60.png)
+![iteration equity](docs/weighted_56c1960.png)
 
 ### Current best (`2f8bd0b`)
 
