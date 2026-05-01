@@ -223,7 +223,8 @@ HORIZONS_MINUTES = [1, 60, 390, 1950]
 RL_REWARD_HORIZON = 3
 ACTION_HEAD_HOLD_BIAS = 1.5     # exp10: softmax([-1.5,1.5,-1.5]) ≈ [4.7%,90.6%,4.7%]: be even more selective
 
-PRETRAIN_EPOCHS = 2             # supervised forecast pretrain on TRAIN slice
+PRETRAIN_EPOCHS = 1             # exp41: 2→1 — at v7 6yr × 20-sym scale each epoch is ~5h. One epoch is plenty given the increased data.
+TRAIN_LOOKBACK_DAYS = 365       # exp41: subset train slice to last N days. Hypothesis: model trained on full 6yr is too conservative for recent regime → exp40 = 0 trades. Recent-only data should produce more confident predictions.
 PRETRAIN_BATCH = 128
 PRETRAIN_LR = 3e-4
 RL_PRETRAIN_EPOCHS = 1          # offline RL pass(es) on TRAIN slice
@@ -1038,6 +1039,13 @@ def train_and_eval(seed: int = 0) -> tuple:
     for sym in UNIVERSE:
         bars = bars_by_sym[sym]
         tr_bars, ev_bars = split(bars)
+        # exp41: subset train slice to last TRAIN_LOOKBACK_DAYS — exp40's full
+        # 6yr training produced 0 trades on the 90-day eval; the model became
+        # too uncertain on the noisier large dataset. Recent-only training
+        # gives more confident predictions for the recent regime.
+        if TRAIN_LOOKBACK_DAYS and len(tr_bars) > 0:
+            cutoff = tr_bars["timestamp"].iloc[-1] - pd.Timedelta(days=TRAIN_LOOKBACK_DAYS)
+            tr_bars = tr_bars[tr_bars["timestamp"] >= cutoff].reset_index(drop=True)
         # featurize each slice independently — strict no-leakage
         if len(tr_bars) > 200:
             train_feat[sym] = featurize(tr_bars, context=context)
