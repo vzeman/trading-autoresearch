@@ -16,23 +16,23 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-01 23:33 UTC** · `2f8bd0b` · 🟢 KEEP — new best_  
-📄 **[Full iteration report → iterations/iter_050_2f8bd0b.md](iterations/iter_050_2f8bd0b.md)** · 📁 [all iterations](iterations/)
+_Last iteration: **2026-05-02 00:09 UTC** · `09119c6` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_051_09119c6.md](iterations/iter_051_09119c6.md)** · 📁 [all iterations](iterations/)
 
-### Latest iteration: iter 050 — 2f8bd0b
+### Latest iteration: iter 051 — 09119c6
 
-🟢 KEEP — new best · exp51: SPY-alpha reward (coef=0.5)
+🔴 DISCARD · exp52: WEIGHTED_MAX_CONCURRENT=5 — force selectivity, fix buy-and-hold bug
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **+1.629** |
-| Sharpe CI low (5%) | -1.351 |
-| Net PnL | **$+3597.60** (+7.195%) |
-| Max drawdown | -9.87% |
-| Trades | 46 |
-| Wall time | 2045.2s |
+| Sharpe (median) | **-57.870** |
+| Sharpe CI low (5%) | -61.706 |
+| Net PnL | **$-44800.91** (-89.602%) |
+| Max drawdown | -89.62% |
+| Trades | 26412 |
+| Wall time | 2104.6s |
 
-![iteration equity](docs/weighted_2f8bd0b.png)
+![iteration equity](docs/weighted_09119c6.png)
 
 ### Current best (`2f8bd0b`)
 
