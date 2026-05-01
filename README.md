@@ -16,23 +16,23 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-01 20:56 UTC** · `6e143de` · 🟢 KEEP — new best_  
-📄 **[Full iteration report → iterations/iter_002_6e143de.md](iterations/iter_002_6e143de.md)** · 📁 [all iterations](iterations/)
+_Last iteration: **2026-05-01 21:42 UTC** · `37994af` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_047_37994af.md](iterations/iter_047_37994af.md)** · 📁 [all iterations](iterations/)
 
-### Latest iteration: iter 002 — 6e143de
+### Latest iteration: iter 047 — 37994af
 
-🟢 KEEP — new best · SWAP pass + cap 0.65 → 0.50
+🔴 DISCARD · exp48: SWAP + cap 0.50→0.55
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **+1.535** |
-| Sharpe CI low (5%) | -1.513 |
-| Net PnL | **$+3,260.33** (+6.521%) |
-| Max drawdown | **-8.70%** |
-| Trades | 48 |
-| Wall time | 2022.2s |
+| Sharpe (median) | **+1.510** |
+| Sharpe CI low (5%) | -1.512 |
+| Net PnL | **$+3135.88** (+6.272%) |
+| Max drawdown | -10.21% |
+| Trades | 46 |
+| Wall time | 2025.9s |
 
-![iteration equity](docs/weighted_6e143de.png)
+![iteration equity](docs/weighted_37994af.png)
 
 ### Current best (`6e143de`)
 
@@ -40,7 +40,7 @@ _Last iteration: **2026-05-01 20:56 UTC** · `6e143de` · 🟢 KEEP — new best
 |---|---|
 | Sharpe (median) | **+1.535** |
 | Sharpe CI low (5%) | -1.513 |
-| Net PnL | **$+3,260.33** (+6.521%) |
+| Net PnL | **$+3260.33** (+6.521%) |
 | Max drawdown | -8.70% |
 | Trades | 48 |
 | Saved at | 2026-05-01 20:56:36 |
