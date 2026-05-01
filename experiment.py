@@ -238,7 +238,7 @@ PRETRAIN_LR = 3e-4
 RL_PRETRAIN_EPOCHS = 1          # offline RL pass(es) on TRAIN slice
 RL_LR = 2e-5     # exp7 KEPT setting (known stable, no rogue seeds)
 RL_COEF = 1.0
-ENTROPY_COEF = 0.01
+ENTROPY_COEF = 0.005   # exp50: 0.01→0.005. exp49 (SWAP_MARGIN=0.15) had best raw sharpe (+1.548) and PnL (+$3,442) but ci_low -1.523 missed exp47's -1.513 by 0.01 — wider per-seed variance suggested too much exploration. Tighter convergence should narrow CI.
 VOL_PENALTY = 0.0   # exp20/21 showed: small penalty=invisible, large penalty=destabilizing. Off.
 
 # ============================================================================
@@ -709,7 +709,7 @@ MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
 KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effect — cap saturates)
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
 WEIGHTED_MIN_TRADE_USD = 100.0        # too small → fee dominates
-WEIGHTED_SWAP_MARGIN = 0.20           # exp47: rotate held→unheld only when pred_sharpe edge exceeds this. Covers round-trip cost (~0.24%/$1k) in Sharpe-equivalent units.
+WEIGHTED_SWAP_MARGIN = 0.15           # exp50: keep 0.15 from exp49 (best PnL +$3,442, sharpe +1.548). DISCARD on exp49 was tiny ci_low miss; reducing entropy should tighten CI.
 
 
 class PickerBroker:
