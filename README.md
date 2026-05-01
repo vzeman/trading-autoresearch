@@ -14,8 +14,8 @@ Karpathy-style [autoresearch](https://github.com/karpathy/autoresearch) harness,
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-04-30 21:08 UTC_  
-_Total experiments: **43**  ·  kept: **15**  ·  latest commit: `43ac1b9`_
+_Last updated: 2026-05-01 18:56 UTC_  
+_Total experiments: **45**  ·  kept: **15**  ·  latest commit: `6e143de`_
 
 ### Weighted strategy — full eval window (~73 days)
 
@@ -29,21 +29,21 @@ _Total experiments: **43**  ·  kept: **15**  ·  latest commit: `43ac1b9`_
 
 | Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees | % time > SPY |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | +0.969 | $+682.90 | +1.366% | **-8.32%** 🏆 | 5 | $5.00 | **0%** 🏆 |
-| **SP500 (SPY) buy-and-hold** — passive benchmark | **+1.320** 🏆 | **$+14,375.39** 🏆 | +28.751% | -16.27% | 1 | **$1.00** 🏆 | 0% |
+| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+1.535** 🏆 | **$+3,260.33** 🏆 | +6.521% | **-8.70%** 🏆 | 48 | $48.00 | **66%** 🏆 |
+| **SP500 (SPY) buy-and-hold** — passive benchmark | +1.011 | $+2,017.61 | +4.035% | -9.73% | 1 | **$1.00** 🏆 | 0% |
 
-**Best by Sharpe:** **SP500 (SPY) buy-and-hold** — passive benchmark
+**Best by Sharpe:** Weighted (Kelly-sized, max 20% free cash, ≤5/step)
 
 ### Detailed metrics — weighted strategy
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+0.969** |
-| Net PnL | $+682.90 (+1.366%) |
-| Max drawdown | -8.32% |
-| Trades | 5 |
-| % time above SPY | 0% |
-| Wall time | 539.6s |
+| Sharpe (median over seeds) | **+1.535** |
+| Net PnL | $+3,260.33 (+6.521%) |
+| Max drawdown | -8.70% |
+| Trades | 48 |
+| % time above SPY | 66% |
+| Wall time | 2022.2s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
@@ -54,7 +54,11 @@ _Total experiments: **43**  ·  kept: **15**  ·  latest commit: `43ac1b9`_
 
 | # | commit | Sharpe | CI-low | DD% | PnL | Trades | Description |
 |---|---|---:|---:|---:|---:|---:|---|
-| 1 | `8988cee` | +0.99 | -1.77 | -9.68 | $+2,557.00 | 4 | exp42: cap 0.95 → 0.80 — bring DD safely under floor |
+| 1 | `d38cd93` | +0.00 | +0.00 | -1.34 | $+0.00 | 0 | exp26 KEEP: LONG_ONLY=True. Per-seed: 1/3 keeps profitable +$194, 2/3 don't trade ($0 vs v5's -$220 each). Mean pnl +$65 (vs v5's -$82). Killed catastrophic SELL-dominant equilibrium. Still loses to passive but no longer to v5. |
+| 2 | `86d13f0` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp28 KEEP 🎯 MULTI-HORIZON prediction (1m/1h/1d/1w). First positive median sharpe on year-of-data (+0.96 vs v5's -1.08). 2/3 seeds find profitable equilibrium (was 1/3). Now ~85% of passive SPY (+0.96 vs +1.17). |
+| 3 | `a82ee98` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp32 KEEP 🎯🎯 STRATEGY 3 WEIGHTED dynamic sizing — primary unchanged but WEIGHTED strategy: sharpe +1.03, pnl +$1303 (+2.6%), 5 trades, DD -8.6%. SIX TIMES the PnL of best passive ($217 equal-wt). First strategy that meaningfully beats passive on absolute return. |
+| 4 | `535c7ca` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp34 KEEP 🎯🎯🎯 cap 0.20→0.40 — weighted: sharpe +1.03→+1.24, pnl +$1303→+$2370 (+82%), DD -8.6→-12.6%. Nearly doubled PnL for 50% more DD — Kelly behaving as expected. New best. |
+| 5 | `e32c804` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp35 KEEP 🎯🎯🎯🎯 cap 0.40→0.50 — weighted: sharpe +1.24→+1.37, pnl +$2370→+$2948 (+24%), DD -12.6→-13.7%. BEST RESULT EVER. Beats SPY B&H by 50% on PnL (+$2948 vs +$1965). Cap still binding — keep ratcheting. |
 
 <!-- RESULTS_END -->
 
