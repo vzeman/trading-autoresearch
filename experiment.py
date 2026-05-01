@@ -59,6 +59,25 @@ CONTEXT_SYMBOLS = ["^VIX", "TLT", "UUP", "SPY"]   # VIX, 20yr Treasury, USD-inde
 HOLDOUT_UNIVERSE = ["JPM", "WMT", "V", "DIS", "JNJ"]
 
 # ============================================================================
+# EXTENDED UNIVERSE — exp56: extends prepare.UNIVERSE (20 names) to ~95 names
+# spanning the top of S&P 500. Adding more training data to test whether the
+# model generalizes better when it sees a wider set of price dynamics.
+# Symbols are fetched lazily via prepare.fetch_bars (cached on disk).
+# Names whose cache file doesn't exist yet are silently skipped — useful while
+# the download script is still running in background.
+# ============================================================================
+EXTENDED_UNIVERSE = [
+    "UNH", "XOM", "MA", "PG", "HD", "CVX", "LLY", "ABBV", "KO", "PEP",
+    "AVGO", "COST", "MCD", "TMO", "MRK", "ACN", "ABT", "NKE", "BA", "ORCL",
+    "PFE", "CRM", "DHR", "NEE", "TXN", "VZ", "ADBE", "CMCSA", "BMY", "T",
+    "PM", "RTX", "QCOM", "UPS", "HON", "LIN", "IBM", "LOW", "AMT", "AMGN",
+    "AMAT", "LMT", "INTU", "GS", "CAT", "SPGI", "NOW", "GE", "BLK", "AXP",
+    "ELV", "MS", "MDLZ", "BKNG", "DE", "ADI", "PLD", "ISRG", "MMC", "GILD",
+    "MO", "SBUX", "ETN", "ZTS", "REGN", "VRTX", "C", "COF", "SCHW", "CI",
+    "DUK", "BSX", "USB", "CB", "SYK",
+]
+
+# ============================================================================
 # FEATURE ENGINEERING — agent edits freely. Must remain causal.
 # ============================================================================
 
@@ -1092,10 +1111,27 @@ def train_and_eval(seed: int = 0) -> tuple:
     device = pick_device()
 
     bars_by_sym = prepare_all()
+    # exp56: extend universe with EXTENDED_UNIVERSE names whose cache exists.
+    # fetch_bars is cache-aware; if download script hasn't fetched a name yet
+    # it'll either download (slow) or fail — we silently skip failures.
+    from prepare import _cache_path
+    extended_added = 0
+    for sym in EXTENDED_UNIVERSE:
+        if sym in bars_by_sym:
+            continue
+        if _cache_path(sym).exists():
+            try:
+                bars_by_sym[sym] = fetch_bars(sym)
+                extended_added += 1
+            except Exception as e:
+                print(f"[extended] {sym}: skipped ({e})", flush=True)
+    print(f"[experiment] universe size: {len(bars_by_sym)} ({extended_added} extended added beyond UNIVERSE)", flush=True)
+    training_universe = list(bars_by_sym.keys())
+
     context = fetch_context()   # cached after first call
     train_feat: dict[str, pd.DataFrame] = {}
     eval_feat: dict[str, pd.DataFrame] = {}
-    for sym in UNIVERSE:
+    for sym in training_universe:
         bars = bars_by_sym[sym]
         tr_bars, ev_bars = split(bars)
         # exp41: subset train slice to last TRAIN_LOOKBACK_DAYS — exp40's full
