@@ -695,7 +695,7 @@ PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at on
 # Up to MAX_NEW_TRADES_PER_TIMESTEP simultaneous buys, each capped at
 # MAX_POS_FRACTION_OF_FREE_CASH of free cash.
 # ============================================================================
-MAX_POS_FRACTION_OF_FREE_CASH = 0.95  # exp39: cap STILL binds at 0.90 — push to near-saturation
+MAX_POS_FRACTION_OF_FREE_CASH = 0.80  # exp42: 0.95→0.80. exp41 was profitable (+$2,679 median, sharpe +0.95) but DD -10.03% just barely violated floor. Smaller positions should keep DD under -10% with similar PnL.
 MIN_CASH_RESERVE_PCT = 0.10           # keep 10% of starting cash unspent
 MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
 KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effect — cap saturates)
