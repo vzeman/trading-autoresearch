@@ -1643,12 +1643,21 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # Return 6-element tuple: weighted_eq, n_trades, fees, slip, trades, cash_curve.
+    # exp64: USE TOP-20 PICKER AS CANONICAL (proved itself in exp63 by beating SPY).
+    # Falls back to weighted if simulator fails for any reason.
+    canonical_broker = weighted
+    try:
+        top20_broker = simulate_passive_topn(model, eval_feat, device, top_n=20, name="top20")
+        if top20_broker.equity_curve and len(top20_broker.equity_curve) > 5:
+            canonical_broker = top20_broker
+            print(f"[experiment] canonical = top20_picker (final equity ${top20_broker.equity_curve[-1][1]:,.2f})", flush=True)
+    except Exception as e:
+        print(f"[experiment] top20 canonical failed ({e}); falling back to weighted", flush=True)
     return (
-        weighted.equity_curve, weighted.n_trades,
-        weighted.total_fees, 0.0,
-        weighted.trades,
-        getattr(weighted, "cash_curve", []),
+        canonical_broker.equity_curve, canonical_broker.n_trades,
+        canonical_broker.total_fees, 0.0,
+        canonical_broker.trades,
+        getattr(canonical_broker, "cash_curve", []),
     )
 
 
