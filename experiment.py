@@ -48,7 +48,7 @@ from prepare import (
 # ============================================================================
 # These are not traded; their bars are merged-asof onto each universe bar to
 # provide cross-asset / macro features.
-CONTEXT_SYMBOLS = ["^VIX", "TLT", "UUP", "SPY"]   # VIX, 20yr Treasury, USD-index proxy, SPY (cross-asset)
+CONTEXT_SYMBOLS = ["TLT", "UUP", "SPY"]   # 20yr Treasury, USD-index proxy, SPY (cross-asset). exp58: dropped ^VIX (only 27 days of yfinance data).
 
 # ============================================================================
 # HOLDOUT UNIVERSE — stocks the model NEVER trains on. After the in-symbol eval
@@ -99,7 +99,7 @@ ALL_FEATURES = [
     # Time of day
     "tod_sin", "tod_cos",
     # exp11: cross-asset / macro context (forward-filled to each universe bar)
-    "vix_logret_1",   # CBOE Volatility Index — fear gauge
+    # exp58: dropped vix_logret_1 (only 27 days of yfinance data)
     "tlt_logret_1",   # 20yr Treasury ETF — interest-rate signal
     "uup_logret_1",   # USD-index ETF (DXY proxy) — currency macro
     "spy_logret_1",   # SPY return as a market factor (for SPY itself this == log_return_1)
@@ -136,7 +136,6 @@ def fetch_context() -> dict[str, pd.DataFrame]:
 
 
 _CONTEXT_KEY_TO_FEATURE = {
-    "^VIX": "vix_logret_1",
     "TLT":  "tlt_logret_1",
     "UUP":  "uup_logret_1",
     "SPY":  "spy_logret_1",
@@ -206,6 +205,7 @@ def featurize(bars: pd.DataFrame, context: dict[str, pd.DataFrame] | None = None
     feat = pd.DataFrame({
         "timestamp": df["timestamp"],
         "close": df["close"].astype(np.float32),
+        "volume": df["volume"].astype(np.float32),   # exp58: raw bar volume for liquidity-aware slippage in simulate_weighted (not a model feature)
         "log_return_1": log_return_1.astype(np.float32),
         "log_return_5": log_return_5.astype(np.float32),
         "log_return_15": log_return_15.astype(np.float32),
@@ -244,10 +244,10 @@ def featurize(bars: pd.DataFrame, context: dict[str, pd.DataFrame] | None = None
 
 PATCH_LEN = 8
 CONTEXT_PATCHES = 16            # context window = PATCH_LEN * CONTEXT_PATCHES = 128 bars
-D_MODEL = 96                    # exp11 KEPT; exp14 (64) and exp17 (128) both discarded
+D_MODEL = 128                   # exp58: 96→128. exp17 (v5 era) found 128 equivalent to 96 at small data scale; with v7's 95 syms × 365d (~5× more data) the bigger model should now have room to use the extra capacity.
 N_HEADS = 4
 N_LAYERS = 3
-D_FF = 192
+D_FF = 256                      # exp58: 192→256 to keep d_ff = 2 × D_MODEL ratio
 DROPOUT = 0.1   # exp22 (DROPOUT=0) was disastrous — keep regularization
 PRED_HORIZON = 5
 # exp28: multi-horizon prediction targets (in 1-min bars)
@@ -754,7 +754,11 @@ MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
 KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effect — cap saturates)
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
 WEIGHTED_MIN_TRADE_USD = 100.0        # too small → fee dominates
-WEIGHTED_SWAP_MARGIN = 0.15           # exp50: keep 0.15 from exp49 (best PnL +$3,442, sharpe +1.548). DISCARD on exp49 was tiny ci_low miss; reducing entropy should tighten CI.
+WEIGHTED_SWAP_MARGIN = 0.15           # exp50: keep 0.15
+# exp58: realistic transaction friction (re-applied — was reset by exp57 discard)
+VOLUME_IMPACT_BPS_PER_PCT = 50.0      # extra slippage per 1% of bar's $-volume our order represents
+VOLUME_IMPACT_MAX_BPS = 200.0         # cap extra slippage at 2%
+MAX_BAR_VOLUME_PARTICIPATION = 0.10   # refuse trades > 10% of bar volume
 
 
 class PickerBroker:
@@ -937,13 +941,23 @@ class WeightedBroker:
         """Cash available for new buys after subtracting reserve."""
         return max(0.0, self.cash - self.min_reserve_usd)
 
-    def buy_usd(self, sym: str, price: float, ts: pd.Timestamp, dollar_amount: float) -> bool:
-        """Buy dollar_amount worth of sym at price. Returns True if executed."""
+    def buy_usd(self, sym: str, price: float, ts: pd.Timestamp, dollar_amount: float,
+                bar_dollar_volume: float = 0.0) -> bool:
+        """Buy dollar_amount worth of sym at price. Returns True if executed.
+        exp58: bar_dollar_volume enables liquidity gate + market-impact slippage."""
         if dollar_amount < WEIGHTED_MIN_TRADE_USD:
             return False
         if dollar_amount > self.free_cash():
             return False
-        fill_price = price * (1.0 + SLIPPAGE_BPS * 1e-4)
+        if bar_dollar_volume > 0:
+            if dollar_amount / bar_dollar_volume > MAX_BAR_VOLUME_PARTICIPATION:
+                return False
+        impact_bps = 0.0
+        if bar_dollar_volume > 0:
+            participation_pct = (dollar_amount / bar_dollar_volume) * 100.0
+            impact_bps = min(participation_pct * VOLUME_IMPACT_BPS_PER_PCT, VOLUME_IMPACT_MAX_BPS)
+        total_slip_bps = SLIPPAGE_BPS + impact_bps
+        fill_price = price * (1.0 + total_slip_bps * 1e-4)
         qty = dollar_amount / max(fill_price, 1e-9)
         cost = qty * fill_price + FEE_PER_TRADE_USD
         if cost > self.cash:
@@ -958,11 +972,22 @@ class WeightedBroker:
         self.trades.append((ts, sym, "BUY"))
         return True
 
-    def sell_all(self, sym: str, price: float, ts: pd.Timestamp) -> bool:
+    def sell_all(self, sym: str, price: float, ts: pd.Timestamp,
+                 bar_dollar_volume: float = 0.0) -> bool:
+        """exp58: bar_dollar_volume enables liquidity gate + impact slippage on sell side."""
         qty = self.positions.get(sym, 0.0)
         if qty <= 1e-9:
             return False
-        fill_price = price * (1.0 - SLIPPAGE_BPS * 1e-4)
+        sell_dollar = qty * price
+        if bar_dollar_volume > 0:
+            if sell_dollar / bar_dollar_volume > MAX_BAR_VOLUME_PARTICIPATION:
+                return False
+        impact_bps = 0.0
+        if bar_dollar_volume > 0:
+            participation_pct = (sell_dollar / bar_dollar_volume) * 100.0
+            impact_bps = min(participation_pct * VOLUME_IMPACT_BPS_PER_PCT, VOLUME_IMPACT_MAX_BPS)
+        total_slip_bps = SLIPPAGE_BPS + impact_bps
+        fill_price = price * (1.0 - total_slip_bps * 1e-4)
         proceeds = qty * fill_price - FEE_PER_TRADE_USD
         slip_cost = qty * (price - fill_price)
         self.cash += proceeds
@@ -1008,6 +1033,12 @@ def simulate_weighted(model: PatchTransformer,
     cols = USE_FEATURES
     feat_arrays = {s: f[cols].to_numpy(np.float32) for s, f in features.items()}
     close_arrays = {s: f["close"].to_numpy(np.float32) for s, f in features.items()}
+    # exp58: per-bar dollar-volume for liquidity-aware slippage
+    volume_arrays = {
+        s: (f["volume"].to_numpy(np.float32) if "volume" in f.columns
+            else np.zeros(len(f), dtype=np.float32))
+        for s, f in features.items()
+    }
 
     events_by_ts: dict[pd.Timestamp, list[tuple[str, int]]] = {}
     for sym, f in features.items():
@@ -1045,7 +1076,9 @@ def simulate_weighted(model: PatchTransformer,
             for sym, ps in sym_to_sharpe.items():
                 if broker.positions.get(sym, 0.0) > 0 and ps < WEIGHTED_SELL_SHARPE:
                     i_now = last_idx_by_sym[sym]
-                    broker.sell_all(sym, float(close_arrays[sym][i_now]), ts)
+                    px = float(close_arrays[sym][i_now])
+                    bar_dv = float(volume_arrays[sym][i_now]) * px
+                    broker.sell_all(sym, px, ts, bar_dollar_volume=bar_dv)
 
             # 1.5) SWAP pass (exp47) — rotate weakest held → strongest unheld
             # only when the pred_sharpe edge clears WEIGHTED_SWAP_MARGIN. Covers
@@ -1065,7 +1098,9 @@ def simulate_weighted(model: PatchTransformer,
                 strong_sym, strong_ps = max(unheld_with_sharpe, key=lambda t: t[1])
                 if (strong_ps - weak_ps) > WEIGHTED_SWAP_MARGIN:
                     i_now_weak = last_idx_by_sym[weak_sym]
-                    broker.sell_all(weak_sym, float(close_arrays[weak_sym][i_now_weak]), ts)
+                    px_w = float(close_arrays[weak_sym][i_now_weak])
+                    bar_dv_w = float(volume_arrays[weak_sym][i_now_weak]) * px_w
+                    broker.sell_all(weak_sym, px_w, ts, bar_dollar_volume=bar_dv_w)
                     # BUY pass below will deploy the freed cash to strong_sym
                     # since it's still in pred_sharpe_list with positive ps.
 
@@ -1091,7 +1126,8 @@ def simulate_weighted(model: PatchTransformer,
                 if actual < WEIGHTED_MIN_TRADE_USD:
                     continue
                 price = float(close_arrays[sym][i_now])
-                broker.buy_usd(sym, price, ts, actual)
+                bar_dv = float(volume_arrays[sym][i_now]) * price
+                broker.buy_usd(sym, price, ts, actual, bar_dollar_volume=bar_dv)
 
         prices = {s: float(close_arrays[s][last_idx_by_sym[s]])
                   for s in features if last_idx_by_sym[s] >= 0}
