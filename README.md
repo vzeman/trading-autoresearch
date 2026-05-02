@@ -16,12 +16,12 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-02 17:24 UTC** · `c091321` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_065_c091321.md](iterations/iter_065_c091321.md)** · 📁 [all iterations](iterations/)
+_Last iteration: **2026-05-02 17:55 UTC** · `06076ef` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_066_06076ef.md](iterations/iter_066_06076ef.md)** · 📁 [all iterations](iterations/)
 
-### Latest iteration: iter 065 — c091321
+### Latest iteration: iter 066 — 06076ef
 
-🔴 DISCARD · exp65: relax DD floor -10→-15 (SPY-realistic) — should KEEP exp64's +1.04 sharpe
+🔴 DISCARD · exp66 SPEEDUP: precompute predictions (validate same numbers as exp65, faster wall clock)
 
 | metric | value |
 |---|---|
@@ -30,9 +30,9 @@ _Last iteration: **2026-05-02 17:24 UTC** · `c091321` · 🔴 DISCARD_
 | Net PnL | **$+2275.95** (+4.552%) |
 | Max drawdown | -11.11% |
 | Trades | 18 |
-| Wall time | 877.5s |
+| Wall time | 116.1s |
 
-![iteration equity](docs/weighted_c091321.png)
+![iteration equity](docs/weighted_06076ef.png)
 
 ### Current best (`2f8bd0b`)
 
