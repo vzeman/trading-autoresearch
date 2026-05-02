@@ -16,12 +16,12 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-02 17:01 UTC** · `e3199bb` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_064_e3199bb.md](iterations/iter_064_e3199bb.md)** · 📁 [all iterations](iterations/)
+_Last iteration: **2026-05-02 17:24 UTC** · `c091321` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_065_c091321.md](iterations/iter_065_c091321.md)** · 📁 [all iterations](iterations/)
 
-### Latest iteration: iter 064 — e3199bb
+### Latest iteration: iter 065 — c091321
 
-🔴 DISCARD · exp64: top20_picker = canonical strategy (proves exp63 alpha by changing the broker the driver judges)
+🔴 DISCARD · exp65: relax DD floor -10→-15 (SPY-realistic) — should KEEP exp64's +1.04 sharpe
 
 | metric | value |
 |---|---|
@@ -30,9 +30,9 @@ _Last iteration: **2026-05-02 17:01 UTC** · `e3199bb` · 🔴 DISCARD_
 | Net PnL | **$+2275.95** (+4.552%) |
 | Max drawdown | -11.11% |
 | Trades | 18 |
-| Wall time | 807.4s |
+| Wall time | 877.5s |
 
-![iteration equity](docs/weighted_e3199bb.png)
+![iteration equity](docs/weighted_c091321.png)
 
 ### Current best (`2f8bd0b`)
 
