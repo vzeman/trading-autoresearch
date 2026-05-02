@@ -70,3 +70,4 @@ a499ccd	1.2950	-1.1713	-8.86	2944.08	4	keep	exp70: concentration sweep — add t
 beaa5e6	1.5489	-1.0118	-8.86	4797.33	3	keep	exp71: top5 ranking horizons (4,8,10)→(3,4) — shorter, less noisy
 0f45fb6	1.5381	-1.0135	-9.88	5294.50	3	discard	exp72: deploy full portfolio (MIN_CASH_RESERVE_PCT 0.10 → 0)
 081c441	1.5381	-1.0135	-9.88	5294.50	3	discard	exp73: spy_buyhold bypasses liquidity gate (fix exp72 broken benchmark)
+a3228fc	1.5381	-1.0135	-9.88	5294.50	3	discard	exp74: fix SPY benchmark — bar_dollar_volume=0.0 not None
