@@ -16,24 +16,34 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 069 — 4ec6ecb
+_Last iteration: **2026-05-02 21:20 UTC** · `4ec6ecb` · 🟢 KEEP — new best_  
+📄 **[Full iteration report → iterations/iter_069_4ec6ecb.md](iterations/iter_069_4ec6ecb.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-02 21:18 UTC** · `4ec6ecb` · status: **RUNNING**_
+### Latest iteration: iter 069 — 4ec6ecb
 
-**exp69: canonical = top5_picker (exp68 proved it beats SPY across seeds)**
-
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
-
-### Current best (`2f8bd0b`)
+🟢 KEEP — new best · exp69: canonical = top5_picker (exp68 proved it beats SPY across seeds)
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **+1.629** |
-| Sharpe CI low (5%) | -1.351 |
-| Net PnL | **$+3597.60** (+7.195%) |
-| Max drawdown | -9.87% |
-| Trades | 46 |
-| Saved at | 2026-05-01 23:33:27 |
+| Sharpe (median) | **+1.295** |
+| Sharpe CI low (5%) | -1.171 |
+| Net PnL | **$+2944.08** (+5.888%) |
+| Max drawdown | -8.86% |
+| Trades | 4 |
+| Wall time | 350.8s |
+
+![iteration equity](docs/weighted_4ec6ecb.png)
+
+### Current best (`4ec6ecb`)
+
+| metric | value |
+|---|---|
+| Sharpe (median) | **+1.295** |
+| Sharpe CI low (5%) | -1.171 |
+| Net PnL | **$+2944.08** (+5.888%) |
+| Max drawdown | -8.86% |
+| Trades | 4 |
+| Saved at | 2026-05-02 21:20:31 |
 
 ![weighted equity, current best](docs/weighted_latest.png)
 
@@ -226,8 +236,8 @@ MIT — copy, fork, modify, anything.
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-05-01 21:33 UTC_  
-_Total experiments: **49**  ·  kept: **17**  ·  latest commit: `2f8bd0b`_
+_Last updated: 2026-05-02 19:20 UTC_  
+_Total experiments: **67**  ·  kept: **18**  ·  latest commit: `963abee`_
 
 ### Weighted strategy — full eval window (~73 days)
 
@@ -241,8 +251,8 @@ _Total experiments: **49**  ·  kept: **17**  ·  latest commit: `2f8bd0b`_
 
 | Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees | % time > SPY |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+1.629** 🏆 | **$+3,597.60** 🏆 | +7.195% | -9.87% | 46 | $46.00 | **59%** 🏆 |
-| **SP500 (SPY) buy-and-hold** — passive benchmark | +1.011 | $+2,017.61 | +4.035% | **-9.73%** 🏆 | 1 | **$1.00** 🏆 | 0% |
+| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+1.295** 🏆 | **$+2,944.08** 🏆 | +5.888% | **-8.86%** 🏆 | 4 | $4.00 | **22%** 🏆 |
+| **SP500 (SPY) buy-and-hold** — passive benchmark | +1.011 | $+2,017.61 | +4.035% | -9.73% | 1 | **$1.00** 🏆 | 0% |
 
 **Best by Sharpe:** Weighted (Kelly-sized, max 20% free cash, ≤5/step)
 
@@ -250,12 +260,12 @@ _Total experiments: **49**  ·  kept: **17**  ·  latest commit: `2f8bd0b`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+1.629** |
-| Net PnL | $+3,597.60 (+7.195%) |
-| Max drawdown | -9.87% |
-| Trades | 46 |
-| % time above SPY | 59% |
-| Wall time | 2045.2s |
+| Sharpe (median over seeds) | **+1.295** |
+| Net PnL | $+2,944.08 (+5.888%) |
+| Max drawdown | -8.86% |
+| Trades | 4 |
+| % time above SPY | 22% |
+| Wall time | 350.8s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
@@ -267,9 +277,9 @@ _Total experiments: **49**  ·  kept: **17**  ·  latest commit: `2f8bd0b`_
 | # | commit | Sharpe | CI-low | DD% | PnL | Trades | Description |
 |---|---|---:|---:|---:|---:|---:|---|
 | 1 | `d38cd93` | +0.00 | +0.00 | -1.34 | $+0.00 | 0 | exp26 KEEP: LONG_ONLY=True. Per-seed: 1/3 keeps profitable +$194, 2/3 don't trade ($0 vs v5's -$220 each). Mean pnl +$65 (vs v5's -$82). Killed catastrophic SELL-dominant equilibrium. Still loses to passive but no longer to v5. |
-| 2 | `29c9eaf` | +1.63 | -1.40 | -9.85 | $+3,505.58 | 48 | exp50: ENTROPY_COEF 0.005 + SWAP_MARGIN 0.15 + holdout eval enabled |
-| 3 | `6e143de` | +1.53 | -1.51 | -8.70 | $+3,260.33 | 48 | exp47: SWAP pass + cap 0.65→0.50 |
-| 4 | `86d13f0` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp28 KEEP 🎯 MULTI-HORIZON prediction (1m/1h/1d/1w). First positive median sharpe on year-of-data (+0.96 vs v5's -1.08). 2/3 seeds find profitable equilibrium (was 1/3). Now ~85% of passive SPY (+0.96 vs +1.17). |
-| 5 | `a82ee98` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp32 KEEP 🎯🎯 STRATEGY 3 WEIGHTED dynamic sizing — primary unchanged but WEIGHTED strategy: sharpe +1.03, pnl +$1303 (+2.6%), 5 trades, DD -8.6%. SIX TIMES the PnL of best passive ($217 equal-wt). First strategy that meaningfully beats passive on absolute return. |
+| 2 | `2f8bd0b` | +1.63 | -1.35 | -9.87 | $+3,597.60 | 46 | exp51: SPY-alpha reward (coef=0.5) |
+| 3 | `29c9eaf` | +1.63 | -1.40 | -9.85 | $+3,505.58 | 48 | exp50: ENTROPY_COEF 0.005 + SWAP_MARGIN 0.15 + holdout eval enabled |
+| 4 | `6e143de` | +1.53 | -1.51 | -8.70 | $+3,260.33 | 48 | exp47: SWAP pass + cap 0.65→0.50 |
+| 5 | `86d13f0` | +0.96 | -2.52 | -1.34 | $+193.93 | 12 | exp28 KEEP 🎯 MULTI-HORIZON prediction (1m/1h/1d/1w). First positive median sharpe on year-of-data (+0.96 vs v5's -1.08). 2/3 seeds find profitable equilibrium (was 1/3). Now ~85% of passive SPY (+0.96 vs +1.17). |
 
 <!-- RESULTS_END -->

@@ -65,3 +65,4 @@ c091321	1.0369	-1.6841	-11.11	2275.95	18	discard	exp65: relax DD floor -10→-15
 06076ef	1.0369	-1.6841	-11.11	2275.95	18	discard	exp66 SPEEDUP: precompute predictions (validate same numbers as exp65, faster wall clock)
 5467e68	0.8176	-1.9459	-11.11	1540.17	18	discard	exp67: N_SEEDS=3 multi-seed validation (fair CI vs prior best)
 e94504e	1.0369	-1.6841	-11.11	2275.95	18	discard	exp68: FRESH full pretrain (no cache) — ranking loss actually engaged this time
+963abee	1.2950	-1.1713	-8.86	2944.08	4	keep	exp69: canonical = top5_picker (exp68 proved it beats SPY across seeds)
