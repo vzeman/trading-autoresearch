@@ -16,23 +16,23 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-02 06:09 UTC** · `0307051` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_058_0307051.md](iterations/iter_058_0307051.md)** · 📁 [all iterations](iterations/)
+_Last iteration: **2026-05-02 12:42 UTC** · `b20af41` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_059_b20af41.md](iterations/iter_059_b20af41.md)** · 📁 [all iterations](iterations/)
 
-### Latest iteration: iter 058 — 0307051
+### Latest iteration: iter 059 — b20af41
 
-🔴 DISCARD · exp58: bigger model + 95-sym + MPS + N_SEEDS=1
+🔴 DISCARD · exp59: foundation reset — 11 horizons, n_layers=4, 3 epochs, 2yr train, 95 syms
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **+0.425** |
-| Sharpe CI low (5%) | -2.004 |
-| Net PnL | **$+617.19** (+1.234%) |
-| Max drawdown | -6.78% |
-| Trades | 95 |
-| Wall time | 2037.2s |
+| Sharpe (median) | **-2.121** |
+| Sharpe CI low (5%) | -3.891 |
+| Net PnL | **$-575.39** (-1.151%) |
+| Max drawdown | -10.18% |
+| Trades | 8 |
+| Wall time | 22518.3s |
 
-![iteration equity](docs/weighted_0307051.png)
+![iteration equity](docs/weighted_b20af41.png)
 
 ### Current best (`2f8bd0b`)
 
