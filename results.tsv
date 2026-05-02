@@ -59,3 +59,4 @@ b20af41	-2.1214	-3.8912	-10.18	-575.39	8	discard	exp59: foundation reset — 11 
 8cad106	-1.1885	-2.8967	-0.33	-158.00	2	discard	exp60: multi-trader-profile comparison (intraday/intraweek/intramonth/longterm vs SPY)
 7db4e02	-1.1885	-2.8967	-0.33	-158.00	2	discard	exp61: bigger model + 4 active profiles + 3 passive top-N pickers + SPY benchmark
 6fb35d3	-1.1885	-2.8967	-0.33	-158.00	2	discard	exp62: rank-percentile=0.90 on active profiles (top-decile)
+2c0ab38	-2.3589	-4.8127	-10.47	-3586.84	1397	discard	exp63: cross-sectional ranking loss + per-timestep standardization (research-backed)

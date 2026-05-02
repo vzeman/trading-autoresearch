@@ -16,23 +16,23 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-02 15:31 UTC** · `6fb35d3` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_062_6fb35d3.md](iterations/iter_062_6fb35d3.md)** · 📁 [all iterations](iterations/)
+_Last iteration: **2026-05-02 16:40 UTC** · `2c0ab38` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_063_2c0ab38.md](iterations/iter_063_2c0ab38.md)** · 📁 [all iterations](iterations/)
 
-### Latest iteration: iter 062 — 6fb35d3
+### Latest iteration: iter 063 — 2c0ab38
 
-🔴 DISCARD · exp62: rank-percentile=0.90 on active profiles (top-decile)
+🔴 DISCARD · exp63: cross-sectional ranking loss + per-timestep standardization (research-backed)
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **-1.189** |
-| Sharpe CI low (5%) | -2.897 |
-| Net PnL | **$-158.00** (-0.316%) |
-| Max drawdown | -0.33% |
-| Trades | 2 |
-| Wall time | 2788.7s |
+| Sharpe (median) | **-2.359** |
+| Sharpe CI low (5%) | -4.813 |
+| Net PnL | **$-3586.84** (-7.174%) |
+| Max drawdown | -10.47% |
+| Trades | 1397 |
+| Wall time | 3935.1s |
 
-![iteration equity](docs/weighted_6fb35d3.png)
+![iteration equity](docs/weighted_2c0ab38.png)
 
 ### Current best (`2f8bd0b`)
 
