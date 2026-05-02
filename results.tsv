@@ -72,3 +72,4 @@ beaa5e6	1.5489	-1.0118	-8.86	4797.33	3	keep	exp71: top5 ranking horizons (4,8,10
 081c441	1.5381	-1.0135	-9.88	5294.50	3	discard	exp73: spy_buyhold bypasses liquidity gate (fix exp72 broken benchmark)
 a3228fc	1.5381	-1.0135	-9.88	5294.50	3	discard	exp74: fix SPY benchmark — bar_dollar_volume=0.0 not None
 4d02b79	1.5381	-1.0135	-9.88	5294.50	3	discard	exp75: SPY benchmark — fee headroom so buy isn't rejected
+47ba680	1.5381	-1.0135	-13.75	5294.50	3	discard	exp76: N_SEEDS=5 (dilute seed-2 drag for cleaner CI)
