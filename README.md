@@ -16,12 +16,12 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-02 13:46 UTC** · `8cad106` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_060_8cad106.md](iterations/iter_060_8cad106.md)** · 📁 [all iterations](iterations/)
+_Last iteration: **2026-05-02 14:40 UTC** · `7db4e02` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_061_7db4e02.md](iterations/iter_061_7db4e02.md)** · 📁 [all iterations](iterations/)
 
-### Latest iteration: iter 060 — 8cad106
+### Latest iteration: iter 061 — 7db4e02
 
-🔴 DISCARD · exp60: multi-trader-profile comparison (intraday/intraweek/intramonth/longterm vs SPY)
+🔴 DISCARD · exp61: bigger model + 4 active profiles + 3 passive top-N pickers + SPY benchmark
 
 | metric | value |
 |---|---|
@@ -30,9 +30,9 @@ _Last iteration: **2026-05-02 13:46 UTC** · `8cad106` · 🔴 DISCARD_
 | Net PnL | **$-158.00** (-0.316%) |
 | Max drawdown | -0.33% |
 | Trades | 2 |
-| Wall time | 2839.5s |
+| Wall time | 2803.6s |
 
-![iteration equity](docs/weighted_8cad106.png)
+![iteration equity](docs/weighted_7db4e02.png)
 
 ### Current best (`2f8bd0b`)
 
