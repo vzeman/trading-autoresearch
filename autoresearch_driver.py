@@ -463,14 +463,20 @@ def main() -> None:
 
     t0 = time.time()
     # Speedup #2: bump per-worker thread count from evaluator's default 2 → 4.
-    # M-series Macs have 8-12 perf cores; 3 workers × 4 threads = 12 active threads.
-    # evaluator.py uses os.environ.setdefault, so pre-set env vars win.
     env = os.environ.copy()
     env.setdefault("OMP_NUM_THREADS", "4")
     env.setdefault("MKL_NUM_THREADS", "4")
+    # EVAL_WORKERS env var lets us call evaluator.run(N) — needed because MPS
+    # isn't multi-process safe (3 workers on the same Apple GPU deadlock).
+    # Default = run evaluator.py as before (n_workers=3 from its __main__).
+    n_workers = os.environ.get("EVAL_WORKERS")
+    if n_workers:
+        cmd = [str(REPO / ".venv" / "bin" / "python"), "-c",
+               f"from evaluator import run; run({int(n_workers)})"]
+    else:
+        cmd = [str(REPO / ".venv" / "bin" / "python"), str(REPO / "evaluator.py")]
     proc = subprocess.run(
-        [str(REPO / ".venv" / "bin" / "python"), str(REPO / "evaluator.py")],
-        cwd=REPO, capture_output=True, text=True, timeout=12 * 3600, env=env,
+        cmd, cwd=REPO, capture_output=True, text=True, timeout=12 * 3600, env=env,
     )
     elapsed = time.time() - t0
     RUN_LOG.write_text(proc.stdout + "\n--STDERR--\n" + proc.stderr)
