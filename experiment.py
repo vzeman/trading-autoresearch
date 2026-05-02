@@ -1501,8 +1501,11 @@ def simulate_buyhold_spy(features: dict[str, pd.DataFrame]) -> WeightedBroker:
         return broker
     first_ts = timestamps[0]
     first_px = float(closes[0])
-    bar_dv = (float(volumes[0]) * first_px) if volumes is not None else 0.0
-    broker.buy_usd(sym, first_px, first_ts, broker.free_cash(), bar_dollar_volume=bar_dv)
+    # exp73: SPY buy-hold is a reference benchmark — bypass the liquidity gate
+    # (passing None disables bar-volume participation cap). Without this, a full
+    # 100%-deployment buy gets rejected when the first bar's volume can't absorb
+    # the full $50k order.
+    broker.buy_usd(sym, first_px, first_ts, broker.free_cash(), bar_dollar_volume=None)
     for i, ts in enumerate(timestamps):
         broker.mark_to_market(ts, {sym: float(closes[i])})
     return broker
