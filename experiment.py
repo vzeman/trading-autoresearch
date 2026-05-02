@@ -259,6 +259,10 @@ PRETRAIN_EPOCHS = 1             # exp41: 2→1 — at v7 6yr × 20-sym scale eac
 # exp67: validate same canonical with N_SEEDS=3 — driver gate compares ci_low against
 # the prior best (set by 3-seed exp51); a 1-seed bootstrap CI is unfair. With the exp66
 # precompute speedup each seed costs ~120s so 3 seeds is affordable (~6min total).
+# exp76: bump to N_SEEDS=5 to dilute seed-2 drag. exp71-75 (cached pretrain) consistently
+# saw seed 2 produce a single losing trade ($-428 / -0.43 sharpe) that pulled the median
+# below the gate. Adding 2 more seeds should give a more robust median (~+1.5 if the
+# signal is real) and tighten ci_low for a clean KEEP.
 # exp68: FRESH FULL PRETRAIN with ranking loss actually engaged. exp67 showed median
 # 3-seed sharpe = +0.82 < SPY +1.00 — the cached pretrain we'd been reusing was from
 # before USE_RANK_LOSS was infrastructure, so the model never actually trained against
