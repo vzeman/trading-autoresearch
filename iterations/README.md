@@ -4,6 +4,7 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
+| 🟢 | [iter 071 — beaa5e6](iter_071_beaa5e6.md) | exp71: top5 ranking horizons (4,8,10)→(3,4) — shorter, less noisy | **+1.549** | **$+4797.33** (+9.595%) |
 | 🟢 | [iter 070 — fa4ab20](iter_070_fa4ab20.md) | exp70: concentration sweep — add top1/top3 to profile suite | **+1.295** | **$+2944.08** (+5.888%) |
 | 🟢 | [iter 069 — 4ec6ecb](iter_069_4ec6ecb.md) | exp69: canonical = top5_picker (exp68 proved it beats SPY across seeds) | **+1.295** | **$+2944.08** (+5.888%) |
 | 🔴 | [iter 068 — e94504e](iter_068_e94504e.md) | exp68: FRESH full pretrain (no cache) — ranking loss actually engaged this time | **+1.037** | **$+2275.95** (+4.552%) |
