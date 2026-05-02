@@ -366,6 +366,47 @@ def write_iteration_md(
     md.append(f"![weighted 1m]({weighted_1m})")
     md.append("")
 
+    # exp60+: trader-profile comparison (if last_seed*_profiles.json present)
+    profile_blocks = []
+    for pf in sorted(CHECKPOINTS.glob("last_seed*_profiles.json")):
+        try:
+            payload = json.loads(pf.read_text())
+            profile_blocks.append(payload)
+        except Exception:
+            continue
+    if profile_blocks:
+        md.append("## Trader profile comparison")
+        md.append("")
+        md.append("Same trained model, different time-horizon strategies + SPY benchmark + passive top-N pickers.")
+        md.append("")
+        profile_names = sorted({k for p in profile_blocks for k in p.keys()})
+        md.append("| profile | sharpe | PnL ($) | PnL % | trades | DD % | horizon |")
+        md.append("|---|---:|---:|---:|---:|---:|---:|")
+        def _med(xs):
+            xs = sorted(xs); return xs[len(xs)//2] if xs else 0.0
+        hmin_to_label = {5:"5m",60:"1h",120:"2h",240:"4h",390:"1d",780:"2d",1170:"3d",1560:"4d",1950:"5d",5460:"14d",11700:"30d"}
+        for pname in profile_names:
+            sharpes = [p[pname].get("sharpe", 0) for p in profile_blocks if pname in p]
+            pnls = [p[pname].get("pnl", 0) for p in profile_blocks if pname in p]
+            pcts = [p[pname].get("pnl_pct", 0) for p in profile_blocks if pname in p]
+            trades = [p[pname].get("trades", 0) for p in profile_blocks if pname in p]
+            dds = [p[pname].get("dd_pct", 0) for p in profile_blocks if pname in p]
+            hmin = profile_blocks[0][pname].get("horizon_minutes", 0)
+            hlabel = hmin_to_label.get(hmin, f"{hmin}m") if hmin else "-"
+            md.append(
+                f"| **{pname}** | {_med(sharpes):+.3f} | ${_med(pnls):+,.2f} | "
+                f"{_med(pcts):+.2f}% | {int(_med(trades))} | {_med(dds):+.2f}% | {hlabel} |"
+            )
+        md.append("")
+        non_spy = [p for p in profile_names if "spy" not in p.lower()]
+        if non_spy:
+            best = max(non_spy, key=lambda n: _med([p[n].get("sharpe", -999) for p in profile_blocks if n in p]))
+            spy_sh = _med([p["spy_buyhold"].get("sharpe", 0) for p in profile_blocks if "spy_buyhold" in p])
+            best_sh = _med([p[best].get("sharpe", 0) for p in profile_blocks if best in p])
+            verdict = "BEATS SPY ✓" if best_sh > spy_sh else "LOSES TO SPY"
+            md.append(f"**Best active strategy: `{best}` (sharpe {best_sh:+.3f}) — {verdict}**")
+            md.append("")
+
     # Out-of-symbol holdout eval
     md.append("## Out-of-symbol holdout eval")
     md.append("")
@@ -466,13 +507,24 @@ def main() -> None:
     env = os.environ.copy()
     env.setdefault("OMP_NUM_THREADS", "4")
     env.setdefault("MKL_NUM_THREADS", "4")
-    # EVAL_WORKERS env var lets us call evaluator.run(N) — needed because MPS
-    # isn't multi-process safe (3 workers on the same Apple GPU deadlock).
-    # Default = run evaluator.py as before (n_workers=3 from its __main__).
+    # EVAL_WORKERS env var → call evaluator.run(N).
+    # N_SEEDS_OVERRIDE env var → monkey-patch prepare.N_SEEDS AND evaluator.N_SEEDS
+    # before the run starts. evaluator does `from prepare import N_SEEDS` which
+    # binds the value at import time, so we must override evaluator's namespace too.
     n_workers = os.environ.get("EVAL_WORKERS")
-    if n_workers:
-        cmd = [str(REPO / ".venv" / "bin" / "python"), "-c",
-               f"from evaluator import run; run({int(n_workers)})"]
+    n_seeds_override = os.environ.get("N_SEEDS_OVERRIDE")
+    if n_workers or n_seeds_override:
+        nw = int(n_workers) if n_workers else 3
+        if n_seeds_override:
+            ns = int(n_seeds_override)
+            script = (
+                f"import prepare; prepare.N_SEEDS = {ns}\n"
+                f"import evaluator; evaluator.N_SEEDS = {ns}\n"
+                f"from evaluator import run; run({nw})"
+            )
+        else:
+            script = f"from evaluator import run; run({nw})"
+        cmd = [str(REPO / ".venv" / "bin" / "python"), "-c", script]
     else:
         cmd = [str(REPO / ".venv" / "bin" / "python"), str(REPO / "evaluator.py")]
     proc = subprocess.run(
