@@ -1501,10 +1501,11 @@ def simulate_buyhold_spy(features: dict[str, pd.DataFrame]) -> WeightedBroker:
         return broker
     first_ts = timestamps[0]
     first_px = float(closes[0])
-    # exp74: SPY buy-hold is a reference benchmark — bypass the liquidity gate
-    # by passing 0.0 (skips both the participation cap and impact slippage).
-    # exp73 used None which crashed because the comparison `None > 0` raises.
-    broker.buy_usd(sym, first_px, first_ts, broker.free_cash(), bar_dollar_volume=0.0)
+    # exp75: SPY buy-hold is a reference benchmark — bypass the liquidity gate
+    # by passing 0.0. Also subtract FEE_PER_TRADE_USD headroom from the order
+    # so qty*price + fee ≤ cash (the broker rejects when cost > cash even by $1).
+    target_usd = max(0.0, broker.free_cash() - FEE_PER_TRADE_USD - 1.0)
+    broker.buy_usd(sym, first_px, first_ts, target_usd, bar_dollar_volume=0.0)
     for i, ts in enumerate(timestamps):
         broker.mark_to_market(ts, {sym: float(closes[i])})
     return broker
