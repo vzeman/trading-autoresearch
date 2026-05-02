@@ -16,23 +16,13 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-02 21:28 UTC** · `fa4ab20` · 🟢 KEEP — new best_  
-📄 **[Full iteration report → iterations/iter_070_fa4ab20.md](iterations/iter_070_fa4ab20.md)** · 📁 [all iterations](iterations/)
+### 🟡 LIVE — iter 071 — beaa5e6
 
-### Latest iteration: iter 070 — fa4ab20
+_Started **2026-05-02 21:32 UTC** · `beaa5e6` · status: **RUNNING**_
 
-🟢 KEEP — new best · exp70: concentration sweep — add top1/top3 to profile suite
+**exp71: top5 ranking horizons (4,8,10)→(3,4) — shorter, less noisy**
 
-| metric | value |
-|---|---|
-| Sharpe (median) | **+1.295** |
-| Sharpe CI low (5%) | -1.171 |
-| Net PnL | **$+2944.08** (+5.888%) |
-| Max drawdown | -8.86% |
-| Trades | 4 |
-| Wall time | 357.8s |
-
-![iteration equity](docs/weighted_fa4ab20.png)
+Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
 
 ### Current best (`fa4ab20`)
 
