@@ -16,23 +16,13 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-02 22:30 UTC** · `081c441` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_073_081c441.md](iterations/iter_073_081c441.md)** · 📁 [all iterations](iterations/)
+### 🟡 LIVE — iter 074 — a3228fc
 
-### Latest iteration: iter 073 — 081c441
+_Started **2026-05-02 22:33 UTC** · `a3228fc` · status: **RUNNING**_
 
-🔴 DISCARD · exp73: spy_buyhold bypasses liquidity gate (fix exp72 broken benchmark)
+**exp74: fix SPY benchmark — bar_dollar_volume=0.0 not None**
 
-| metric | value |
-|---|---|
-| Sharpe (median) | **+1.538** |
-| Sharpe CI low (5%) | -1.014 |
-| Net PnL | **$+5294.50** (+10.589%) |
-| Max drawdown | -9.88% |
-| Trades | 3 |
-| Wall time | 356.0s |
-
-![iteration equity](docs/weighted_081c441.png)
+Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
 
 ### Current best (`beaa5e6`)
 
