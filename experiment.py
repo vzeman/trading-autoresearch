@@ -259,6 +259,11 @@ PRETRAIN_EPOCHS = 1             # exp41: 2→1 — at v7 6yr × 20-sym scale eac
 # exp67: validate same canonical with N_SEEDS=3 — driver gate compares ci_low against
 # the prior best (set by 3-seed exp51); a 1-seed bootstrap CI is unfair. With the exp66
 # precompute speedup each seed costs ~120s so 3 seeds is affordable (~6min total).
+# exp68: FRESH FULL PRETRAIN with ranking loss actually engaged. exp67 showed median
+# 3-seed sharpe = +0.82 < SPY +1.00 — the cached pretrain we'd been reusing was from
+# before USE_RANK_LOSS was infrastructure, so the model never actually trained against
+# the ranking objective. This iter scraps cached weights (USE_CACHED_PRETRAIN=0) and
+# does a fresh full pretrain. Tests whether stale weights were the bottleneck.
 # exp63: cross-sectional ranking + standardization (research-backed: CIKM 2025, JFDS 2021).
 # Trains the model to predict RELATIVE outperformance vs the universe at each timestep
 # rather than absolute returns. Documented ~3× sharpe lift in published comparisons.
