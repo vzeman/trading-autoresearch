@@ -56,3 +56,4 @@ e243765	1.0799	-1.5815	-9.75	2391.43	40	discard	exp53: SWAP_MARGIN 0.15→1.0 + 
 2d9ea93	0.7335	-1.7950	-7.54	1286.82	79	discard	exp57: volume-aware slippage + liquidity gate
 0307051	0.4245	-2.0045	-6.78	617.19	95	discard	exp58: bigger model + 95-sym + MPS + N_SEEDS=1
 b20af41	-2.1214	-3.8912	-10.18	-575.39	8	discard	exp59: foundation reset — 11 horizons, n_layers=4, 3 epochs, 2yr train, 95 syms
+8cad106	-1.1885	-2.8967	-0.33	-158.00	2	discard	exp60: multi-trader-profile comparison (intraday/intraweek/intramonth/longterm vs SPY)
