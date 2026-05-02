@@ -16,23 +16,23 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-02 02:29 UTC** · `2ce550f` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_056_2ce550f.md](iterations/iter_056_2ce550f.md)** · 📁 [all iterations](iterations/)
+_Last iteration: **2026-05-02 02:40 UTC** · `2d9ea93` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_057_2d9ea93.md](iterations/iter_057_2d9ea93.md)** · 📁 [all iterations](iterations/)
 
-### Latest iteration: iter 056 — 2ce550f
+### Latest iteration: iter 057 — 2d9ea93
 
-🔴 DISCARD · exp56: extended universe (~95 names) + VIX removed + full retrain
+🔴 DISCARD · exp57: volume-aware slippage + liquidity gate
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **+0.796** |
-| Sharpe CI low (5%) | -1.715 |
-| Net PnL | **$+1404.38** (+2.809%) |
-| Max drawdown | -7.27% |
+| Sharpe (median) | **+0.734** |
+| Sharpe CI low (5%) | -1.795 |
+| Net PnL | **$+1286.82** (+2.574%) |
+| Max drawdown | -7.54% |
 | Trades | 79 |
-| Wall time | 6060.0s |
+| Wall time | 183.5s |
 
-![iteration equity](docs/weighted_2ce550f.png)
+![iteration equity](docs/weighted_2d9ea93.png)
 
 ### Current best (`2f8bd0b`)
 
