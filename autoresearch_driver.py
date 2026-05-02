@@ -35,7 +35,7 @@ BEST_JSON = CHECKPOINTS / "best.json"
 ITERATIONS_DIR = REPO / "iterations"
 LATEST_LINK = ITERATIONS_DIR / "latest.md"
 DOCS = REPO / "docs"
-DD_FLOOR = -10.0
+DD_FLOOR = -15.0   # exp65: SPY itself has had > -10% intra-period DDs; -15 is the realistic floor
 
 
 def git(args: list[str]) -> str:
