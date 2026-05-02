@@ -1072,9 +1072,78 @@ class WeightedBroker:
         return eq
 
 
+def precompute_predictions(
+    model: PatchTransformer,
+    features: dict[str, pd.DataFrame],
+    device: str,
+    *,
+    batch_size: int = 4096,
+) -> dict[tuple[str, int], tuple[np.ndarray, np.ndarray]]:
+    """exp66 SPEEDUP: precompute model.forward_multi_horizon outputs for every
+    valid (symbol, bar_index) pair. Returns {(sym, i_now): (mh_mean[H], mh_log_std[H])}.
+    Eliminates ~25k×N_simulators of repeated GPU launches per iteration.
+    Memory: ~95 sym × 25k bars × 4 horizons × 2 × 4 bytes ≈ 76 MB.
+    """
+    preds: dict[tuple[str, int], tuple[np.ndarray, np.ndarray]] = {}
+    if not getattr(model, "horizons_minutes", None):
+        return preds
+    cols = USE_FEATURES
+    C = model.context_len
+    all_X: list[np.ndarray] = []
+    all_meta: list[tuple[str, int]] = []
+    for sym, f in features.items():
+        arr = f[cols].to_numpy(np.float32)
+        n = len(arr)
+        for i_now in range(C - 1, n):
+            all_X.append(arr[i_now - C + 1 : i_now + 1])
+            all_meta.append((sym, i_now))
+    if not all_X:
+        return preds
+    model.eval()
+    t0 = time.time()
+    with torch.no_grad():
+        for i in range(0, len(all_X), batch_size):
+            chunk = all_X[i : i + batch_size]
+            chunk_meta = all_meta[i : i + batch_size]
+            xb = torch.from_numpy(np.stack(chunk)).to(device)
+            mh_mean, mh_log_std = model.forward_multi_horizon(xb)
+            mh_mean_np = mh_mean.cpu().numpy()
+            mh_log_std_np = mh_log_std.cpu().numpy()
+            for j, key in enumerate(chunk_meta):
+                preds[key] = (mh_mean_np[j], mh_log_std_np[j])
+    model.train()
+    print(f"[precompute] {len(preds):,} (sym,bar) predictions in {time.time()-t0:.1f}s", flush=True)
+    return preds
+
+
+def _lookup_mh(
+    events: list[tuple[str, int]],
+    precomputed: dict[tuple[str, int], tuple[np.ndarray, np.ndarray]],
+    C: int,
+) -> tuple[list[tuple[str, int]], np.ndarray, np.ndarray]:
+    """Filter events to those with valid context AND a precomputed prediction;
+    return (kept_meta, mh_mean[B,H], mh_log_std[B,H]) as numpy arrays."""
+    kept: list[tuple[str, int]] = []
+    means: list[np.ndarray] = []
+    log_stds: list[np.ndarray] = []
+    for s, i in events:
+        if i < C - 1:
+            continue
+        v = precomputed.get((s, i))
+        if v is None:
+            continue
+        kept.append((s, i))
+        means.append(v[0])
+        log_stds.append(v[1])
+    if not kept:
+        return [], np.zeros((0, 0), np.float32), np.zeros((0, 0), np.float32)
+    return kept, np.stack(means), np.stack(log_stds)
+
+
 def simulate_weighted(model: PatchTransformer,
                       features: dict[str, pd.DataFrame],
-                      device: str) -> WeightedBroker:
+                      device: str,
+                      precomputed_preds: dict | None = None) -> WeightedBroker:
     """Confidence-weighted dynamic-sizing strategy.
 
     For each timestep:
@@ -1119,14 +1188,23 @@ def simulate_weighted(model: PatchTransformer,
                 batch_meta.append((sym, i_now))
 
         if batch_X and model.horizons_minutes:
-            with torch.no_grad():
-                model.eval()
-                xb = torch.from_numpy(np.stack(batch_X)).to(device)
-                mh_mean, mh_log_std = model.forward_multi_horizon(xb)
-                h_mean = mh_mean[:, 1]   # 1h horizon
-                h_std = torch.exp(mh_log_std[:, 1])
-                pred_sharpe_list = (h_mean / (h_std + 1e-12)).cpu().tolist()
-            model.train()
+            if precomputed_preds is not None:
+                batch_meta, mh_mean_np, mh_log_std_np = _lookup_mh(events_here, precomputed_preds, C)
+                if not batch_meta:
+                    pred_sharpe_list = []
+                else:
+                    h_mean = mh_mean_np[:, 1]
+                    h_std = np.exp(mh_log_std_np[:, 1])
+                    pred_sharpe_list = (h_mean / (h_std + 1e-12)).tolist()
+            else:
+                with torch.no_grad():
+                    model.eval()
+                    xb = torch.from_numpy(np.stack(batch_X)).to(device)
+                    mh_mean, mh_log_std = model.forward_multi_horizon(xb)
+                    h_mean = mh_mean[:, 1]   # 1h horizon
+                    h_std = torch.exp(mh_log_std[:, 1])
+                    pred_sharpe_list = (h_mean / (h_std + 1e-12)).cpu().tolist()
+                model.train()
             sym_to_sharpe = {sym: ps for (sym, _), ps in zip(batch_meta, pred_sharpe_list)}
 
             # 1) SELL pass — close held positions whose 1h Sharpe dropped below threshold
@@ -1213,6 +1291,7 @@ def simulate_profile(
     sell_threshold: float = 0.0,
     rank_percentile: float = 0.0,   # exp62: if >0, only buy when pred_sharpe is in top (1-rank_pct) of timestep
     name: str = "profile",
+    precomputed_preds: dict | None = None,
 ) -> WeightedBroker:
     broker = WeightedBroker(STARTING_CASH_USD, min_reserve_frac=MIN_CASH_RESERVE_PCT)
     cols = USE_FEATURES
@@ -1251,15 +1330,25 @@ def simulate_profile(
                 batch_X.append(feat_arrays[sym][i_now - C + 1 : i_now + 1])
                 batch_meta.append((sym, i_now))
         if batch_X and model.horizons_minutes:
-            with torch.no_grad():
-                model.eval()
-                xb = torch.from_numpy(np.stack(batch_X)).to(device)
-                mh_mean, mh_log_std = model.forward_multi_horizon(xb)
-                hi = min(horizon_idx, mh_mean.size(1) - 1)
-                h_mean = mh_mean[:, hi]
-                h_std = torch.exp(mh_log_std[:, hi])
-                pred_sharpe_list = (h_mean / (h_std + 1e-12)).cpu().tolist()
-            model.train()
+            if precomputed_preds is not None:
+                batch_meta, mh_mean_np, mh_log_std_np = _lookup_mh(events_here, precomputed_preds, C)
+                if not batch_meta:
+                    pred_sharpe_list = []
+                else:
+                    hi = min(horizon_idx, mh_mean_np.shape[1] - 1)
+                    h_mean = mh_mean_np[:, hi]
+                    h_std = np.exp(mh_log_std_np[:, hi])
+                    pred_sharpe_list = (h_mean / (h_std + 1e-12)).tolist()
+            else:
+                with torch.no_grad():
+                    model.eval()
+                    xb = torch.from_numpy(np.stack(batch_X)).to(device)
+                    mh_mean, mh_log_std = model.forward_multi_horizon(xb)
+                    hi = min(horizon_idx, mh_mean.size(1) - 1)
+                    h_mean = mh_mean[:, hi]
+                    h_std = torch.exp(mh_log_std[:, hi])
+                    pred_sharpe_list = (h_mean / (h_std + 1e-12)).cpu().tolist()
+                model.train()
             sym_to_sharpe = {sym: ps for (sym, _), ps in zip(batch_meta, pred_sharpe_list)}
             # SELL pass — close held when below sell_threshold
             for sym, ps in sym_to_sharpe.items():
@@ -1312,6 +1401,7 @@ def simulate_passive_topn(
     top_n: int = 10,
     ranking_horizons: tuple = (4, 8, 10),
     name: str = "topn",
+    precomputed_preds: dict | None = None,
 ) -> WeightedBroker:
     """Pick top-N at first ready bar, equal-weight buy, hold to end."""
     broker = WeightedBroker(STARTING_CASH_USD, min_reserve_frac=MIN_CASH_RESERVE_PCT)
@@ -1338,24 +1428,40 @@ def simulate_passive_topn(
         if not picked:
             ready = [(sym, i_now) for sym, i_now in events_here if i_now >= C - 1]
             if len(ready) >= max(top_n, len(features) // 2):
-                batch_X = [feat_arrays[sym][i_now - C + 1 : i_now + 1] for sym, i_now in ready]
-                with torch.no_grad():
-                    model.eval()
-                    xb = torch.from_numpy(np.stack(batch_X)).to(device)
-                    if model.horizons_minutes:
-                        mh_mean, mh_log_std = model.forward_multi_horizon(xb)
-                        scores = None
-                        for hi in ranking_horizons:
-                            if hi >= mh_mean.size(1):
-                                continue
-                            mu = mh_mean[:, hi]
-                            sd = torch.exp(mh_log_std[:, hi])
-                            s = mu / (sd + 1e-12)
-                            scores = s if scores is None else scores + s
-                        scores = scores.cpu().tolist() if scores is not None else [0.0] * len(ready)
+                if precomputed_preds is not None and model.horizons_minutes:
+                    kept, mh_mean_np, mh_log_std_np = _lookup_mh(ready, precomputed_preds, C)
+                    if not kept:
+                        scores = []
+                        ready = []
                     else:
-                        scores = [0.0] * len(ready)
-                model.train()
+                        ready = kept
+                        scores_np = np.zeros(mh_mean_np.shape[0], dtype=np.float32)
+                        for hi in ranking_horizons:
+                            if hi >= mh_mean_np.shape[1]:
+                                continue
+                            mu = mh_mean_np[:, hi]
+                            sd = np.exp(mh_log_std_np[:, hi])
+                            scores_np += (mu / (sd + 1e-12))
+                        scores = scores_np.tolist()
+                else:
+                    batch_X = [feat_arrays[sym][i_now - C + 1 : i_now + 1] for sym, i_now in ready]
+                    with torch.no_grad():
+                        model.eval()
+                        xb = torch.from_numpy(np.stack(batch_X)).to(device)
+                        if model.horizons_minutes:
+                            mh_mean, mh_log_std = model.forward_multi_horizon(xb)
+                            scores = None
+                            for hi in ranking_horizons:
+                                if hi >= mh_mean.size(1):
+                                    continue
+                                mu = mh_mean[:, hi]
+                                sd = torch.exp(mh_log_std[:, hi])
+                                s = mu / (sd + 1e-12)
+                                scores = s if scores is None else scores + s
+                            scores = scores.cpu().tolist() if scores is not None else [0.0] * len(ready)
+                        else:
+                            scores = [0.0] * len(ready)
+                    model.train()
                 ranked = sorted(zip(ready, scores), key=lambda r: -r[1])
                 top = ranked[:top_n]
                 if top:
@@ -1405,8 +1511,10 @@ PROFILE_PRESETS = [
 PASSIVE_TOPN_VARIANTS = [(5,), (10,), (20,)]
 
 
-def run_profile_suite(model, eval_feat, device, seed):
-    """exp61+: run all 8 strategies and dump results JSON for the driver."""
+def run_profile_suite(model, eval_feat, device, seed, precomputed_preds=None):
+    """exp61+: run all 8 strategies and dump results JSON for the driver.
+    exp66: accept precomputed predictions so each profile's per-bar inference is a dict lookup.
+    """
     profile_results: dict = {}
     try:
         from prepare import sharpe_ratio as _sr, max_drawdown_pct as _dd
@@ -1418,6 +1526,7 @@ def run_profile_suite(model, eval_feat, device, seed):
                     horizon_idx=hidx, max_hold_bars=max_hold,
                     buy_threshold=buy_t, sell_threshold=sell_t,
                     rank_percentile=rank_pct, name=pname,
+                    precomputed_preds=precomputed_preds,
                 )
                 end_eq = float(pb.equity_curve[-1][1]) if pb.equity_curve else 0.0
                 start_eq = float(pb.equity_curve[0][1]) if pb.equity_curve else float(STARTING_CASH_USD)
@@ -1435,7 +1544,8 @@ def run_profile_suite(model, eval_feat, device, seed):
                 print(f"[prof-{pname}] failed: {e}", flush=True)
         for (n,) in PASSIVE_TOPN_VARIANTS:
             try:
-                pb = simulate_passive_topn(model, eval_feat, device, top_n=n, name=f"top{n}")
+                pb = simulate_passive_topn(model, eval_feat, device, top_n=n, name=f"top{n}",
+                                           precomputed_preds=precomputed_preds)
                 end_eq = float(pb.equity_curve[-1][1]) if pb.equity_curve else 0.0
                 start_eq = float(pb.equity_curve[0][1]) if pb.equity_curve else float(STARTING_CASH_USD)
                 profile_results[f"top{n}_picker"] = {
@@ -1560,10 +1670,14 @@ def train_and_eval(seed: int = 0) -> tuple:
 
     # Phases 3-4 (primary + picker eval) stay removed — they didn't beat passive.
 
+    # exp66 SPEEDUP: precompute model predictions ONCE, share across all simulators.
+    # Each simulator becomes pure dict lookup + numpy — no per-bar GPU launch.
+    pred_cache = precompute_predictions(model, eval_feat, device)
+
     # Phase 5: WEIGHTED dynamic-sizing strategy (the only one that works).
-    weighted = simulate_weighted(model, eval_feat, device)
+    weighted = simulate_weighted(model, eval_feat, device, precomputed_preds=pred_cache)
     # Multi-trader-profile + passive-topn + SPY comparison suite
-    run_profile_suite(model, eval_feat, device, seed)
+    run_profile_suite(model, eval_feat, device, seed, precomputed_preds=pred_cache)
 
     # Save trained weights for this seed. Agent loop promotes last_*.pt → best_*.pt
     # whenever sharpe_ci_low improves on the prior best.
@@ -1647,7 +1761,8 @@ def train_and_eval(seed: int = 0) -> tuple:
     # Falls back to weighted if simulator fails for any reason.
     canonical_broker = weighted
     try:
-        top20_broker = simulate_passive_topn(model, eval_feat, device, top_n=20, name="top20")
+        top20_broker = simulate_passive_topn(model, eval_feat, device, top_n=20, name="top20",
+                                              precomputed_preds=pred_cache)
         if top20_broker.equity_curve and len(top20_broker.equity_curve) > 5:
             canonical_broker = top20_broker
             print(f"[experiment] canonical = top20_picker (final equity ${top20_broker.equity_curve[-1][1]:,.2f})", flush=True)
