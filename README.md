@@ -16,23 +16,23 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-02 17:55 UTC** · `06076ef` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_066_06076ef.md](iterations/iter_066_06076ef.md)** · 📁 [all iterations](iterations/)
+_Last iteration: **2026-05-02 18:02 UTC** · `5467e68` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_067_5467e68.md](iterations/iter_067_5467e68.md)** · 📁 [all iterations](iterations/)
 
-### Latest iteration: iter 066 — 06076ef
+### Latest iteration: iter 067 — 5467e68
 
-🔴 DISCARD · exp66 SPEEDUP: precompute predictions (validate same numbers as exp65, faster wall clock)
+🔴 DISCARD · exp67: N_SEEDS=3 multi-seed validation (fair CI vs prior best)
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **+1.037** |
-| Sharpe CI low (5%) | -1.684 |
-| Net PnL | **$+2275.95** (+4.552%) |
+| Sharpe (median) | **+0.818** |
+| Sharpe CI low (5%) | -1.946 |
+| Net PnL | **$+1540.17** (+3.080%) |
 | Max drawdown | -11.11% |
 | Trades | 18 |
-| Wall time | 116.1s |
+| Wall time | 347.3s |
 
-![iteration equity](docs/weighted_06076ef.png)
+![iteration equity](docs/weighted_5467e68.png)
 
 ### Current best (`2f8bd0b`)
 
