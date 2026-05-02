@@ -1516,7 +1516,7 @@ PROFILE_PRESETS = [
     ("intramonth", 10, 30 * 390,   0.0, 0.0, 0.0),
     ("longterm",   10, 10**9,      0.0, 0.0, 0.0),
 ]
-PASSIVE_TOPN_VARIANTS = [(5,), (10,), (20,)]
+PASSIVE_TOPN_VARIANTS = [(1,), (3,), (5,), (10,), (20,)]   # exp70: add extreme concentration to test if top3/top1 beats top5
 
 
 def run_profile_suite(model, eval_feat, device, seed, precomputed_preds=None):
