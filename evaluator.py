@@ -389,6 +389,12 @@ def run(n_workers: int = 3) -> dict:
 # ----------------------------------------------------------------------
 
 def _git_short_hash() -> str:
+    """Return the experiment commit SHA. The driver may set EXPERIMENT_COMMIT if
+    it added throwaway commits (e.g. LIVE-block) on top — without this override
+    the chart filenames would key off the wrong (driver) commit."""
+    override = os.environ.get("EXPERIMENT_COMMIT")
+    if override:
+        return override.strip()
     try:
         out = subprocess.check_output(["git", "rev-parse", "--short=7", "HEAD"], cwd=REPO).decode().strip()
         return out or "untracked"

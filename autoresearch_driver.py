@@ -574,6 +574,10 @@ def main() -> None:
     env = os.environ.copy()
     env.setdefault("OMP_NUM_THREADS", "4")
     env.setdefault("MKL_NUM_THREADS", "4")
+    # The LIVE-block git commit shifts HEAD off the experiment commit. Pin the
+    # original SHA so evaluator names its chart files with the experiment commit
+    # (matches the iter md links written by write_iteration_md).
+    env["EXPERIMENT_COMMIT"] = commit
     # EVAL_WORKERS env var → call evaluator.run(N).
     # N_SEEDS_OVERRIDE env var → monkey-patch prepare.N_SEEDS AND evaluator.N_SEEDS
     # before the run starts. evaluator does `from prepare import N_SEEDS` which
