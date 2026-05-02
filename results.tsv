@@ -68,3 +68,4 @@ e94504e	1.0369	-1.6841	-11.11	2275.95	18	discard	exp68: FRESH full pretrain (no 
 963abee	1.2950	-1.1713	-8.86	2944.08	4	keep	exp69: canonical = top5_picker (exp68 proved it beats SPY across seeds)
 a499ccd	1.2950	-1.1713	-8.86	2944.08	4	keep	exp70: concentration sweep — add top1/top3 to profile suite
 beaa5e6	1.5489	-1.0118	-8.86	4797.33	3	keep	exp71: top5 ranking horizons (4,8,10)→(3,4) — shorter, less noisy
+0f45fb6	1.5381	-1.0135	-9.88	5294.50	3	discard	exp72: deploy full portfolio (MIN_CASH_RESERVE_PCT 0.10 → 0)
