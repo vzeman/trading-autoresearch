@@ -233,6 +233,57 @@ def update_readme_for_iteration(
         readme.write_text(txt.rstrip() + "\n\n" + block)
 
 
+def write_live_iteration_block(commit: str, description: str, iter_num: int | None = None) -> None:
+    """Hero-section block written at iteration START — shows 🟡 LIVE badge so the
+    GitHub homepage reflects an in-flight iteration instead of looking like the
+    last DISCARD/KEEP is current.
+    Replaced by `update_readme_for_iteration` when the iteration completes.
+    """
+    readme = REPO / "README.md"
+    if not readme.exists():
+        return
+    started = time.strftime("%Y-%m-%d %H:%M UTC")
+    iter_label = f"iter {iter_num:03d} — {commit}" if iter_num is not None else f"`{commit}`"
+    best_block = ""
+    if BEST_JSON.exists():
+        try:
+            best = json.loads(BEST_JSON.read_text())
+            bm = best.get("metrics", {})
+            best_block = (
+                f"### Current best (`{best.get('commit','?')}`)\n\n"
+                f"| metric | value |\n|---|---|\n"
+                f"| Sharpe (median) | **{bm.get('sharpe','—')}** |\n"
+                f"| Sharpe CI low (5%) | {bm.get('sharpe_ci_low','—')} |\n"
+                f"| Net PnL | **${bm.get('pnl_usd','0')}** ({bm.get('pnl_pct','0')}%) |\n"
+                f"| Max drawdown | {bm.get('max_dd_pct','0')}% |\n"
+                f"| Trades | {bm.get('trades','0')} |\n"
+                f"| Saved at | {best.get('timestamp','—')} |\n\n"
+                f"![weighted equity, current best](docs/weighted_latest.png)\n\n"
+                f"![first month](docs/weighted_1m_latest.png)\n\n"
+            )
+        except Exception:
+            pass
+    block = (
+        f"{README_START}\n\n"
+        f"### 🟡 LIVE — {iter_label}\n\n"
+        f"_Started **{started}** · `{commit}` · status: **RUNNING**_\n\n"
+        f"**{description}**\n\n"
+        f"Final metrics will appear here when the iteration completes "
+        f"(typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).\n\n"
+        f"{best_block}"
+        f"### Progress over all experiments\n\n"
+        f"![progress](docs/progress.png)\n\n"
+        f"{README_END}\n"
+    )
+    txt = readme.read_text()
+    if README_START in txt and README_END in txt:
+        before = txt.split(README_START, 1)[0].rstrip() + "\n\n"
+        after = "\n" + txt.split(README_END, 1)[1].lstrip()
+        readme.write_text(before + block + after)
+    else:
+        readme.write_text(txt.rstrip() + "\n\n" + block)
+
+
 def update_iterations_index() -> None:
     """Rebuild iterations/README.md from all iter_*.md files in the folder.
 
@@ -501,6 +552,22 @@ def main() -> None:
     description = sys.argv[1] if len(sys.argv) > 1 else "(no description)"
     commit = git(["rev-parse", "--short=7", "HEAD"])
     print(f"=== iter @ {commit}  {description}", flush=True)
+
+    # Hero section: write 🟡 LIVE block immediately + push so the GitHub homepage
+    # reflects the running iteration instead of the last completed one.
+    try:
+        live_iter_num = next_iter_number(description)
+        write_live_iteration_block(commit, description, live_iter_num)
+        subprocess.run(["git", "add", "README.md"], cwd=REPO, check=False, capture_output=True)
+        diff = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=REPO).returncode
+        if diff:
+            subprocess.run(
+                ["git", "commit", "-m", f"live: iter {live_iter_num:03d} {commit} started — {description[:80]}"],
+                cwd=REPO, check=False, capture_output=True,
+            )
+            subprocess.run(["git", "push", "origin", "main"], cwd=REPO, check=False, capture_output=True)
+    except Exception as e:
+        print(f"[live-readme] failed: {e}", flush=True)
 
     t0 = time.time()
     # Speedup #2: bump per-worker thread count from evaluator's default 2 → 4.
