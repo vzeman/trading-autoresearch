@@ -16,23 +16,23 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-02 18:02 UTC** · `5467e68` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_067_5467e68.md](iterations/iter_067_5467e68.md)** · 📁 [all iterations](iterations/)
+_Last iteration: **2026-05-02 20:54 UTC** · `e94504e` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_068_e94504e.md](iterations/iter_068_e94504e.md)** · 📁 [all iterations](iterations/)
 
-### Latest iteration: iter 067 — 5467e68
+### Latest iteration: iter 068 — e94504e
 
-🔴 DISCARD · exp67: N_SEEDS=3 multi-seed validation (fair CI vs prior best)
+🔴 DISCARD · exp68: FRESH full pretrain (no cache) — ranking loss actually engaged this time
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **+0.818** |
-| Sharpe CI low (5%) | -1.946 |
-| Net PnL | **$+1540.17** (+3.080%) |
+| Sharpe (median) | **+1.037** |
+| Sharpe CI low (5%) | -1.684 |
+| Net PnL | **$+2275.95** (+4.552%) |
 | Max drawdown | -11.11% |
 | Trades | 18 |
-| Wall time | 347.3s |
+| Wall time | 9737.4s |
 
-![iteration equity](docs/weighted_5467e68.png)
+![iteration equity](docs/weighted_e94504e.png)
 
 ### Current best (`2f8bd0b`)
 

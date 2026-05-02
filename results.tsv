@@ -64,3 +64,4 @@ e3199bb	1.0369	-1.6841	-11.11	2275.95	18	discard	exp64: top20_picker = canonical
 c091321	1.0369	-1.6841	-11.11	2275.95	18	discard	exp65: relax DD floor -10→-15 (SPY-realistic) — should KEEP exp64's +1.04 sharpe
 06076ef	1.0369	-1.6841	-11.11	2275.95	18	discard	exp66 SPEEDUP: precompute predictions (validate same numbers as exp65, faster wall clock)
 5467e68	0.8176	-1.9459	-11.11	1540.17	18	discard	exp67: N_SEEDS=3 multi-seed validation (fair CI vs prior best)
+e94504e	1.0369	-1.6841	-11.11	2275.95	18	discard	exp68: FRESH full pretrain (no cache) — ranking loss actually engaged this time
