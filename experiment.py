@@ -244,15 +244,14 @@ def featurize(bars: pd.DataFrame, context: dict[str, pd.DataFrame] | None = None
 
 PATCH_LEN = 8
 CONTEXT_PATCHES = 16            # context window = PATCH_LEN * CONTEXT_PATCHES = 128 bars
-D_MODEL = 128                   # exp58: 96→128. exp17 (v5 era) found 128 equivalent to 96 at small data scale; with v7's 95 syms × 365d (~5× more data) the bigger model should now have room to use the extra capacity.
+D_MODEL = 128                   # exp58+: 96→128 (more capacity for 11-horizon multi-task head)
 N_HEADS = 4
-N_LAYERS = 3
-D_FF = 256                      # exp58: 192→256 to keep d_ff = 2 × D_MODEL ratio
+N_LAYERS = 4                    # 3→4 (deeper for multi-horizon)
+D_FF = 256                      # 2 × D_MODEL
 DROPOUT = 0.1   # exp22 (DROPOUT=0) was disastrous — keep regularization
 PRED_HORIZON = 5
-# exp28: multi-horizon prediction targets (in 1-min bars)
-# 1, 60, 390, 1950 = 1m, 1h, 1d, 1w. Each predicted as cumulative log-return Gaussian.
-HORIZONS_MINUTES = [1, 60, 390, 1950]
+# 11-horizon multi-task. 5m → 30d. Same model serves multiple trader profiles.
+HORIZONS_MINUTES = [5, 60, 120, 240, 390, 780, 1170, 1560, 1950, 5460, 11700]
 RL_REWARD_HORIZON = 3
 ACTION_HEAD_HOLD_BIAS = 1.5     # exp10: softmax([-1.5,1.5,-1.5]) ≈ [4.7%,90.6%,4.7%]: be even more selective
 
@@ -1137,6 +1136,287 @@ def simulate_weighted(model: PatchTransformer,
 
 
 # ============================================================================
+# MULTI-TRADER-PROFILE SIMULATORS — same model, different time horizons
+# ============================================================================
+# Profiles share the trained model but differ in:
+#   - which horizon prediction they consult
+#   - max-hold rule (force-exit when held too long)
+#   - selection threshold (absolute pred_sharpe OR rank-percentile)
+# Plus a passive top-N picker (no rotation, just pick + hold) and SPY benchmark.
+
+def simulate_profile(
+    model: PatchTransformer,
+    features: dict[str, pd.DataFrame],
+    device: str,
+    *,
+    horizon_idx: int,
+    max_hold_bars: int,
+    buy_threshold: float = 0.0,
+    sell_threshold: float = 0.0,
+    rank_percentile: float = 0.0,   # exp62: if >0, only buy when pred_sharpe is in top (1-rank_pct) of timestep
+    name: str = "profile",
+) -> WeightedBroker:
+    broker = WeightedBroker(STARTING_CASH_USD, min_reserve_frac=MIN_CASH_RESERVE_PCT)
+    cols = USE_FEATURES
+    feat_arrays = {s: f[cols].to_numpy(np.float32) for s, f in features.items()}
+    close_arrays = {s: f["close"].to_numpy(np.float32) for s, f in features.items()}
+    volume_arrays = {
+        s: (f["volume"].to_numpy(np.float32) if "volume" in f.columns
+            else np.zeros(len(f), dtype=np.float32))
+        for s, f in features.items()
+    }
+    events_by_ts: dict[pd.Timestamp, list[tuple[str, int]]] = {}
+    for sym, f in features.items():
+        for i, ts in enumerate(f["timestamp"]):
+            events_by_ts.setdefault(ts, []).append((sym, i))
+    sorted_ts = sorted(events_by_ts.keys())
+    C = model.context_len
+    last_idx_by_sym: dict[str, int] = {s: -1 for s in features}
+    bar_count = 0
+    bought_at_bar: dict[str, int] = {}
+    for ts in sorted_ts:
+        bar_count += 1
+        events_here = events_by_ts[ts]
+        for sym, i_now in events_here:
+            last_idx_by_sym[sym] = i_now
+        for held_sym, q in list(broker.positions.items()):
+            if q > 0 and (bar_count - bought_at_bar.get(held_sym, 0)) >= max_hold_bars:
+                i_now_h = last_idx_by_sym[held_sym]
+                if i_now_h >= 0:
+                    px = float(close_arrays[held_sym][i_now_h])
+                    bar_dv = float(volume_arrays[held_sym][i_now_h]) * px
+                    if broker.sell_all(held_sym, px, ts, bar_dollar_volume=bar_dv):
+                        bought_at_bar.pop(held_sym, None)
+        batch_X, batch_meta = [], []
+        for sym, i_now in events_here:
+            if i_now >= C - 1:
+                batch_X.append(feat_arrays[sym][i_now - C + 1 : i_now + 1])
+                batch_meta.append((sym, i_now))
+        if batch_X and model.horizons_minutes:
+            with torch.no_grad():
+                model.eval()
+                xb = torch.from_numpy(np.stack(batch_X)).to(device)
+                mh_mean, mh_log_std = model.forward_multi_horizon(xb)
+                hi = min(horizon_idx, mh_mean.size(1) - 1)
+                h_mean = mh_mean[:, hi]
+                h_std = torch.exp(mh_log_std[:, hi])
+                pred_sharpe_list = (h_mean / (h_std + 1e-12)).cpu().tolist()
+            model.train()
+            sym_to_sharpe = {sym: ps for (sym, _), ps in zip(batch_meta, pred_sharpe_list)}
+            # SELL pass — close held when below sell_threshold
+            for sym, ps in sym_to_sharpe.items():
+                if broker.positions.get(sym, 0.0) > 0 and ps < sell_threshold:
+                    i_now = last_idx_by_sym[sym]
+                    px = float(close_arrays[sym][i_now])
+                    bar_dv = float(volume_arrays[sym][i_now]) * px
+                    if broker.sell_all(sym, px, ts, bar_dollar_volume=bar_dv):
+                        bought_at_bar.pop(sym, None)
+            # exp62: optional rank-percentile gate
+            rank_cutoff = None
+            if rank_percentile > 0 and pred_sharpe_list:
+                import numpy as _np
+                rank_cutoff = float(_np.quantile(_np.array(pred_sharpe_list), rank_percentile))
+            free_cash_now = broker.free_cash()
+            candidates = []
+            for (sym, i_now), ps in zip(batch_meta, pred_sharpe_list):
+                if ps <= buy_threshold:
+                    continue
+                if rank_cutoff is not None and ps < rank_cutoff:
+                    continue
+                if broker.positions.get(sym, 0.0) > 0:
+                    continue
+                base_frac = min(ps * KELLY_SCALE, MAX_POS_FRACTION_OF_FREE_CASH)
+                usd_size = base_frac * free_cash_now
+                if usd_size >= WEIGHTED_MIN_TRADE_USD:
+                    candidates.append((sym, i_now, usd_size, ps))
+            candidates.sort(key=lambda t: -t[3])
+            candidates = candidates[:MAX_NEW_TRADES_PER_TIMESTEP]
+            for sym, i_now, suggested_usd, ps in candidates:
+                cap = MAX_POS_FRACTION_OF_FREE_CASH * broker.free_cash()
+                actual = min(suggested_usd, cap)
+                if actual < WEIGHTED_MIN_TRADE_USD:
+                    continue
+                price = float(close_arrays[sym][i_now])
+                bar_dv = float(volume_arrays[sym][i_now]) * price
+                if broker.buy_usd(sym, price, ts, actual, bar_dollar_volume=bar_dv):
+                    bought_at_bar[sym] = bar_count
+        prices = {s: float(close_arrays[s][last_idx_by_sym[s]])
+                  for s in features if last_idx_by_sym[s] >= 0}
+        broker.mark_to_market(ts, prices)
+    return broker
+
+
+def simulate_passive_topn(
+    model: PatchTransformer,
+    features: dict[str, pd.DataFrame],
+    device: str,
+    *,
+    top_n: int = 10,
+    ranking_horizons: tuple = (4, 8, 10),
+    name: str = "topn",
+) -> WeightedBroker:
+    """Pick top-N at first ready bar, equal-weight buy, hold to end."""
+    broker = WeightedBroker(STARTING_CASH_USD, min_reserve_frac=MIN_CASH_RESERVE_PCT)
+    cols = USE_FEATURES
+    feat_arrays = {s: f[cols].to_numpy(np.float32) for s, f in features.items()}
+    close_arrays = {s: f["close"].to_numpy(np.float32) for s, f in features.items()}
+    volume_arrays = {
+        s: (f["volume"].to_numpy(np.float32) if "volume" in f.columns
+            else np.zeros(len(f), dtype=np.float32))
+        for s, f in features.items()
+    }
+    events_by_ts: dict[pd.Timestamp, list[tuple[str, int]]] = {}
+    for sym, f in features.items():
+        for i, ts in enumerate(f["timestamp"]):
+            events_by_ts.setdefault(ts, []).append((sym, i))
+    sorted_ts = sorted(events_by_ts.keys())
+    C = model.context_len
+    last_idx_by_sym: dict[str, int] = {s: -1 for s in features}
+    picked = False
+    for ts in sorted_ts:
+        events_here = events_by_ts[ts]
+        for sym, i_now in events_here:
+            last_idx_by_sym[sym] = i_now
+        if not picked:
+            ready = [(sym, i_now) for sym, i_now in events_here if i_now >= C - 1]
+            if len(ready) >= max(top_n, len(features) // 2):
+                batch_X = [feat_arrays[sym][i_now - C + 1 : i_now + 1] for sym, i_now in ready]
+                with torch.no_grad():
+                    model.eval()
+                    xb = torch.from_numpy(np.stack(batch_X)).to(device)
+                    if model.horizons_minutes:
+                        mh_mean, mh_log_std = model.forward_multi_horizon(xb)
+                        scores = None
+                        for hi in ranking_horizons:
+                            if hi >= mh_mean.size(1):
+                                continue
+                            mu = mh_mean[:, hi]
+                            sd = torch.exp(mh_log_std[:, hi])
+                            s = mu / (sd + 1e-12)
+                            scores = s if scores is None else scores + s
+                        scores = scores.cpu().tolist() if scores is not None else [0.0] * len(ready)
+                    else:
+                        scores = [0.0] * len(ready)
+                model.train()
+                ranked = sorted(zip(ready, scores), key=lambda r: -r[1])
+                top = ranked[:top_n]
+                if top:
+                    per_pos = broker.free_cash() / len(top)
+                    for (sym, i_now), score in top:
+                        if per_pos < WEIGHTED_MIN_TRADE_USD:
+                            continue
+                        price = float(close_arrays[sym][i_now])
+                        bar_dv = float(volume_arrays[sym][i_now]) * price
+                        broker.buy_usd(sym, price, ts, per_pos, bar_dollar_volume=bar_dv)
+                picked = True
+        prices = {s: float(close_arrays[s][last_idx_by_sym[s]])
+                  for s in features if last_idx_by_sym[s] >= 0}
+        broker.mark_to_market(ts, prices)
+    return broker
+
+
+def simulate_buyhold_spy(features: dict[str, pd.DataFrame]) -> WeightedBroker:
+    """Passive baseline: invest all (less reserve) into SPY at first bar, hold."""
+    broker = WeightedBroker(STARTING_CASH_USD, min_reserve_frac=MIN_CASH_RESERVE_PCT)
+    if not features:
+        return broker
+    sym = "SPY" if "SPY" in features else next(iter(features))
+    f = features[sym]
+    closes = f["close"].to_numpy(np.float32)
+    volumes = f["volume"].to_numpy(np.float32) if "volume" in f.columns else None
+    timestamps = f["timestamp"].tolist()
+    if len(closes) < 2:
+        return broker
+    first_ts = timestamps[0]
+    first_px = float(closes[0])
+    bar_dv = (float(volumes[0]) * first_px) if volumes is not None else 0.0
+    broker.buy_usd(sym, first_px, first_ts, broker.free_cash(), bar_dollar_volume=bar_dv)
+    for i, ts in enumerate(timestamps):
+        broker.mark_to_market(ts, {sym: float(closes[i])})
+    return broker
+
+
+# Profile presets. horizon_idx into HORIZONS_MINUTES = [5,60,120,240,390,780,1170,1560,1950,5460,11700]
+PROFILE_PRESETS = [
+    # (name, horizon_idx, max_hold_bars, buy_threshold, sell_threshold, rank_percentile)
+    ("intraday",   2, 390,         0.0, 0.0, 0.0),
+    ("intraweek",  8, 5 * 390,     0.0, 0.0, 0.0),
+    ("intramonth", 10, 30 * 390,   0.0, 0.0, 0.0),
+    ("longterm",   10, 10**9,      0.0, 0.0, 0.0),
+]
+PASSIVE_TOPN_VARIANTS = [(5,), (10,), (20,)]
+
+
+def run_profile_suite(model, eval_feat, device, seed):
+    """exp61+: run all 8 strategies and dump results JSON for the driver."""
+    profile_results: dict = {}
+    try:
+        from prepare import sharpe_ratio as _sr, max_drawdown_pct as _dd
+        for preset in PROFILE_PRESETS:
+            pname, hidx, max_hold, buy_t, sell_t, rank_pct = preset
+            try:
+                pb = simulate_profile(
+                    model, eval_feat, device,
+                    horizon_idx=hidx, max_hold_bars=max_hold,
+                    buy_threshold=buy_t, sell_threshold=sell_t,
+                    rank_percentile=rank_pct, name=pname,
+                )
+                end_eq = float(pb.equity_curve[-1][1]) if pb.equity_curve else 0.0
+                start_eq = float(pb.equity_curve[0][1]) if pb.equity_curve else float(STARTING_CASH_USD)
+                profile_results[pname] = {
+                    "sharpe": float(_sr(pb.equity_curve)),
+                    "pnl": end_eq - start_eq,
+                    "pnl_pct": (end_eq - start_eq) / start_eq * 100 if start_eq else 0.0,
+                    "trades": int(pb.n_trades), "dd_pct": float(_dd(pb.equity_curve)),
+                    "ending_equity": end_eq, "horizon_minutes": HORIZONS_MINUTES[hidx],
+                    "max_hold_bars": int(max_hold) if max_hold < 10**8 else None,
+                }
+                print(f"[prof-{pname}] sh={profile_results[pname]['sharpe']:+.3f} "
+                      f"pnl=${profile_results[pname]['pnl']:+,.2f} trades={profile_results[pname]['trades']}", flush=True)
+            except Exception as e:
+                print(f"[prof-{pname}] failed: {e}", flush=True)
+        for (n,) in PASSIVE_TOPN_VARIANTS:
+            try:
+                pb = simulate_passive_topn(model, eval_feat, device, top_n=n, name=f"top{n}")
+                end_eq = float(pb.equity_curve[-1][1]) if pb.equity_curve else 0.0
+                start_eq = float(pb.equity_curve[0][1]) if pb.equity_curve else float(STARTING_CASH_USD)
+                profile_results[f"top{n}_picker"] = {
+                    "sharpe": float(_sr(pb.equity_curve)),
+                    "pnl": end_eq - start_eq,
+                    "pnl_pct": (end_eq - start_eq) / start_eq * 100 if start_eq else 0.0,
+                    "trades": int(pb.n_trades), "dd_pct": float(_dd(pb.equity_curve)),
+                    "ending_equity": end_eq, "horizon_minutes": 0,
+                }
+                print(f"[prof-top{n}] sh={profile_results[f'top{n}_picker']['sharpe']:+.3f} "
+                      f"pnl=${profile_results[f'top{n}_picker']['pnl']:+,.2f}", flush=True)
+            except Exception as e:
+                print(f"[prof-top{n}] failed: {e}", flush=True)
+        try:
+            spy = simulate_buyhold_spy(eval_feat)
+            end_eq = float(spy.equity_curve[-1][1]) if spy.equity_curve else 0.0
+            start_eq = float(spy.equity_curve[0][1]) if spy.equity_curve else float(STARTING_CASH_USD)
+            profile_results["spy_buyhold"] = {
+                "sharpe": float(_sr(spy.equity_curve)),
+                "pnl": end_eq - start_eq,
+                "pnl_pct": (end_eq - start_eq) / start_eq * 100 if start_eq else 0.0,
+                "trades": int(spy.n_trades), "dd_pct": float(_dd(spy.equity_curve)),
+                "ending_equity": end_eq,
+            }
+            print(f"[prof-spy] sh={profile_results['spy_buyhold']['sharpe']:+.3f} "
+                  f"pnl=${profile_results['spy_buyhold']['pnl']:+,.2f}", flush=True)
+        except Exception as e:
+            print(f"[prof-spy] failed: {e}", flush=True)
+    except Exception as e:
+        print(f"[prof-suite] outer failure: {e}", flush=True)
+    try:
+        import json as _json
+        prof_path = CHECKPOINT_DIR / f"last_seed{seed}_profiles.json"
+        prof_path.write_text(_json.dumps(profile_results, indent=2, default=str))
+    except Exception as e:
+        print(f"[prof-dump] seed {seed} failed: {e}", flush=True)
+
+
+# ============================================================================
 # CONTRACT — DO NOT change the signature
 # ============================================================================
 
@@ -1224,6 +1504,8 @@ def train_and_eval(seed: int = 0) -> tuple:
 
     # Phase 5: WEIGHTED dynamic-sizing strategy (the only one that works).
     weighted = simulate_weighted(model, eval_feat, device)
+    # Multi-trader-profile + passive-topn + SPY comparison suite
+    run_profile_suite(model, eval_feat, device, seed)
 
     # Save trained weights for this seed. Agent loop promotes last_*.pt → best_*.pt
     # whenever sharpe_ci_low improves on the prior best.
