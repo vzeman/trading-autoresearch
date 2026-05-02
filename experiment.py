@@ -1770,7 +1770,10 @@ def train_and_eval(seed: int = 0) -> tuple:
     # every seed. Concentration matters: 5 high-conviction picks > 20 diluted picks.
     canonical_broker = weighted
     try:
+        # exp71: try shorter ranking horizons (4h+1d) instead of default (1d+5d+30d).
+        # Hypothesis: shorter-horizon predictions are less noise-compounded.
         top5_broker = simulate_passive_topn(model, eval_feat, device, top_n=5, name="top5",
+                                            ranking_horizons=(3, 4),
                                             precomputed_preds=pred_cache)
         if top5_broker.equity_curve and len(top5_broker.equity_curve) > 5:
             canonical_broker = top5_broker
