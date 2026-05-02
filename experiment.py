@@ -256,6 +256,9 @@ RL_REWARD_HORIZON = 3
 ACTION_HEAD_HOLD_BIAS = 1.5     # exp10: softmax([-1.5,1.5,-1.5]) ≈ [4.7%,90.6%,4.7%]: be even more selective
 
 PRETRAIN_EPOCHS = 1             # exp41: 2→1 — at v7 6yr × 20-sym scale each epoch is ~5h. One epoch is plenty given the increased data.
+# exp67: validate same canonical with N_SEEDS=3 — driver gate compares ci_low against
+# the prior best (set by 3-seed exp51); a 1-seed bootstrap CI is unfair. With the exp66
+# precompute speedup each seed costs ~120s so 3 seeds is affordable (~6min total).
 # exp63: cross-sectional ranking + standardization (research-backed: CIKM 2025, JFDS 2021).
 # Trains the model to predict RELATIVE outperformance vs the universe at each timestep
 # rather than absolute returns. Documented ~3× sharpe lift in published comparisons.
