@@ -319,7 +319,7 @@ HORIZONS_MINUTES = [5, 60, 120, 240, 390, 780, 1170, 1560, 1950, 5460, 11700]
 RL_REWARD_HORIZON = 3
 ACTION_HEAD_HOLD_BIAS = 1.5     # exp10: softmax([-1.5,1.5,-1.5]) ≈ [4.7%,90.6%,4.7%]: be even more selective
 
-PRETRAIN_EPOCHS = 2             # exp87: 1→2 — try more training to break +1.55 sharpe ceiling. ~3-5h fresh pretrain at v7 scale.
+PRETRAIN_EPOCHS = 1             # exp88: REVERT 2→1 — exp87 (2 epochs) regressed sharpe +1.55 → +0.34. Classic overfit: NLL went lower (−10.98 vs −9.5) but seed-2 generalization collapsed to −1.14.
 # exp67: validate same canonical with N_SEEDS=3 — driver gate compares ci_low against
 # the prior best (set by 3-seed exp51); a 1-seed bootstrap CI is unfair. With the exp66
 # precompute speedup each seed costs ~120s so 3 seeds is affordable (~6min total).
