@@ -320,6 +320,9 @@ PRETRAIN_EPOCHS = 1             # exp41: 2→1 — at v7 6yr × 20-sym scale eac
 # exp67: validate same canonical with N_SEEDS=3 — driver gate compares ci_low against
 # the prior best (set by 3-seed exp51); a 1-seed bootstrap CI is unfair. With the exp66
 # precompute speedup each seed costs ~120s so 3 seeds is affordable (~6min total).
+# exp83: fresh pretrain WITH bf16 autocast (exp81 infra) on the reverted 17-feature
+# config. Same seeds as exp71 KEEP but with autocast — should reproduce ~+1.5 sharpe
+# in ~110min instead of exp79's 167min (~33% wall-clock savings).
 # exp76: bump to N_SEEDS=5 to dilute seed-2 drag. exp71-75 (cached pretrain) consistently
 # saw seed 2 produce a single losing trade ($-428 / -0.43 sharpe) that pulled the median
 # below the gate. Adding 2 more seeds should give a more robust median (~+1.5 if the
