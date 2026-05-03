@@ -104,8 +104,6 @@ ALL_FEATURES = [
     "hl_range",
     # Time of day
     "tod_sin", "tod_cos",
-    # exp95: session structure features
-    "session_open_ret", "prev_close_gap", "first30_range",
     # exp11: cross-asset / macro context (forward-filled to each universe bar)
     # exp58: dropped vix_logret_1 (only 27 days of yfinance data)
     "tlt_logret_1",   # 20yr Treasury ETF — interest-rate signal
@@ -214,26 +212,6 @@ def featurize(bars: pd.DataFrame, context: dict[str, pd.DataFrame] | None = None
     tod_sin = np.sin(2 * math.pi * sec / period)
     tod_cos = np.cos(2 * math.pi * sec / period)
 
-    # ---- session structure: open-to-now, overnight gap, first-30m range ----
-    session_day = et.dt.date
-    session_open = df.groupby(session_day, sort=False)["open"].transform("first").to_numpy(np.float64)
-    session_high_so_far = pd.Series(high).groupby(session_day, sort=False).cummax().to_numpy()
-    session_low_so_far = pd.Series(low).groupby(session_day, sort=False).cummin().to_numpy()
-    daily_close = df.groupby(session_day, sort=False)["close"].last()
-    prev_daily_close = daily_close.shift(1)
-    prev_close_by_day = session_day.map(prev_daily_close).astype(float).to_numpy()
-    prev_close_by_day = np.where(np.isfinite(prev_close_by_day), prev_close_by_day, session_open)
-    first30_mask = sec <= 30 * 60
-    first30_high = pd.Series(np.where(first30_mask, high, np.nan)).groupby(session_day, sort=False).cummax()
-    first30_low = pd.Series(np.where(first30_mask, low, np.nan)).groupby(session_day, sort=False).cummin()
-    first30_high = first30_high.groupby(session_day, sort=False).ffill().fillna(pd.Series(session_high_so_far))
-    first30_low = first30_low.groupby(session_day, sort=False).ffill().fillna(pd.Series(session_low_so_far))
-    first30_high = first30_high.to_numpy()
-    first30_low = first30_low.to_numpy()
-    session_open_ret = np.log(close / np.maximum(session_open, 1e-12))
-    prev_close_gap = np.log(session_open / np.maximum(prev_close_by_day, 1e-12))
-    first30_range = (first30_high - first30_low) / np.maximum(session_open, 1e-12)
-
     feat = pd.DataFrame({
         "timestamp": df["timestamp"],
         "close": df["close"].astype(np.float32),
@@ -254,9 +232,6 @@ def featurize(bars: pd.DataFrame, context: dict[str, pd.DataFrame] | None = None
         "hl_range": hl_range.astype(np.float32),
         "tod_sin": tod_sin.astype(np.float32),
         "tod_cos": tod_cos.astype(np.float32),
-        "session_open_ret": session_open_ret.astype(np.float32),
-        "prev_close_gap": prev_close_gap.astype(np.float32),
-        "first30_range": first30_range.astype(np.float32),
     })
 
     # ---- Context features: backward merge_asof (causal) ----
@@ -949,7 +924,7 @@ PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at on
 # MAX_POS_FRACTION_OF_FREE_CASH of free cash.
 # ============================================================================
 MAX_POS_FRACTION_OF_FREE_CASH = 0.50  # exp47: SWAP + cap 0.50. exp46 (SWAP+0.65) gave best sharpe yet (+1.42) but DD -10.85% over floor on seed 1 only. Drop cap from 0.65 to 0.50 to bring worst-seed DD comfortably under -10%.
-MIN_CASH_RESERVE_PCT = 0.15           # exp92: top4 canonical with larger reserve; test if CI improves via lower tail DD
+MIN_CASH_RESERVE_PCT = 0.20           # exp96: after exp95 feature regression, sweep higher cash reserve to reduce top4 tail DD
 MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
 KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effect — cap saturates)
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
