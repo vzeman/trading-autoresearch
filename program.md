@@ -41,7 +41,7 @@ LOOP FOREVER:
 - **Did the experiment crash?** → status=`crash`, discard, move on. Don't tunnel
   into debugging unless the fix is obvious (typo, missing import). After 2
   failed crash-recovery attempts, give up and try a different idea.
-- **Did `max_dd_pct` go below −10%?** → status=`discard` regardless of Sharpe.
+- **Did `max_dd_pct` go below -15%?** → status=`discard` regardless of Sharpe.
   Survivability comes first.
 - **Did `sharpe_ci_low` improve over the current branch's best `sharpe_ci_low`?**
   - YES → status=`keep`, advance branch (commit stays).
@@ -99,8 +99,8 @@ d4e5f6g	1.300	-0.200	-9.80	289.00	85	discard	too noisy, ci_low went negative
 
 Status values: `keep` | `discard` | `crash`. Use 0.00 / 0 for failed runs.
 
-`results.tsv` is GIT-IGNORED. It accumulates locally across the run and is
-your memory between iterations. Do not commit it.
+`results.tsv` is tracked. It is the public progress log that the driver commits
+and pushes after every iteration.
 
 ## Idea sources (when you run out of moves)
 

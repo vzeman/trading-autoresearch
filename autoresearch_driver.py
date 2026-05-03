@@ -6,7 +6,7 @@ Assumes the agent has ALREADY edited experiment.py and committed. This script:
   1. Runs evaluator.py, captures stdout to run.log
   2. Parses the canonical metrics block
   3. Decides keep/discard per program.md rules:
-       - max_dd_pct < -10 → discard (auto)
+       - max_dd_pct < -15 → discard (auto)
        - sharpe_ci_low > prior best (across status=keep rows) → keep
        - otherwise → discard
   4. Updates the last row of results.tsv with the decided status

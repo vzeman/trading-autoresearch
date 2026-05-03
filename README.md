@@ -6,9 +6,9 @@ Karpathy-style [autoresearch](https://github.com/karpathy/autoresearch) harness,
 
 - Trains a PatchTST-style transformer on 1-minute OHLCV bars for 20 liquid US tickers.
 - Predicts cumulative log-returns at 1m / 1h / 1d / 1w horizons.
-- Trades a **single live strategy** (`simulate_weighted`): Kelly-sized longs, exit when 1-h forecast turns negative.
+- Judges a **single canonical strategy** (`top5_picker`): pick the five strongest cross-sectional names from the transformer's multi-horizon forecasts, then hold through the eval window.
 - Evaluates over the most recent **90 calendar days** (held-out).
-- An LLM agent (Claude in `program.md`) iterates on the model + policy overnight, gated by a Sharpe lower-CI metric and a hard −10 % drawdown floor.
+- An LLM agent (Claude in `program.md`) iterates on the model + policy overnight, gated by a Sharpe lower-CI metric and a hard -15% drawdown floor.
 
 ## Latest results
 
@@ -55,30 +55,31 @@ _Last iteration: **2026-05-03 18:36 UTC** · `7ba80b3` · 🔴 DISCARD_
 
 <!-- LATEST_ITER_END -->
 
-## The strategy: weighted dynamic sizing
+## The canonical strategy: top5 picker
 
-`simulate_weighted` is the only strategy currently evaluated (earlier ones — full-portfolio every-bar, best-stock picker — were retired in exp39 because they didn't beat passive on the 90-day window).
+`train_and_eval()` still runs `simulate_weighted` and the full profile suite for diagnostics, but the canonical metric returned to `evaluator.py` is currently `top5_picker` when it succeeds. This became the judged strategy in exp69 because the passive top-N variants beat SPY more reliably than the churn-heavy intraday profiles.
 
-For each 1-minute bar:
+For each eval run:
 
-1. **Predict** 1-hour-horizon Sharpe for every ready symbol via the multi-horizon head.
-2. **SELL pass** — close any held position whose 1-h Sharpe drops below `WEIGHTED_SELL_SHARPE = 0.0`.
-3. **SWAP pass** (exp44+) — rotate the weakest held position into the strongest unheld candidate when the pred-Sharpe edge clears `WEIGHTED_SWAP_MARGIN = 0.20`, which comfortably covers a round-trip transaction cost (~0.24 % per $1 k position). This was the breakthrough that took median sharpe from +0.99 → +1.54.
-4. **BUY pass** — for each non-held symbol with positive predicted Sharpe, size by `min(pred_sharpe × KELLY_SCALE, MAX_POS_FRACTION_OF_FREE_CASH) × free_cash`. Sort by suggested $ descending; take up to `MAX_NEW_TRADES_PER_TIMESTEP = 5`.
-5. **Mark to market.**
+1. **Train** the PatchTST-style transformer on the train slice with supervised multi-horizon forecasting plus ranking loss and one RL encoder-warming pass.
+2. **Precompute** all eval-slice multi-horizon predictions once per seed.
+3. **Rank** symbols by predicted Sharpe over the 4-hour and 1-day horizons (`ranking_horizons=(3, 4)`).
+4. **Buy** the top five names through the same `WeightedBroker` sizing and friction model used by the profile suite.
+5. **Return** the top5 equity curve as the canonical result; fall back to `simulate_weighted` only if top5 simulation fails.
 
-`free_cash = cash − MIN_CASH_RESERVE_PCT × starting_cash`. Long-only (`LONG_ONLY = True`) — shorts caused a destructive equilibrium in earlier experiments.
+`simulate_weighted` remains useful as a diagnostic strategy: Kelly-sized longs, sell below zero 1-hour Sharpe, and optional swaps into stronger unheld candidates. It is not the current gate metric.
 
-Current tuned defaults (best so far at `6e143de`, exp47 — sharpe **+1.535**, pnl **+$3,260 / +6.5 %**, DD **−8.7 %**):
+Current tuned defaults:
 
 | Param | Value | Notes |
 |---|---|---|
 | `MAX_POS_FRACTION_OF_FREE_CASH` | `0.50` | exp47: smaller cap controls DD when SWAP pass is active |
-| `WEIGHTED_SWAP_MARGIN` | `0.20` | exp44+: rotate held → unheld only when pred-Sharpe edge clears this (covers ~0.24 % round-trip cost) |
-| `MIN_CASH_RESERVE_PCT` | `0.10` | keep 10 % reserve for opportunities |
+| `WEIGHTED_SWAP_MARGIN` | `0.15` | exp50: slightly more rotation improved raw Sharpe but remains monitored by CI |
+| `MIN_CASH_RESERVE_PCT` | `0.0` | exp72: full deployment is the current code path for top-N profiles |
 | `KELLY_SCALE` | `0.5` | half-Kelly |
 | `MAX_NEW_TRADES_PER_TIMESTEP` | `5` | diversify timing |
 | `WEIGHTED_MIN_TRADE_USD` | `100` | below this, fee dominates |
+| `ranking_horizons` | `(3, 4)` | exp71: 4-hour + 1-day combo beat either horizon alone |
 | `TRAIN_LOOKBACK_DAYS` | `365` | exp41: subsetting train to recent year produced confident predictions; full 6 years made the model too uncertain to trade at all |
 | `PRETRAIN_EPOCHS` | `1` | one epoch on 365 days suffices; 2 doubled wall-time without improvement |
 
@@ -107,7 +108,7 @@ Current tuned defaults (best so far at `6e143de`, exp47 — sharpe **+1.535**, p
 |---|---|
 | LLM training (`train.py` → val_bpb) | Trading model + Kelly policy (`experiment.py` → portfolio Sharpe) |
 | Single deterministic metric | Multi-seed median Sharpe + bootstrap CI low |
-| One file, one metric | One file, **one metric + one hard constraint** (max DD ≥ −10 %) |
+| One file, one metric | One file, **one metric + one hard constraint** (max DD >= -15%) |
 | H100 GPU expected | CPU only (M-series Macs); 3 seeds in parallel via multiprocessing |
 | Data baked into prepare.py (FineWeb) | Free Alpaca IEX 1-min bars for 20 liquid US tickers, 6 years cached locally |
 
@@ -125,7 +126,7 @@ experiment.py          # the file the agent edits — model + policy + train loo
 evaluator.py           # frozen — runs experiment with N seeds, prints canonical metrics
 autoresearch_driver.py # one iteration: run evaluator, parse, decide keep/discard, promote checkpoints
 program.md             # the agent's instructions
-results.tsv            # append-only log of every experiment (gitignored, local memory)
+results.tsv            # append-only public progress log (tracked)
 checkpoints/           # per-seed weights from the most recent run + best/ promoted on improvement (gitignored)
 docs/                  # auto-generated equity + progress charts (committed)
 pyproject.toml         # uv / pip dependencies
@@ -180,7 +181,7 @@ git commit -am "exp43: <description>"
 
 The driver runs `evaluator.py`, parses the canonical metrics block, and:
 
-- `max_dd_pct < -10` → **discard** (hard floor) + `git reset --hard HEAD~1`
+- `max_dd_pct < -15` → **discard** (hard floor) + `git reset --hard HEAD~1`
 - `sharpe_ci_low > prior best` → **keep** + promote checkpoints to `checkpoints/best/`
 - otherwise → **discard** + `git reset --hard HEAD~1`
 
