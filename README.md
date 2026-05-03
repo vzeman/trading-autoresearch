@@ -6,7 +6,7 @@ Karpathy-style [autoresearch](https://github.com/karpathy/autoresearch) harness,
 
 - Trains a PatchTST-style transformer on 1-minute OHLCV bars for 20 liquid US tickers.
 - Predicts cumulative log-returns at 1m / 1h / 1d / 1w horizons.
-- Judges a **single canonical strategy** (`top5_picker`): pick the five strongest cross-sectional names from the transformer's multi-horizon forecasts, then hold through the eval window.
+- Judges a **single canonical strategy** (`top4_picker`): pick the four strongest cross-sectional names from the transformer's multi-horizon forecasts, then hold through the eval window.
 - Evaluates over the most recent **90 calendar days** (held-out).
 - An LLM agent (Claude in `program.md`) iterates on the model + policy overnight, gated by a Sharpe lower-CI metric and a hard -15% drawdown floor.
 
@@ -55,17 +55,17 @@ _Last iteration: **2026-05-03 20:19 UTC** · `074e0ba` · 🟢 KEEP — new best
 
 <!-- LATEST_ITER_END -->
 
-## The canonical strategy: top5 picker
+## The canonical strategy: top4 picker
 
-`train_and_eval()` still runs `simulate_weighted` and the full profile suite for diagnostics, but the canonical metric returned to `evaluator.py` is currently `top5_picker` when it succeeds. This became the judged strategy in exp69 because the passive top-N variants beat SPY more reliably than the churn-heavy intraday profiles.
+`train_and_eval()` still runs `simulate_weighted` and the full profile suite for diagnostics, but the canonical metric returned to `evaluator.py` is currently `top4_picker` when it succeeds. The top-N family became the judged strategy in exp69 because the passive variants beat SPY more reliably than the churn-heavy intraday profiles; exp89 moved the gate from top5 to top4.
 
 For each eval run:
 
 1. **Train** the PatchTST-style transformer on the train slice with supervised multi-horizon forecasting plus ranking loss and one RL encoder-warming pass.
 2. **Precompute** all eval-slice multi-horizon predictions once per seed.
 3. **Rank** symbols by predicted Sharpe over the 4-hour and 1-day horizons (`ranking_horizons=(3, 4)`).
-4. **Buy** the top five names through the same `WeightedBroker` sizing and friction model used by the profile suite.
-5. **Return** the top5 equity curve as the canonical result; fall back to `simulate_weighted` only if top5 simulation fails.
+4. **Buy** the top four names through the same `WeightedBroker` sizing and friction model used by the profile suite.
+5. **Return** the top4 equity curve as the canonical result; fall back to `simulate_weighted` only if top4 simulation fails.
 
 `simulate_weighted` remains useful as a diagnostic strategy: Kelly-sized longs, sell below zero 1-hour Sharpe, and optional swaps into stronger unheld candidates. It is not the current gate metric.
 
