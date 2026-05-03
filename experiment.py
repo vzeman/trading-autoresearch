@@ -930,7 +930,7 @@ KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effec
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
 WEIGHTED_MIN_TRADE_USD = 100.0        # too small → fee dominates
 WEIGHTED_SWAP_MARGIN = 0.15           # exp50: keep 0.15
-TOPN_RV_Z_PENALTY = 0.25              # exp93: penalize high current realized vol in top-N ranking
+TOPN_RV_Z_PENALTY = 0.05              # exp94: weaker vol penalty; exp93 0.25 overwhelmed model score
 # exp58: realistic transaction friction (re-applied — was reset by exp57 discard)
 VOLUME_IMPACT_BPS_PER_PCT = 50.0      # extra slippage per 1% of bar's $-volume our order represents
 VOLUME_IMPACT_MAX_BPS = 200.0         # cap extra slippage at 2%
