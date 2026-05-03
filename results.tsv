@@ -88,3 +88,4 @@ aa351d6	1.5333	-0.4281	-11.12	5945.61	2	keep	exp90: restore 10pct cash reserve f
 ea5f1f4	1.5345	-0.4230	-10.50	5615.13	2	keep	exp92: top4 with 15pct cash reserve
 d26b39f	0.0000	-1.9872	-4.97	0.00	1	discard	exp93: volatility penalized topN ranking
 224c9d4	-1.9549	-4.2342	-9.36	-3850.08	2	discard	exp94: weaker volatility rank penalty
+58e777f	-1.5353	-3.7349	-14.77	-3961.44	3	discard	exp95: add causal session structure features
