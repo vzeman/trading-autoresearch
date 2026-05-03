@@ -82,3 +82,4 @@ fd14569	1.5381	-1.0135	-9.88	5294.50	3	discard	exp84: fp32 default (post-bf16 fa
 cfef6a0	0.4120	-1.9547	-14.58	815.46	4	discard	exp86: ranking_horizons=(3,) — single 4h horizon
 e7c037c	0.3371	-2.3827	-11.81	759.68	4	discard	exp87: PRETRAIN_EPOCHS=2 + ranking (3,4) — break +1.55 ceiling
 7ba80b3	1.5381	-1.0135	-9.88	5294.50	3	discard	exp88: REVERT 2 epochs → 1 epoch (exp87 overfit), restored exp71 weights
+334c3b0	1.5310	-0.4380	-12.35	6606.57	2	keep	exp89: canonical top4 picker between top3 and top5

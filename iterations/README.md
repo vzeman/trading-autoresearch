@@ -4,6 +4,21 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
+| 🟢 | [iter 089 — 334c3b0](iter_089_334c3b0.md) | exp89: canonical top4 picker between top3 and top5 | **+1.531** | **$+6606.57** (+13.213%) |
+| 🔴 | [iter 088 — 7ba80b3](iter_088_7ba80b3.md) | exp88: REVERT 2 epochs → 1 epoch (exp87 overfit), restored exp71 weights | **+1.538** | **$+5294.50** (+10.589%) |
+| 🔴 | [iter 087 — e7c037c](iter_087_e7c037c.md) | exp87: PRETRAIN_EPOCHS=2 + ranking (3,4) — break +1.55 ceiling | **+0.337** | **$+759.68** (+1.519%) |
+| 🔴 | [iter 086 — cfef6a0](iter_086_cfef6a0.md) | exp86: ranking_horizons=(3,) — single 4h horizon | **+0.412** | **$+815.46** (+1.631%) |
+| 🔴 | [iter 085 — 139bd9d](iter_085_139bd9d.md) | exp85: ranking_horizons=(4,) — single 1-day horizon | **+0.847** | **$+1875.58** (+3.751%) |
+| 🔴 | [iter 084 — fd14569](iter_084_fd14569.md) | exp84: fp32 default (post-bf16 failure) — quick cached-pretrain sanity check | **+1.538** | **$+5294.50** (+10.589%) |
+| 🔴 | [iter 082 — ad6b9de](iter_082_ad6b9de.md) | exp82: REVERT exp79 universe features (restore exp71 baseline + new infra) | **+1.538** | **$+5294.50** (+10.589%) |
+| 🔴 | [iter 079 — 60a689e](iter_079_60a689e.md) | exp79: universe-context features (cross-sectional aggregates) — fresh pretrain | **+0.055** | **$-26.61** (-0.053%) |
+| 🔴 | [iter 078 — e50ee1b](iter_078_e50ee1b.md) | exp78: revert canonical to top5 (exp77 hit DD floor with top3 + full deployment) | **+1.538** | **$+5294.50** (+10.589%) |
+| 🔴 | [iter 077 — 6655f5e](iter_077_6655f5e.md) | exp77: SWITCH CANONICAL top5 → top3 (5-seed proves top3 dominates +2.288) | **+1.301** | **$+2843.54** (+5.687%) |
+| 🔴 | [iter 076 — 47ba680](iter_076_47ba680.md) | exp76: N_SEEDS=5 (dilute seed-2 drag for cleaner CI) | **+1.538** | **$+5294.50** (+10.589%) |
+| 🔴 | [iter 075 — 4d02b79](iter_075_4d02b79.md) | exp75: SPY benchmark — fee headroom so buy isn't rejected | **+1.538** | **$+5294.50** (+10.589%) |
+| 🔴 | [iter 074 — a3228fc](iter_074_a3228fc.md) | exp74: fix SPY benchmark — bar_dollar_volume=0.0 not None | **+1.538** | **$+5294.50** (+10.589%) |
+| 🔴 | [iter 073 — 081c441](iter_073_081c441.md) | exp73: spy_buyhold bypasses liquidity gate (fix exp72 broken benchmark) | **+1.538** | **$+5294.50** (+10.589%) |
+| 🔴 | [iter 072 — 0f45fb6](iter_072_0f45fb6.md) | exp72: deploy full portfolio (MIN_CASH_RESERVE_PCT 0.10 → 0) | **+1.538** | **$+5294.50** (+10.589%) |
 | 🟢 | [iter 071 — beaa5e6](iter_071_beaa5e6.md) | exp71: top5 ranking horizons (4,8,10)→(3,4) — shorter, less noisy | **+1.549** | **$+4797.33** (+9.595%) |
 | 🟢 | [iter 070 — fa4ab20](iter_070_fa4ab20.md) | exp70: concentration sweep — add top1/top3 to profile suite | **+1.295** | **$+2944.08** (+5.888%) |
 | 🟢 | [iter 069 — 4ec6ecb](iter_069_4ec6ecb.md) | exp69: canonical = top5_picker (exp68 proved it beats SPY across seeds) | **+1.295** | **$+2944.08** (+5.888%) |
