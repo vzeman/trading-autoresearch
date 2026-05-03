@@ -584,9 +584,21 @@ def supervised_pretrain(model: PatchTransformer, train_features: dict[str, pd.Da
         return
     opt = torch.optim.AdamW(model.parameters(), lr=PRETRAIN_LR, weight_decay=1e-4)
     model.train()
+    # exp80: live training-loss log so we can chart loss falling during long pretrains
+    # without waiting for subprocess stdout to flush. Append-only JSONL, one row per
+    # batch print (every TRAIN_LOG_EVERY batches). Cleared at the start of each pretrain.
+    import json as _json
+    seed = int(np.random.get_state()[1][0]) % 100000   # rough seed identifier
+    train_log_path = CHECKPOINT_DIR / f"last_train_loss.jsonl"
+    try:
+        train_log_path.write_text("")  # truncate at start
+    except Exception:
+        pass
+    TRAIN_LOG_EVERY = max(1, n // (PRETRAIN_BATCH * 50))   # ~50 points per epoch
     for ep in range(PRETRAIN_EPOCHS):
         perm = np.random.permutation(n)
         losses, losses_mh, losses_rank = [], [], []
+        batch_idx_print = 0
         for i in range(0, n - SGD_BATCH, PRETRAIN_BATCH):
             batch_idxs = perm[i : i + PRETRAIN_BATCH]
             X_np, y_np, y_mh_np = ds.get_batch(batch_idxs)
@@ -647,6 +659,26 @@ def supervised_pretrain(model: PatchTransformer, train_features: dict[str, pd.Da
             torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
             opt.step()
             losses.append(loss.item())
+            # exp80: live JSONL log every TRAIN_LOG_EVERY batches so charts can be
+            # built mid-pretrain (durable on disk, not subprocess stdout).
+            batch_idx_print += 1
+            if batch_idx_print % TRAIN_LOG_EVERY == 0:
+                try:
+                    row = {
+                        "epoch": ep + 1,
+                        "batch": batch_idx_print,
+                        "frac_through": float(i / max(1, n - SGD_BATCH)),
+                        "nll": float(loss.item()),
+                        "nll_running_mean": float(np.mean(losses[-100:])),
+                    }
+                    if losses_mh:
+                        row["mh_nll"] = float(np.mean(losses_mh[-100:]))
+                    if losses_rank:
+                        row["rank"] = float(np.mean(losses_rank[-100:]))
+                    with open(train_log_path, "a") as _fh:
+                        _fh.write(_json.dumps(row) + "\n")
+                except Exception:
+                    pass
         if losses:
             extra = f"  mh_nll={np.mean(losses_mh):.4f}" if losses_mh else ""
             extra += f"  rank={np.mean(losses_rank):.4f}" if losses_rank else ""
