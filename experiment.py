@@ -1772,21 +1772,23 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp69: USE TOP-5 PICKER AS CANONICAL — exp68 multi-seed showed top5 is the
-    # actual best (sharpe +1.295 vs top20 +1.037 vs SPY +1.007), beating SPY on
-    # every seed. Concentration matters: 5 high-conviction picks > 20 diluted picks.
+    # exp77: SWITCH CANONICAL top5 → top3. exp76 (5 seeds) revealed top3 dominates:
+    #   top3_picker: sharpe +2.288  pnl +$13,589 (+27.18%)  ← median across 5 seeds
+    #   top5_picker: sharpe +1.455  pnl +$5,294  (+10.59%)
+    #   spy_buyhold: sharpe +1.011  pnl +$2,017  (+4.04%)
+    # With full deployment + shorter ranking horizons + 3-stock concentration,
+    # the picker has produced its strongest signal. Switching canonical so the
+    # driver judges what's actually winning.
     canonical_broker = weighted
     try:
-        # exp71: try shorter ranking horizons (4h+1d) instead of default (1d+5d+30d).
-        # Hypothesis: shorter-horizon predictions are less noise-compounded.
-        top5_broker = simulate_passive_topn(model, eval_feat, device, top_n=5, name="top5",
+        top3_broker = simulate_passive_topn(model, eval_feat, device, top_n=3, name="top3",
                                             ranking_horizons=(3, 4),
                                             precomputed_preds=pred_cache)
-        if top5_broker.equity_curve and len(top5_broker.equity_curve) > 5:
-            canonical_broker = top5_broker
-            print(f"[experiment] canonical = top5_picker (final equity ${top5_broker.equity_curve[-1][1]:,.2f})", flush=True)
+        if top3_broker.equity_curve and len(top3_broker.equity_curve) > 5:
+            canonical_broker = top3_broker
+            print(f"[experiment] canonical = top3_picker (final equity ${top3_broker.equity_curve[-1][1]:,.2f})", flush=True)
     except Exception as e:
-        print(f"[experiment] top5 canonical failed ({e}); falling back to weighted", flush=True)
+        print(f"[experiment] top3 canonical failed ({e}); falling back to weighted", flush=True)
     return (
         canonical_broker.equity_curve, canonical_broker.n_trades,
         canonical_broker.total_fees, 0.0,
