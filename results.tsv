@@ -80,3 +80,4 @@ ad6b9de	1.5381	-1.0135	-9.88	5294.50	3	discard	exp82: REVERT exp79 universe feat
 fd14569	1.5381	-1.0135	-9.88	5294.50	3	discard	exp84: fp32 default (post-bf16 failure) — quick cached-pretrain sanity check
 139bd9d	0.8470	-1.9298	-11.82	1875.58	4	discard	exp85: ranking_horizons=(4,) — single 1-day horizon
 cfef6a0	0.4120	-1.9547	-14.58	815.46	4	discard	exp86: ranking_horizons=(3,) — single 4h horizon
+e7c037c	0.3371	-2.3827	-11.81	759.68	4	discard	exp87: PRETRAIN_EPOCHS=2 + ranking (3,4) — break +1.55 ceiling
