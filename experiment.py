@@ -319,7 +319,7 @@ HORIZONS_MINUTES = [5, 60, 120, 240, 390, 780, 1170, 1560, 1950, 5460, 11700]
 RL_REWARD_HORIZON = 3
 ACTION_HEAD_HOLD_BIAS = 1.5     # exp10: softmax([-1.5,1.5,-1.5]) ≈ [4.7%,90.6%,4.7%]: be even more selective
 
-PRETRAIN_EPOCHS = 1             # exp41: 2→1 — at v7 6yr × 20-sym scale each epoch is ~5h. One epoch is plenty given the increased data.
+PRETRAIN_EPOCHS = 2             # exp87: 1→2 — try more training to break +1.55 sharpe ceiling. ~3-5h fresh pretrain at v7 scale.
 # exp67: validate same canonical with N_SEEDS=3 — driver gate compares ci_low against
 # the prior best (set by 3-seed exp51); a 1-seed bootstrap CI is unfair. With the exp66
 # precompute speedup each seed costs ~120s so 3 seeds is affordable (~6min total).
@@ -1953,11 +1953,11 @@ def train_and_eval(seed: int = 0) -> tuple:
     # artefact, not a real per-seed median.
     canonical_broker = weighted
     try:
-        # exp86: single 4h horizon (was (4h+1d) combo or (1d) alone).
-        # exp85 showed (1d) alone regressed; try (4h) alone — maybe the SHORTER
-        # of the two horizons does the heavy lifting and the 1d adds noise.
+        # exp87: REVERT to (3,4) = 4h + 1d combo. Both single-horizon variants
+        # (exp85=(4,) and exp86=(3,)) regressed materially. The combo is the
+        # local optimum.
         top5_broker = simulate_passive_topn(model, eval_feat, device, top_n=5, name="top5",
-                                            ranking_horizons=(3,),
+                                            ranking_horizons=(3, 4),
                                             precomputed_preds=pred_cache)
         if top5_broker.equity_curve and len(top5_broker.equity_curve) > 5:
             canonical_broker = top5_broker
