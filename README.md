@@ -16,24 +16,34 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 090 — aa351d6
+_Last iteration: **2026-05-03 20:33 UTC** · `aa351d6` · 🟢 KEEP — new best_  
+📄 **[Full iteration report → iterations/iter_090_aa351d6.md](iterations/iter_090_aa351d6.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-03 20:27 UTC** · `aa351d6` · status: **RUNNING**_
+### Latest iteration: iter 090 — aa351d6
 
-**exp90: restore 10pct cash reserve for top4**
-
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
-
-### Current best (`334c3b0`)
+🟢 KEEP — new best · exp90: restore 10pct cash reserve for top4
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **+1.531** |
-| Sharpe CI low (5%) | -0.438 |
-| Net PnL | **$+6606.57** (+13.213%) |
-| Max drawdown | -12.35% |
+| Sharpe (median) | **+1.533** |
+| Sharpe CI low (5%) | -0.428 |
+| Net PnL | **$+5945.61** (+11.891%) |
+| Max drawdown | -11.12% |
 | Trades | 2 |
-| Saved at | 2026-05-03 20:19:19 |
+| Wall time | 373.2s |
+
+![iteration equity](docs/weighted_aa351d6.png)
+
+### Current best (`aa351d6`)
+
+| metric | value |
+|---|---|
+| Sharpe (median) | **+1.533** |
+| Sharpe CI low (5%) | -0.428 |
+| Net PnL | **$+5945.61** (+11.891%) |
+| Max drawdown | -11.12% |
+| Trades | 2 |
+| Saved at | 2026-05-03 20:33:51 |
 
 ![weighted equity, current best](docs/weighted_latest.png)
 
@@ -227,8 +237,8 @@ MIT — copy, fork, modify, anything.
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-05-03 18:19 UTC_  
-_Total experiments: **84**  ·  kept: **21**  ·  latest commit: `074e0ba`_
+_Last updated: 2026-05-03 18:33 UTC_  
+_Total experiments: **85**  ·  kept: **22**  ·  latest commit: `aa351d6`_
 
 ### Weighted strategy — full eval window (~73 days)
 
@@ -242,7 +252,7 @@ _Total experiments: **84**  ·  kept: **21**  ·  latest commit: `074e0ba`_
 
 | Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees | % time > SPY |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+1.531** 🏆 | **$+6,606.57** 🏆 | +13.213% | -12.35% | 2 | $2.00 | **18%** 🏆 |
+| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+1.533** 🏆 | **$+5,945.61** 🏆 | +11.891% | -11.12% | 2 | $2.00 | **24%** 🏆 |
 | **SP500 (SPY) buy-and-hold** — passive benchmark | +1.011 | $+2,017.61 | +4.035% | **-9.73%** 🏆 | 1 | **$1.00** 🏆 | 0% |
 
 **Best by Sharpe:** Weighted (Kelly-sized, max 20% free cash, ≤5/step)
@@ -251,12 +261,12 @@ _Total experiments: **84**  ·  kept: **21**  ·  latest commit: `074e0ba`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+1.531** |
-| Net PnL | $+6,606.57 (+13.213%) |
-| Max drawdown | -12.35% |
+| Sharpe (median over seeds) | **+1.533** |
+| Net PnL | $+5,945.61 (+11.891%) |
+| Max drawdown | -11.12% |
 | Trades | 2 |
-| % time above SPY | 18% |
-| Wall time | 374.4s |
+| % time above SPY | 24% |
+| Wall time | 373.2s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
@@ -268,9 +278,9 @@ _Total experiments: **84**  ·  kept: **21**  ·  latest commit: `074e0ba`_
 | # | commit | Sharpe | CI-low | DD% | PnL | Trades | Description |
 |---|---|---:|---:|---:|---:|---:|---|
 | 1 | `d38cd93` | +0.00 | +0.00 | -1.34 | $+0.00 | 0 | exp26 KEEP: LONG_ONLY=True. Per-seed: 1/3 keeps profitable +$194, 2/3 don't trade ($0 vs v5's -$220 each). Mean pnl +$65 (vs v5's -$82). Killed catastrophic SELL-dominant equilibrium. Still loses to passive but no longer to v5. |
-| 2 | `beaa5e6` | +1.55 | -1.01 | -8.86 | $+4,797.33 | 3 | exp71: top5 ranking horizons (4,8,10)→(3,4) — shorter, less noisy |
-| 3 | `963abee` | +1.29 | -1.17 | -8.86 | $+2,944.08 | 4 | exp69: canonical = top5_picker (exp68 proved it beats SPY across seeds) |
-| 4 | `a499ccd` | +1.29 | -1.17 | -8.86 | $+2,944.08 | 4 | exp70: concentration sweep — add top1/top3 to profile suite |
-| 5 | `2f8bd0b` | +1.63 | -1.35 | -9.87 | $+3,597.60 | 46 | exp51: SPY-alpha reward (coef=0.5) |
+| 2 | `074e0ba` | +1.53 | -0.44 | -12.35 | $+6,606.57 | 2 | exp89: canonical top4 picker between top3 and top5 |
+| 3 | `beaa5e6` | +1.55 | -1.01 | -8.86 | $+4,797.33 | 3 | exp71: top5 ranking horizons (4,8,10)→(3,4) — shorter, less noisy |
+| 4 | `963abee` | +1.29 | -1.17 | -8.86 | $+2,944.08 | 4 | exp69: canonical = top5_picker (exp68 proved it beats SPY across seeds) |
+| 5 | `a499ccd` | +1.29 | -1.17 | -8.86 | $+2,944.08 | 4 | exp70: concentration sweep — add top1/top3 to profile suite |
 
 <!-- RESULTS_END -->
