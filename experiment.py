@@ -924,13 +924,12 @@ PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at on
 # MAX_POS_FRACTION_OF_FREE_CASH of free cash.
 # ============================================================================
 MAX_POS_FRACTION_OF_FREE_CASH = 0.50  # exp47: SWAP + cap 0.50. exp46 (SWAP+0.65) gave best sharpe yet (+1.42) but DD -10.85% over floor on seed 1 only. Drop cap from 0.65 to 0.50 to bring worst-seed DD comfortably under -10%.
-MIN_CASH_RESERVE_PCT = 0.2875         # exp106: restore best reserve and test positive-score topN entry filter
+MIN_CASH_RESERVE_PCT = 0.2875         # exp107: keep best reserve while testing canonical top3 concentration
 MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
 KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effect — cap saturates)
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
 WEIGHTED_MIN_TRADE_USD = 100.0        # too small → fee dominates
 WEIGHTED_SWAP_MARGIN = 0.15           # exp50: keep 0.15
-TOPN_MIN_SCORE = 0.0                  # exp106: avoid buying names with non-positive multi-horizon rank score
 # exp58: realistic transaction friction (re-applied — was reset by exp57 discard)
 VOLUME_IMPACT_BPS_PER_PCT = 50.0      # extra slippage per 1% of bar's $-volume our order represents
 VOLUME_IMPACT_MAX_BPS = 200.0         # cap extra slippage at 2%
@@ -1586,7 +1585,7 @@ def simulate_passive_topn(
                         else:
                             scores = [0.0] * len(ready)
                     model.train()
-                ranked = sorted((r for r in zip(ready, scores) if r[1] > TOPN_MIN_SCORE), key=lambda r: -r[1])
+                ranked = sorted(zip(ready, scores), key=lambda r: -r[1])
                 top = ranked[:top_n]
                 if top:
                     per_pos = broker.free_cash() / len(top)
@@ -1947,20 +1946,20 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp106: keep canonical top4 and require positive multi-horizon score.
+    # exp107: test canonical top3 concentration at the best reserve setting.
     canonical_broker = weighted
     try:
         # exp87: REVERT to (3,4) = 4h + 1d combo. Both single-horizon variants
         # (exp85=(4,) and exp86=(3,)) regressed materially. The combo is the
         # local optimum.
-        topn_broker = simulate_passive_topn(model, eval_feat, device, top_n=4, name="top4",
+        topn_broker = simulate_passive_topn(model, eval_feat, device, top_n=3, name="top3",
                                             ranking_horizons=(3, 4),
                                             precomputed_preds=pred_cache)
         if topn_broker.equity_curve and len(topn_broker.equity_curve) > 5:
             canonical_broker = topn_broker
-            print(f"[experiment] canonical = top4_picker (final equity ${topn_broker.equity_curve[-1][1]:,.2f})", flush=True)
+            print(f"[experiment] canonical = top3_picker (final equity ${topn_broker.equity_curve[-1][1]:,.2f})", flush=True)
     except Exception as e:
-        print(f"[experiment] top4 canonical failed ({e}); falling back to weighted", flush=True)
+        print(f"[experiment] top3 canonical failed ({e}); falling back to weighted", flush=True)
     return (
         canonical_broker.equity_curve, canonical_broker.n_trades,
         canonical_broker.total_fees, 0.0,
