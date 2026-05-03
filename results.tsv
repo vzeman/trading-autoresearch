@@ -79,3 +79,4 @@ e50ee1b	1.5381	-1.0135	-13.75	5294.50	3	discard	exp78: revert canonical to top5 
 ad6b9de	1.5381	-1.0135	-9.88	5294.50	3	discard	exp82: REVERT exp79 universe features (restore exp71 baseline + new infra)
 fd14569	1.5381	-1.0135	-9.88	5294.50	3	discard	exp84: fp32 default (post-bf16 failure) — quick cached-pretrain sanity check
 139bd9d	0.8470	-1.9298	-11.82	1875.58	4	discard	exp85: ranking_horizons=(4,) — single 1-day horizon
+cfef6a0	0.4120	-1.9547	-14.58	815.46	4	discard	exp86: ranking_horizons=(3,) — single 4h horizon
