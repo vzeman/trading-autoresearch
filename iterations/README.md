@@ -4,6 +4,10 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
+| 🟢 | [iter 096 — be9d0b9](iter_096_be9d0b9.md) | exp96: top4 with 20pct cash reserve | **+1.538** | **$+5294.50** (+10.589%) |
+| 🔴 | [iter 095 — 58e777f](iter_095_58e777f.md) | exp95: add causal session structure features | **-1.535** | **$-3961.44** (-7.923%) |
+| 🔴 | [iter 094 — 224c9d4](iter_094_224c9d4.md) | exp94: weaker volatility rank penalty | **-1.955** | **$-3850.08** (-7.700%) |
+| 🔴 | [iter 093 — d26b39f](iter_093_d26b39f.md) | exp93: volatility penalized topN ranking | **+0.000** | **$+0.00** (+0.000%) |
 | 🟢 | [iter 092 — ea5f1f4](iter_092_ea5f1f4.md) | exp92: top4 with 15pct cash reserve | **+1.534** | **$+5615.13** (+11.230%) |
 | 🔴 | [iter 091 — 5e514f7](iter_091_5e514f7.md) | exp91: canonical top3 with 10pct reserve | **+0.000** | **$+0.00** (+0.000%) |
 | 🟢 | [iter 090 — aa351d6](iter_090_aa351d6.md) | exp90: restore 10pct cash reserve for top4 | **+1.533** | **$+5945.61** (+11.891%) |
