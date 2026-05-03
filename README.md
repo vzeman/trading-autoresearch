@@ -16,13 +16,23 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 104 — e206a1b
+_Last iteration: **2026-05-04 01:23 UTC** · `e206a1b` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_104_e206a1b.md](iterations/iter_104_e206a1b.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-04 01:17 UTC** · `e206a1b` · status: **RUNNING**_
+### Latest iteration: iter 104 — e206a1b
 
-**exp104: top4 with 28.90625pct cash reserve**
+🔴 DISCARD · exp104: top4 with 28.90625pct cash reserve
 
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
+| metric | value |
+|---|---|
+| Sharpe (median) | **+1.550** |
+| Sharpe CI low (5%) | -1.012 |
+| Net PnL | **$+4740.56** (+9.481%) |
+| Max drawdown | -8.75% |
+| Trades | 2 |
+| Wall time | 364.7s |
+
+![iteration equity](docs/weighted_e206a1b.png)
 
 ### Current best (`e360b24`)
 
