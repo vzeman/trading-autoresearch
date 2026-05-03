@@ -4,6 +4,8 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
+| 🟢 | [iter 092 — ea5f1f4](iter_092_ea5f1f4.md) | exp92: top4 with 15pct cash reserve | **+1.534** | **$+5615.13** (+11.230%) |
+| 🔴 | [iter 091 — 5e514f7](iter_091_5e514f7.md) | exp91: canonical top3 with 10pct reserve | **+0.000** | **$+0.00** (+0.000%) |
 | 🟢 | [iter 090 — aa351d6](iter_090_aa351d6.md) | exp90: restore 10pct cash reserve for top4 | **+1.533** | **$+5945.61** (+11.891%) |
 | 🟢 | [iter 089 — 074e0ba](iter_089_074e0ba.md) | exp89: canonical top4 picker between top3 and top5 | **+1.531** | **$+6606.57** (+13.213%) |
 | 🔴 | [iter 088 — 7ba80b3](iter_088_7ba80b3.md) | exp88: REVERT 2 epochs → 1 epoch (exp87 overfit), restored exp71 weights | **+1.538** | **$+5294.50** (+10.589%) |
