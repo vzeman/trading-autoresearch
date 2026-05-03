@@ -1946,21 +1946,20 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp92: return to canonical top4 after exp91 top3 failed the trade-activity
-    # gate; pair it with a 15% reserve to test if lower tail DD improves CI.
+    # exp97: test canonical top5 at 20% reserve after exp96 improved top4 tail CI.
     canonical_broker = weighted
     try:
         # exp87: REVERT to (3,4) = 4h + 1d combo. Both single-horizon variants
         # (exp85=(4,) and exp86=(3,)) regressed materially. The combo is the
         # local optimum.
-        topn_broker = simulate_passive_topn(model, eval_feat, device, top_n=4, name="top4",
+        topn_broker = simulate_passive_topn(model, eval_feat, device, top_n=5, name="top5",
                                             ranking_horizons=(3, 4),
                                             precomputed_preds=pred_cache)
         if topn_broker.equity_curve and len(topn_broker.equity_curve) > 5:
             canonical_broker = topn_broker
-            print(f"[experiment] canonical = top4_picker (final equity ${topn_broker.equity_curve[-1][1]:,.2f})", flush=True)
+            print(f"[experiment] canonical = top5_picker (final equity ${topn_broker.equity_curve[-1][1]:,.2f})", flush=True)
     except Exception as e:
-        print(f"[experiment] top4 canonical failed ({e}); falling back to weighted", flush=True)
+        print(f"[experiment] top5 canonical failed ({e}); falling back to weighted", flush=True)
     return (
         canonical_broker.equity_curve, canonical_broker.n_trades,
         canonical_broker.total_fees, 0.0,
