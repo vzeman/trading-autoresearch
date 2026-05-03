@@ -93,3 +93,4 @@ be9d0b9	1.5381	-0.4156	-9.88	5294.50	2	keep	exp96: top4 with 20pct cash reserve
 d833f53	1.0557	-1.5397	-11.20	3155.91	3	discard	exp97: canonical top5 with 20pct reserve
 14809c9	1.5448	-0.4054	-9.24	4984.60	2	keep	exp98: top4 with 25pct cash reserve
 6f01b87	1.5516	-1.0114	-8.61	4671.92	2	discard	exp99: top4 with 30pct cash reserve
+573f243	1.5482	-0.4002	-8.92	4828.61	2	keep	exp100: top4 with 27.5pct cash reserve
