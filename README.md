@@ -16,23 +16,13 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-03 07:29 UTC** · `ad6b9de` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_082_ad6b9de.md](iterations/iter_082_ad6b9de.md)** · 📁 [all iterations](iterations/)
+### 🟡 LIVE — iter 083 — 591f054
 
-### Latest iteration: iter 082 — ad6b9de
+_Started **2026-05-03 08:25 UTC** · `591f054` · status: **RUNNING**_
 
-🔴 DISCARD · exp82: REVERT exp79 universe features (restore exp71 baseline + new infra)
+**exp83: bf16 fresh pretrain (measure speedup vs exp79's 167min)**
 
-| metric | value |
-|---|---|
-| Sharpe (median) | **+1.538** |
-| Sharpe CI low (5%) | -1.014 |
-| Net PnL | **$+5294.50** (+10.589%) |
-| Max drawdown | -9.88% |
-| Trades | 3 |
-| Wall time | 578.1s |
-
-![iteration equity](docs/weighted_ad6b9de.png)
+Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
 
 ### Current best (`beaa5e6`)
 
