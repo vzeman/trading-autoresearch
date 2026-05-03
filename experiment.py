@@ -103,6 +103,11 @@ ALL_FEATURES = [
     "tlt_logret_1",   # 20yr Treasury ETF — interest-rate signal
     "uup_logret_1",   # USD-index ETF (DXY proxy) — currency macro
     "spy_logret_1",   # SPY return as a market factor (for SPY itself this == log_return_1)
+    # exp79: universe-aggregate context — per-timestep cross-sectional stats merged
+    # back onto each symbol's frame. Helps model see market regime + dispersion.
+    "univ_mean_logret_1",   # mean log_return_1 across the universe at this bar
+    "univ_disp_logret_1",   # std of log_return_1 across the universe (dispersion)
+    "univ_pct_above_ma60",  # % of symbols whose close > 60-bar EMA (breadth)
 ]
 
 USE_FEATURES = [f for f in ALL_FEATURES if f not in {"signed_log_vol", "vol_z_15"}]   # exp4 + exp11: drop 2 noisy + add 4 context
@@ -235,7 +240,61 @@ def featurize(bars: pd.DataFrame, context: dict[str, pd.DataFrame] | None = None
             feat[feat_name] = merged["logret"].fillna(0.0).astype(np.float32).to_numpy()
         else:
             feat[feat_name] = np.zeros(len(feat), dtype=np.float32)
+    # exp79: stub-init the universe-context columns; populated by add_universe_context()
+    # after all symbols have been featurized. Keeps featurize() signature unchanged.
+    feat["univ_mean_logret_1"] = np.zeros(len(feat), dtype=np.float32)
+    feat["univ_disp_logret_1"] = np.zeros(len(feat), dtype=np.float32)
+    feat["univ_pct_above_ma60"] = np.zeros(len(feat), dtype=np.float32)
     return feat
+
+
+def add_universe_context(features: dict[str, pd.DataFrame]) -> None:
+    """exp79: compute per-timestep universe aggregates and merge into each symbol's
+    frame in-place. Strictly causal (no future leakage) — uses only the same-timestamp
+    log_return_1 and ema_dev_60 values that already exist in each symbol's frame.
+    """
+    if not features:
+        return
+    rets_by_ts: dict = {}
+    above_by_ts: dict = {}
+    for sym, f in features.items():
+        ts_arr = f["timestamp"].to_numpy()
+        ret_arr = f["log_return_1"].to_numpy(np.float32)
+        ema_dev_arr = f["ema_dev_60"].to_numpy(np.float32)
+        for i in range(len(ts_arr)):
+            ts = ts_arr[i]
+            r = float(ret_arr[i])
+            if not np.isfinite(r):
+                continue
+            rets_by_ts.setdefault(ts, []).append(r)
+            cnt, tot = above_by_ts.get(ts, (0, 0))
+            above_by_ts[ts] = (cnt + (1 if ema_dev_arr[i] > 0 else 0), tot + 1)
+    if not rets_by_ts:
+        return
+    sorted_ts = sorted(rets_by_ts.keys())
+    means_arr = np.zeros(len(sorted_ts), dtype=np.float32)
+    disp_arr = np.zeros(len(sorted_ts), dtype=np.float32)
+    breadth_arr = np.zeros(len(sorted_ts), dtype=np.float32)
+    for i, ts in enumerate(sorted_ts):
+        rets = np.array(rets_by_ts[ts], dtype=np.float32)
+        means_arr[i] = float(rets.mean())
+        disp_arr[i] = float(rets.std()) if len(rets) > 1 else 0.0
+        cnt, tot = above_by_ts[ts]
+        breadth_arr[i] = float(cnt / max(tot, 1))
+    ctx = pd.DataFrame({
+        "timestamp": sorted_ts,
+        "univ_mean_logret_1": means_arr,
+        "univ_disp_logret_1": disp_arr,
+        "univ_pct_above_ma60": breadth_arr,
+    })
+    for sym, f in features.items():
+        merged = pd.merge_asof(
+            f[["timestamp"]].sort_values("timestamp").reset_index(drop=True),
+            ctx, on="timestamp", direction="backward",
+        )
+        f["univ_mean_logret_1"] = merged["univ_mean_logret_1"].fillna(0.0).astype(np.float32).to_numpy()
+        f["univ_disp_logret_1"] = merged["univ_disp_logret_1"].fillna(0.0).astype(np.float32).to_numpy()
+        f["univ_pct_above_ma60"] = merged["univ_pct_above_ma60"].fillna(0.5).astype(np.float32).to_numpy()
 
 
 # ============================================================================
@@ -1646,6 +1705,12 @@ def train_and_eval(seed: int = 0) -> tuple:
         if len(ev_bars) > 50:
             eval_feat[sym] = featurize(ev_bars, context=context)
 
+    # exp79: populate universe-aggregate context features (per-timestep
+    # cross-sectional mean/dispersion/breadth) on each symbol's frame.
+    # MUST happen after per-symbol featurize so all timestamps are present.
+    add_universe_context(train_feat)
+    add_universe_context(eval_feat)
+
     n_features = len(USE_FEATURES)
     model = PatchTransformer(
         n_features=n_features, patch_len=PATCH_LEN, context_patches=CONTEXT_PATCHES,
@@ -1747,6 +1812,8 @@ def train_and_eval(seed: int = 0) -> tuple:
             _, ev_bars = split(bars)
             if len(ev_bars) > 50:
                 holdout_feat[sym] = featurize(ev_bars, context=context)
+        # exp79: populate universe context for holdout too (separate aggregation)
+        add_universe_context(holdout_feat)
         if holdout_feat:
             holdout_broker = simulate_weighted(model, holdout_feat, device)
             end_eq_h = float(holdout_broker.equity_curve[-1][1]) if holdout_broker.equity_curve else 0.0
