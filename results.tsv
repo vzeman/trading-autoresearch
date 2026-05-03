@@ -100,3 +100,4 @@ ade77fe	1.5503	-1.0116	-8.73	4730.76	2	discard	exp103: top4 with 29.0625pct cash
 e206a1b	1.5501	-1.0117	-8.75	4740.56	2	discard	exp104: top4 with 28.90625pct cash reserve
 c77b022	1.5500	-1.0117	-8.76	4745.45	2	discard	exp105: top4 with 28.828125pct cash reserve
 7dbaa24	0.0000	0.0000	0.00	0.00	0	discard	exp106: require positive topN score
+278aa97	0.0000	-0.4331	-10.46	0.00	2	discard	exp107: canonical top3 at best reserve
