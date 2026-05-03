@@ -91,3 +91,4 @@ d26b39f	0.0000	-1.9872	-4.97	0.00	1	discard	exp93: volatility penalized topN ran
 58e777f	-1.5353	-3.7349	-14.77	-3961.44	3	discard	exp95: add causal session structure features
 be9d0b9	1.5381	-0.4156	-9.88	5294.50	2	keep	exp96: top4 with 20pct cash reserve
 d833f53	1.0557	-1.5397	-11.20	3155.91	3	discard	exp97: canonical top5 with 20pct reserve
+14809c9	1.5448	-0.4054	-9.24	4984.60	2	keep	exp98: top4 with 25pct cash reserve

@@ -4,6 +4,8 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
+| 🟢 | [iter 098 — 14809c9](iter_098_14809c9.md) | exp98: top4 with 25pct cash reserve | **+1.545** | **$+4984.60** (+9.969%) |
+| 🔴 | [iter 097 — d833f53](iter_097_d833f53.md) | exp97: canonical top5 with 20pct reserve | **+1.056** | **$+3155.91** (+6.312%) |
 | 🟢 | [iter 096 — be9d0b9](iter_096_be9d0b9.md) | exp96: top4 with 20pct cash reserve | **+1.538** | **$+5294.50** (+10.589%) |
 | 🔴 | [iter 095 — 58e777f](iter_095_58e777f.md) | exp95: add causal session structure features | **-1.535** | **$-3961.44** (-7.923%) |
 | 🔴 | [iter 094 — 224c9d4](iter_094_224c9d4.md) | exp94: weaker volatility rank penalty | **-1.955** | **$-3850.08** (-7.700%) |

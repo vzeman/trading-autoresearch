@@ -16,24 +16,34 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 098 — 14809c9
+_Last iteration: **2026-05-04 00:35 UTC** · `14809c9` · 🟢 KEEP — new best_  
+📄 **[Full iteration report → iterations/iter_098_14809c9.md](iterations/iter_098_14809c9.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-04 00:29 UTC** · `14809c9` · status: **RUNNING**_
+### Latest iteration: iter 098 — 14809c9
 
-**exp98: top4 with 25pct cash reserve**
-
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
-
-### Current best (`be9d0b9`)
+🟢 KEEP — new best · exp98: top4 with 25pct cash reserve
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **+1.538** |
-| Sharpe CI low (5%) | -0.416 |
-| Net PnL | **$+5294.50** (+10.589%) |
-| Max drawdown | -9.88% |
+| Sharpe (median) | **+1.545** |
+| Sharpe CI low (5%) | -0.405 |
+| Net PnL | **$+4984.60** (+9.969%) |
+| Max drawdown | -9.24% |
 | Trades | 2 |
-| Saved at | 2026-05-04 00:21:02 |
+| Wall time | 372.7s |
+
+![iteration equity](docs/weighted_14809c9.png)
+
+### Current best (`14809c9`)
+
+| metric | value |
+|---|---|
+| Sharpe (median) | **+1.545** |
+| Sharpe CI low (5%) | -0.405 |
+| Net PnL | **$+4984.60** (+9.969%) |
+| Max drawdown | -9.24% |
+| Trades | 2 |
+| Saved at | 2026-05-04 00:35:25 |
 
 ![weighted equity, current best](docs/weighted_latest.png)
 
@@ -227,8 +237,8 @@ MIT — copy, fork, modify, anything.
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-05-03 22:21 UTC_  
-_Total experiments: **91**  ·  kept: **24**  ·  latest commit: `be9d0b9`_
+_Last updated: 2026-05-03 22:35 UTC_  
+_Total experiments: **93**  ·  kept: **25**  ·  latest commit: `14809c9`_
 
 ### Weighted strategy — full eval window (~73 days)
 
@@ -242,8 +252,8 @@ _Total experiments: **91**  ·  kept: **24**  ·  latest commit: `be9d0b9`_
 
 | Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees | % time > SPY |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+1.538** 🏆 | **$+5,294.50** 🏆 | +10.589% | -9.88% | 2 | $2.00 | **26%** 🏆 |
-| **SP500 (SPY) buy-and-hold** — passive benchmark | +1.011 | $+2,017.61 | +4.035% | **-9.73%** 🏆 | 1 | **$1.00** 🏆 | 0% |
+| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+1.545** 🏆 | **$+4,984.60** 🏆 | +9.969% | **-9.24%** 🏆 | 2 | $2.00 | **28%** 🏆 |
+| **SP500 (SPY) buy-and-hold** — passive benchmark | +1.011 | $+2,017.61 | +4.035% | -9.73% | 1 | **$1.00** 🏆 | 0% |
 
 **Best by Sharpe:** Weighted (Kelly-sized, max 20% free cash, ≤5/step)
 
@@ -251,12 +261,12 @@ _Total experiments: **91**  ·  kept: **24**  ·  latest commit: `be9d0b9`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+1.538** |
-| Net PnL | $+5,294.50 (+10.589%) |
-| Max drawdown | -9.88% |
+| Sharpe (median over seeds) | **+1.545** |
+| Net PnL | $+4,984.60 (+9.969%) |
+| Max drawdown | -9.24% |
 | Trades | 2 |
-| % time above SPY | 26% |
-| Wall time | 368.9s |
+| % time above SPY | 28% |
+| Wall time | 372.7s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
@@ -268,9 +278,9 @@ _Total experiments: **91**  ·  kept: **24**  ·  latest commit: `be9d0b9`_
 | # | commit | Sharpe | CI-low | DD% | PnL | Trades | Description |
 |---|---|---:|---:|---:|---:|---:|---|
 | 1 | `d38cd93` | +0.00 | +0.00 | -1.34 | $+0.00 | 0 | exp26 KEEP: LONG_ONLY=True. Per-seed: 1/3 keeps profitable +$194, 2/3 don't trade ($0 vs v5's -$220 each). Mean pnl +$65 (vs v5's -$82). Killed catastrophic SELL-dominant equilibrium. Still loses to passive but no longer to v5. |
-| 2 | `ea5f1f4` | +1.53 | -0.42 | -10.50 | $+5,615.13 | 2 | exp92: top4 with 15pct cash reserve |
-| 3 | `aa351d6` | +1.53 | -0.43 | -11.12 | $+5,945.61 | 2 | exp90: restore 10pct cash reserve for top4 |
-| 4 | `074e0ba` | +1.53 | -0.44 | -12.35 | $+6,606.57 | 2 | exp89: canonical top4 picker between top3 and top5 |
-| 5 | `beaa5e6` | +1.55 | -1.01 | -8.86 | $+4,797.33 | 3 | exp71: top5 ranking horizons (4,8,10)→(3,4) — shorter, less noisy |
+| 2 | `be9d0b9` | +1.54 | -0.42 | -9.88 | $+5,294.50 | 2 | exp96: top4 with 20pct cash reserve |
+| 3 | `ea5f1f4` | +1.53 | -0.42 | -10.50 | $+5,615.13 | 2 | exp92: top4 with 15pct cash reserve |
+| 4 | `aa351d6` | +1.53 | -0.43 | -11.12 | $+5,945.61 | 2 | exp90: restore 10pct cash reserve for top4 |
+| 5 | `074e0ba` | +1.53 | -0.44 | -12.35 | $+6,606.57 | 2 | exp89: canonical top4 picker between top3 and top5 |
 
 <!-- RESULTS_END -->
