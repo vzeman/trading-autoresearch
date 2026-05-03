@@ -1639,7 +1639,7 @@ PROFILE_PRESETS = [
     ("weekly_capped",  8, 30 * 390,  0.0, 0.0, 0.0, 5 * 390),     # 1 trade/sym/week,  5d horizon
     ("monthly_capped", 10, 10**9,    0.0, 0.0, 0.0, 30 * 390),    # 1 trade/sym/month, 30d horizon
 ]
-PASSIVE_TOPN_VARIANTS = [(1,), (3,), (5,), (10,), (20,)]   # exp70: add extreme concentration to test if top3/top1 beats top5
+PASSIVE_TOPN_VARIANTS = [(1,), (3,), (4,), (5,), (10,), (20,)]   # exp89: add top4 between unstable top3 and stable top5
 
 
 def run_profile_suite(model, eval_feat, device, seed, precomputed_preds=None):
@@ -1946,24 +1946,23 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp78: REVERT canonical top3 → top5. exp77 showed top3 with full deployment
+    # exp89: probe canonical top4. exp77 showed top3 with full deployment
     # is too concentrated: 5-seed per-seed was {+3.13, +3.13, 0, -2.79, +1.30} —
     # one seed had DD -16.99% (over the -15 floor). top5 is more stable and still
-    # beats SPY. The eye-popping +2.288 from exp76's profile suite was an aggregate
-    # artefact, not a real per-seed median.
+    # beats SPY; top4 tests the middle ground.
     canonical_broker = weighted
     try:
         # exp87: REVERT to (3,4) = 4h + 1d combo. Both single-horizon variants
         # (exp85=(4,) and exp86=(3,)) regressed materially. The combo is the
         # local optimum.
-        top5_broker = simulate_passive_topn(model, eval_feat, device, top_n=5, name="top5",
+        topn_broker = simulate_passive_topn(model, eval_feat, device, top_n=4, name="top4",
                                             ranking_horizons=(3, 4),
                                             precomputed_preds=pred_cache)
-        if top5_broker.equity_curve and len(top5_broker.equity_curve) > 5:
-            canonical_broker = top5_broker
-            print(f"[experiment] canonical = top5_picker (final equity ${top5_broker.equity_curve[-1][1]:,.2f})", flush=True)
+        if topn_broker.equity_curve and len(topn_broker.equity_curve) > 5:
+            canonical_broker = topn_broker
+            print(f"[experiment] canonical = top4_picker (final equity ${topn_broker.equity_curve[-1][1]:,.2f})", flush=True)
     except Exception as e:
-        print(f"[experiment] top5 canonical failed ({e}); falling back to weighted", flush=True)
+        print(f"[experiment] top4 canonical failed ({e}); falling back to weighted", flush=True)
     return (
         canonical_broker.equity_curve, canonical_broker.n_trades,
         canonical_broker.total_fees, 0.0,
