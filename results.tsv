@@ -76,3 +76,4 @@ a3228fc	1.5381	-1.0135	-9.88	5294.50	3	discard	exp74: fix SPY benchmark — bar_
 6655f5e	1.3008	0.0000	-16.99	2843.54	1	discard	exp77: SWITCH CANONICAL top5 → top3 (5-seed proves top3 dominates +2.288)
 e50ee1b	1.5381	-1.0135	-13.75	5294.50	3	discard	exp78: revert canonical to top5 (exp77 hit DD floor with top3 + full deployment)
 60a689e	0.0550	-2.5527	-13.47	-26.61	4	discard	exp79: universe-context features (cross-sectional aggregates) — fresh pretrain
+ad6b9de	1.5381	-1.0135	-9.88	5294.50	3	discard	exp82: REVERT exp79 universe features (restore exp71 baseline + new infra)
