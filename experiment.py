@@ -930,6 +930,7 @@ KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effec
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
 WEIGHTED_MIN_TRADE_USD = 100.0        # too small → fee dominates
 WEIGHTED_SWAP_MARGIN = 0.15           # exp50: keep 0.15
+TOPN_RV_Z_PENALTY = 0.25              # exp93: penalize high current realized vol in top-N ranking
 # exp58: realistic transaction friction (re-applied — was reset by exp57 discard)
 VOLUME_IMPACT_BPS_PER_PCT = 50.0      # extra slippage per 1% of bar's $-volume our order represents
 VOLUME_IMPACT_MAX_BPS = 200.0         # cap extra slippage at 2%
@@ -1585,6 +1586,12 @@ def simulate_passive_topn(
                         else:
                             scores = [0.0] * len(ready)
                     model.train()
+                if TOPN_RV_Z_PENALTY > 0 and scores:
+                    rv = np.array([float(features[sym]["rv_60"].iloc[i_now]) for sym, i_now in ready], dtype=np.float32)
+                    rv_std = float(rv.std())
+                    if rv_std > 1e-12:
+                        rv_z = (rv - float(rv.mean())) / rv_std
+                        scores = (np.array(scores, dtype=np.float32) - TOPN_RV_Z_PENALTY * rv_z).tolist()
                 ranked = sorted(zip(ready, scores), key=lambda r: -r[1])
                 top = ranked[:top_n]
                 if top:
