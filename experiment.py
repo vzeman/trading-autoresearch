@@ -36,8 +36,11 @@ CHECKPOINT_DIR.mkdir(exist_ok=True)
 # changed between iterations. Loads checkpoints/last_seed{seed}.pt instead.
 # Set USE_CACHED_PRETRAIN=1 in the env when launching the driver.
 USE_CACHED_PRETRAIN = os.environ.get("USE_CACHED_PRETRAIN", "0") == "1"
-# exp81: bfloat16 autocast on MPS for ~1.5× pretrain speedup. Set USE_AMP=0 to disable.
-USE_AMP_PRETRAIN = os.environ.get("USE_AMP", "1") == "1"
+# exp81/83: bfloat16 autocast on MPS — was on by default but exp83 measured it
+# is actually SLOWER than fp32 on Apple Metal (~75min/seed bf16 vs ~55min/seed fp32).
+# Apple's Metal doesn't have specialized bf16 tensor cores like NVIDIA. Leaving as
+# opt-in via USE_AMP=1 for future hardware (e.g. M5 / cloud H100).
+USE_AMP_PRETRAIN = os.environ.get("USE_AMP", "0") == "1"
 from contextlib import nullcontext as _nullcontext
 
 from prepare import (
