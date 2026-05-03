@@ -1,4 +1,4 @@
-# iter 089 — 334c3b0
+# iter 089 — 074e0ba
 
 **🟢 KEEP** · exp89: canonical top4 picker between top3 and top5
 
@@ -29,11 +29,11 @@ _2026-05-03 20:19 UTC · 381s wall_
 
 ## Equity curve (full eval window, ~73 days)
 
-![weighted equity](../docs/weighted_334c3b0.png)
+![weighted equity](../docs/weighted_074e0ba.png)
 
 ## Equity curve (first month)
 
-![weighted 1m](../docs/weighted_1m_334c3b0.png)
+![weighted 1m](../docs/weighted_1m_074e0ba.png)
 
 ## Strategy comparison (equity curves)
 
@@ -41,7 +41,7 @@ Overlays every profile (intraday/intraweek/intramonth/longterm +
 daily-capped/weekly-capped/monthly-capped trade-frequency variants 
 + topN pickers + SPY benchmark) on one chart, using the median-seed run.
 
-![strategy comparison](../docs/profile_compare_334c3b0.png)
+![strategy comparison](../docs/profile_compare_074e0ba.png)
 
 ## Trader profile comparison
 
@@ -1016,7 +1016,7 @@ Tested on **JPM, WMT, V, DIS, JNJ** — large-caps the model NEVER saw during tr
 ## Diff vs previous experiment
 
 ```diff
-334c3b0 exp89: canonical top4 picker between top3 and top5
+074e0ba exp89: canonical top4 picker between top3 and top5
 
 
 

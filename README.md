@@ -16,10 +16,10 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-03 20:19 UTC** · `334c3b0` · 🟢 KEEP — new best_  
-📄 **[Full iteration report → iterations/iter_089_334c3b0.md](iterations/iter_089_334c3b0.md)** · 📁 [all iterations](iterations/)
+_Last iteration: **2026-05-03 20:19 UTC** · `074e0ba` · 🟢 KEEP — new best_  
+📄 **[Full iteration report → iterations/iter_089_074e0ba.md](iterations/iter_089_074e0ba.md)** · 📁 [all iterations](iterations/)
 
-### Latest iteration: iter 089 — 334c3b0
+### Latest iteration: iter 089 — 074e0ba
 
 🟢 KEEP — new best · exp89: canonical top4 picker between top3 and top5
 
@@ -32,9 +32,9 @@ _Last iteration: **2026-05-03 20:19 UTC** · `334c3b0` · 🟢 KEEP — new best
 | Trades | 2 |
 | Wall time | 374.4s |
 
-![iteration equity](docs/weighted_334c3b0.png)
+![iteration equity](docs/weighted_074e0ba.png)
 
-### Current best (`334c3b0`)
+### Current best (`074e0ba`)
 
 | metric | value |
 |---|---|
@@ -238,7 +238,7 @@ MIT — copy, fork, modify, anything.
 <!-- RESULTS_START -->
 
 _Last updated: 2026-05-03 18:19 UTC_  
-_Total experiments: **84**  ·  kept: **21**  ·  latest commit: `334c3b0`_
+_Total experiments: **84**  ·  kept: **21**  ·  latest commit: `074e0ba`_
 
 ### Weighted strategy — full eval window (~73 days)
 

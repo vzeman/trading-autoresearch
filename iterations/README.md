@@ -4,7 +4,7 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
-| 🟢 | [iter 089 — 334c3b0](iter_089_334c3b0.md) | exp89: canonical top4 picker between top3 and top5 | **+1.531** | **$+6606.57** (+13.213%) |
+| 🟢 | [iter 089 — 074e0ba](iter_089_074e0ba.md) | exp89: canonical top4 picker between top3 and top5 | **+1.531** | **$+6606.57** (+13.213%) |
 | 🔴 | [iter 088 — 7ba80b3](iter_088_7ba80b3.md) | exp88: REVERT 2 epochs → 1 epoch (exp87 overfit), restored exp71 weights | **+1.538** | **$+5294.50** (+10.589%) |
 | 🔴 | [iter 087 — e7c037c](iter_087_e7c037c.md) | exp87: PRETRAIN_EPOCHS=2 + ranking (3,4) — break +1.55 ceiling | **+0.337** | **$+759.68** (+1.519%) |
 | 🔴 | [iter 086 — cfef6a0](iter_086_cfef6a0.md) | exp86: ranking_horizons=(3,) — single 4h horizon | **+0.412** | **$+815.46** (+1.631%) |
