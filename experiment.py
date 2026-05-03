@@ -36,6 +36,9 @@ CHECKPOINT_DIR.mkdir(exist_ok=True)
 # changed between iterations. Loads checkpoints/last_seed{seed}.pt instead.
 # Set USE_CACHED_PRETRAIN=1 in the env when launching the driver.
 USE_CACHED_PRETRAIN = os.environ.get("USE_CACHED_PRETRAIN", "0") == "1"
+# exp81: bfloat16 autocast on MPS for ~1.5× pretrain speedup. Set USE_AMP=0 to disable.
+USE_AMP_PRETRAIN = os.environ.get("USE_AMP", "1") == "1"
+from contextlib import nullcontext as _nullcontext
 
 from prepare import (
     UNIVERSE, NOTIONAL_PER_SYMBOL_USD, STARTING_CASH_USD,
@@ -605,56 +608,63 @@ def supervised_pretrain(model: PatchTransformer, train_features: dict[str, pd.Da
             xb = torch.from_numpy(X_np).to(device)
             yb = torch.from_numpy(y_np).to(device)
             opt.zero_grad(set_to_none=True)
-            mean, log_std, _ = model(xb)
-            loss = PatchTransformer.gaussian_nll(mean, log_std, yb)
+            # exp81: bfloat16 autocast on MPS — ~1.5× speedup on transformer matmuls.
+            # bfloat16 (not fp16) because: same exponent range as fp32 → no underflow
+            # on Gaussian NLL log_std; no GradScaler needed (CUDA-only anyway).
+            # Disabled for non-MPS (CPU bfloat16 is slower; CUDA prefers fp16+scaler).
+            use_amp = USE_AMP_PRETRAIN and device == "mps"
+            amp_ctx = torch.autocast(device_type="mps", dtype=torch.bfloat16) if use_amp else _nullcontext()
+            with amp_ctx:
+                mean, log_std, _ = model(xb)
+                loss = PatchTransformer.gaussian_nll(mean, log_std, yb)
 
-            rank_loss_val = 0.0
-            if y_mh_np is not None:
-                ymh_b = torch.from_numpy(y_mh_np).to(device)
-                # Group windows by timestamp (start position) — same timestep across symbols
-                batch_starts = ds.start[batch_idxs]
-                if USE_CSEC_STANDARDIZATION or USE_RANK_LOSS:
-                    unique_starts, inverse = np.unique(batch_starts, return_inverse=True)
-                    inverse_t = torch.from_numpy(inverse.astype(np.int64)).to(device)
-                if USE_CSEC_STANDARDIZATION:
-                    # Subtract per-timestep universe mean from targets
-                    n_g = len(unique_starts)
-                    sums = torch.zeros(n_g, ymh_b.size(1), device=device)
-                    counts = torch.zeros(n_g, 1, device=device)
-                    sums = sums.index_add(0, inverse_t, ymh_b)
-                    counts = counts.index_add(0, inverse_t, torch.ones(ymh_b.size(0), 1, device=device))
-                    means = sums / counts.clamp(min=1)
-                    ymh_b = ymh_b - means[inverse_t]
+                rank_loss_val = 0.0
+                if y_mh_np is not None:
+                    ymh_b = torch.from_numpy(y_mh_np).to(device)
+                    # Group windows by timestamp (start position) — same timestep across symbols
+                    batch_starts = ds.start[batch_idxs]
+                    if USE_CSEC_STANDARDIZATION or USE_RANK_LOSS:
+                        unique_starts, inverse = np.unique(batch_starts, return_inverse=True)
+                        inverse_t = torch.from_numpy(inverse.astype(np.int64)).to(device)
+                    if USE_CSEC_STANDARDIZATION:
+                        # Subtract per-timestep universe mean from targets
+                        n_g = len(unique_starts)
+                        sums = torch.zeros(n_g, ymh_b.size(1), device=device)
+                        counts = torch.zeros(n_g, 1, device=device)
+                        sums = sums.index_add(0, inverse_t, ymh_b)
+                        counts = counts.index_add(0, inverse_t, torch.ones(ymh_b.size(0), 1, device=device))
+                        means = sums / counts.clamp(min=1)
+                        ymh_b = ymh_b - means[inverse_t]
 
-                mh_mean, mh_log_std = model.forward_multi_horizon(xb)
-                loss_mh = PatchTransformer.gaussian_nll(mh_mean, mh_log_std, ymh_b)
-                loss = loss + loss_mh
-                losses_mh.append(float(loss_mh.item()))
+                    mh_mean, mh_log_std = model.forward_multi_horizon(xb)
+                    loss_mh = PatchTransformer.gaussian_nll(mh_mean, mh_log_std, ymh_b)
+                    loss = loss + loss_mh
+                    losses_mh.append(float(loss_mh.item()))
 
-                if USE_RANK_LOSS:
-                    # Pairwise margin ranking loss within each timestep group
-                    rank_loss = torch.zeros((), device=device)
-                    n_groups = 0
-                    for g_idx in range(len(unique_starts)):
-                        mask = (inverse_t == g_idx)
-                        cnt = int(mask.sum().item())
-                        if cnt < 2:
-                            continue
-                        p = mh_mean[mask]      # (cnt, H_horizons)
-                        t = ymh_b[mask]        # (cnt, H_horizons)
-                        # For each horizon: pairwise margin loss
-                        p_diff = p.unsqueeze(0) - p.unsqueeze(1)   # (cnt, cnt, H)
-                        t_diff = t.unsqueeze(0) - t.unsqueeze(1)
-                        mask_pair = (t_diff > 0).float()
-                        loss_pair = torch.relu(RANK_MARGIN - p_diff) * mask_pair
-                        denom = mask_pair.sum().clamp(min=1)
-                        rank_loss = rank_loss + loss_pair.sum() / denom
-                        n_groups += 1
-                    if n_groups > 0:
-                        rank_loss = rank_loss / n_groups
-                        loss = loss + RANK_LOSS_COEF * rank_loss
-                        rank_loss_val = float(rank_loss.item())
-                        losses_rank.append(rank_loss_val)
+                    if USE_RANK_LOSS:
+                        # Pairwise margin ranking loss within each timestep group
+                        rank_loss = torch.zeros((), device=device)
+                        n_groups = 0
+                        for g_idx in range(len(unique_starts)):
+                            mask = (inverse_t == g_idx)
+                            cnt = int(mask.sum().item())
+                            if cnt < 2:
+                                continue
+                            p = mh_mean[mask]      # (cnt, H_horizons)
+                            t = ymh_b[mask]        # (cnt, H_horizons)
+                            # For each horizon: pairwise margin loss
+                            p_diff = p.unsqueeze(0) - p.unsqueeze(1)   # (cnt, cnt, H)
+                            t_diff = t.unsqueeze(0) - t.unsqueeze(1)
+                            mask_pair = (t_diff > 0).float()
+                            loss_pair = torch.relu(RANK_MARGIN - p_diff) * mask_pair
+                            denom = mask_pair.sum().clamp(min=1)
+                            rank_loss = rank_loss + loss_pair.sum() / denom
+                            n_groups += 1
+                        if n_groups > 0:
+                            rank_loss = rank_loss / n_groups
+                            loss = loss + RANK_LOSS_COEF * rank_loss
+                            rank_loss_val = float(rank_loss.item())
+                            losses_rank.append(rank_loss_val)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
             opt.step()
