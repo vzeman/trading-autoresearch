@@ -16,13 +16,23 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 078 — e50ee1b
+_Last iteration: **2026-05-03 03:31 UTC** · `e50ee1b` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_078_e50ee1b.md](iterations/iter_078_e50ee1b.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-03 03:21 UTC** · `e50ee1b` · status: **RUNNING**_
+### Latest iteration: iter 078 — e50ee1b
 
-**exp78: revert canonical to top5 (exp77 hit DD floor with top3 + full deployment)**
+🔴 DISCARD · exp78: revert canonical to top5 (exp77 hit DD floor with top3 + full deployment)
 
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
+| metric | value |
+|---|---|
+| Sharpe (median) | **+1.538** |
+| Sharpe CI low (5%) | -1.014 |
+| Net PnL | **$+5294.50** (+10.589%) |
+| Max drawdown | -13.75% |
+| Trades | 3 |
+| Wall time | 591.0s |
+
+![iteration equity](docs/weighted_e50ee1b.png)
 
 ### Current best (`beaa5e6`)
 

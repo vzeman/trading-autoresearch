@@ -74,3 +74,4 @@ a3228fc	1.5381	-1.0135	-9.88	5294.50	3	discard	exp74: fix SPY benchmark — bar_
 4d02b79	1.5381	-1.0135	-9.88	5294.50	3	discard	exp75: SPY benchmark — fee headroom so buy isn't rejected
 47ba680	1.5381	-1.0135	-13.75	5294.50	3	discard	exp76: N_SEEDS=5 (dilute seed-2 drag for cleaner CI)
 6655f5e	1.3008	0.0000	-16.99	2843.54	1	discard	exp77: SWITCH CANONICAL top5 → top3 (5-seed proves top3 dominates +2.288)
+e50ee1b	1.5381	-1.0135	-13.75	5294.50	3	discard	exp78: revert canonical to top5 (exp77 hit DD floor with top3 + full deployment)
