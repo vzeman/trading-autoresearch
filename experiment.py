@@ -104,6 +104,8 @@ ALL_FEATURES = [
     "hl_range",
     # Time of day
     "tod_sin", "tod_cos",
+    # exp95: session structure features
+    "session_open_ret", "prev_close_gap", "first30_range",
     # exp11: cross-asset / macro context (forward-filled to each universe bar)
     # exp58: dropped vix_logret_1 (only 27 days of yfinance data)
     "tlt_logret_1",   # 20yr Treasury ETF — interest-rate signal
@@ -212,6 +214,26 @@ def featurize(bars: pd.DataFrame, context: dict[str, pd.DataFrame] | None = None
     tod_sin = np.sin(2 * math.pi * sec / period)
     tod_cos = np.cos(2 * math.pi * sec / period)
 
+    # ---- session structure: open-to-now, overnight gap, first-30m range ----
+    session_day = et.dt.date
+    session_open = df.groupby(session_day, sort=False)["open"].transform("first").to_numpy(np.float64)
+    session_high_so_far = pd.Series(high).groupby(session_day, sort=False).cummax().to_numpy()
+    session_low_so_far = pd.Series(low).groupby(session_day, sort=False).cummin().to_numpy()
+    daily_close = df.groupby(session_day, sort=False)["close"].last()
+    prev_daily_close = daily_close.shift(1)
+    prev_close_by_day = session_day.map(prev_daily_close).astype(float).to_numpy()
+    prev_close_by_day = np.where(np.isfinite(prev_close_by_day), prev_close_by_day, session_open)
+    first30_mask = sec <= 30 * 60
+    first30_high = pd.Series(np.where(first30_mask, high, np.nan)).groupby(session_day, sort=False).cummax()
+    first30_low = pd.Series(np.where(first30_mask, low, np.nan)).groupby(session_day, sort=False).cummin()
+    first30_high = first30_high.groupby(session_day, sort=False).ffill().fillna(pd.Series(session_high_so_far))
+    first30_low = first30_low.groupby(session_day, sort=False).ffill().fillna(pd.Series(session_low_so_far))
+    first30_high = first30_high.to_numpy()
+    first30_low = first30_low.to_numpy()
+    session_open_ret = np.log(close / np.maximum(session_open, 1e-12))
+    prev_close_gap = np.log(session_open / np.maximum(prev_close_by_day, 1e-12))
+    first30_range = (first30_high - first30_low) / np.maximum(session_open, 1e-12)
+
     feat = pd.DataFrame({
         "timestamp": df["timestamp"],
         "close": df["close"].astype(np.float32),
@@ -232,6 +254,9 @@ def featurize(bars: pd.DataFrame, context: dict[str, pd.DataFrame] | None = None
         "hl_range": hl_range.astype(np.float32),
         "tod_sin": tod_sin.astype(np.float32),
         "tod_cos": tod_cos.astype(np.float32),
+        "session_open_ret": session_open_ret.astype(np.float32),
+        "prev_close_gap": prev_close_gap.astype(np.float32),
+        "first30_range": first30_range.astype(np.float32),
     })
 
     # ---- Context features: backward merge_asof (causal) ----
@@ -930,7 +955,6 @@ KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effec
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
 WEIGHTED_MIN_TRADE_USD = 100.0        # too small → fee dominates
 WEIGHTED_SWAP_MARGIN = 0.15           # exp50: keep 0.15
-TOPN_RV_Z_PENALTY = 0.05              # exp94: weaker vol penalty; exp93 0.25 overwhelmed model score
 # exp58: realistic transaction friction (re-applied — was reset by exp57 discard)
 VOLUME_IMPACT_BPS_PER_PCT = 50.0      # extra slippage per 1% of bar's $-volume our order represents
 VOLUME_IMPACT_MAX_BPS = 200.0         # cap extra slippage at 2%
@@ -1586,12 +1610,6 @@ def simulate_passive_topn(
                         else:
                             scores = [0.0] * len(ready)
                     model.train()
-                if TOPN_RV_Z_PENALTY > 0 and scores:
-                    rv = np.array([float(features[sym]["rv_60"].iloc[i_now]) for sym, i_now in ready], dtype=np.float32)
-                    rv_std = float(rv.std())
-                    if rv_std > 1e-12:
-                        rv_z = (rv - float(rv.mean())) / rv_std
-                        scores = (np.array(scores, dtype=np.float32) - TOPN_RV_Z_PENALTY * rv_z).tolist()
                 ranked = sorted(zip(ready, scores), key=lambda r: -r[1])
                 top = ranked[:top_n]
                 if top:
