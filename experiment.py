@@ -106,11 +106,10 @@ ALL_FEATURES = [
     "tlt_logret_1",   # 20yr Treasury ETF — interest-rate signal
     "uup_logret_1",   # USD-index ETF (DXY proxy) — currency macro
     "spy_logret_1",   # SPY return as a market factor (for SPY itself this == log_return_1)
-    # exp79: universe-aggregate context — per-timestep cross-sectional stats merged
-    # back onto each symbol's frame. Helps model see market regime + dispersion.
-    "univ_mean_logret_1",   # mean log_return_1 across the universe at this bar
-    "univ_disp_logret_1",   # std of log_return_1 across the universe (dispersion)
-    "univ_pct_above_ma60",  # % of symbols whose close > 60-bar EMA (breadth)
+    # exp82: REVERTED exp79's universe-context features — they regressed sharpe
+    # +1.549 → +0.055. Probably scale-mismatch (pct_above_ma60 in [0,1] vs others
+    # ~1e-4). Re-add later with proper z-score normalization. The featurize() stub
+    # init + add_universe_context() helper stay in place for the future retry.
 ]
 
 USE_FEATURES = [f for f in ALL_FEATURES if f not in {"signed_log_vol", "vol_z_15"}]   # exp4 + exp11: drop 2 noisy + add 4 context
