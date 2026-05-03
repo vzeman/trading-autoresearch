@@ -16,13 +16,23 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 084 — fd14569
+_Last iteration: **2026-05-03 10:36 UTC** · `fd14569` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_084_fd14569.md](iterations/iter_084_fd14569.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-03 10:27 UTC** · `fd14569` · status: **RUNNING**_
+### Latest iteration: iter 084 — fd14569
 
-**exp84: fp32 default (post-bf16 failure) — quick cached-pretrain sanity check**
+🔴 DISCARD · exp84: fp32 default (post-bf16 failure) — quick cached-pretrain sanity check
 
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
+| metric | value |
+|---|---|
+| Sharpe (median) | **+1.538** |
+| Sharpe CI low (5%) | -1.014 |
+| Net PnL | **$+5294.50** (+10.589%) |
+| Max drawdown | -9.88% |
+| Trades | 3 |
+| Wall time | 573.7s |
+
+![iteration equity](docs/weighted_fd14569.png)
 
 ### Current best (`beaa5e6`)
 
