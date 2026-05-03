@@ -794,7 +794,7 @@ def _render_profile_compare_chart(commit: str) -> None:
     import pandas as _pd
 
     curves_by_profile: dict = {}
-    for f in sorted(CHECKPOINTS.glob("last_seed*_profile_curves.json")):
+    for f in sorted((REPO / "checkpoints").glob("last_seed*_profile_curves.json")):
         try:
             data = json.loads(f.read_text())
         except Exception:
