@@ -16,11 +16,11 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 083 — 591f054
+### 🟡 LIVE — iter 084 — fd14569
 
-_Started **2026-05-03 08:25 UTC** · `591f054` · status: **RUNNING**_
+_Started **2026-05-03 10:27 UTC** · `fd14569` · status: **RUNNING**_
 
-**exp83: bf16 fresh pretrain (measure speedup vs exp79's 167min)**
+**exp84: fp32 default (post-bf16 failure) — quick cached-pretrain sanity check**
 
 Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
 
