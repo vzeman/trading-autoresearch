@@ -1363,6 +1363,7 @@ def simulate_profile(
     rank_percentile: float = 0.0,   # exp62: if >0, only buy when pred_sharpe is in top (1-rank_pct) of timestep
     name: str = "profile",
     precomputed_preds: dict | None = None,
+    cooldown_bars_per_sym: int = 0,    # exp80: min bars between trades on the same symbol (0 = no cap)
 ) -> WeightedBroker:
     broker = WeightedBroker(STARTING_CASH_USD, min_reserve_frac=MIN_CASH_RESERVE_PCT)
     cols = USE_FEATURES
@@ -1442,6 +1443,10 @@ def simulate_profile(
                 if rank_cutoff is not None and ps < rank_cutoff:
                     continue
                 if broker.positions.get(sym, 0.0) > 0:
+                    continue
+                # exp80: per-symbol cooldown — refuse to re-trade SYM until cooldown_bars_per_sym elapsed
+                last_traded = bought_at_bar.get(sym, -10**9)
+                if cooldown_bars_per_sym > 0 and (bar_count - last_traded) < cooldown_bars_per_sym:
                     continue
                 base_frac = min(ps * KELLY_SCALE, MAX_POS_FRACTION_OF_FREE_CASH)
                 usd_size = base_frac * free_cash_now
@@ -1575,12 +1580,17 @@ def simulate_buyhold_spy(features: dict[str, pd.DataFrame]) -> WeightedBroker:
 
 
 # Profile presets. horizon_idx into HORIZONS_MINUTES = [5,60,120,240,390,780,1170,1560,1950,5460,11700]
+# 7th field (exp80) = cooldown_bars_per_sym — minimum bars between trades of the same symbol.
 PROFILE_PRESETS = [
-    # (name, horizon_idx, max_hold_bars, buy_threshold, sell_threshold, rank_percentile)
-    ("intraday",   2, 390,         0.0, 0.0, 0.0),
-    ("intraweek",  8, 5 * 390,     0.0, 0.0, 0.0),
-    ("intramonth", 10, 30 * 390,   0.0, 0.0, 0.0),
-    ("longterm",   10, 10**9,      0.0, 0.0, 0.0),
+    # (name, horizon_idx, max_hold_bars, buy_threshold, sell_threshold, rank_percentile, cooldown_bars_per_sym)
+    ("intraday",   2, 390,         0.0, 0.0, 0.0, 0),
+    ("intraweek",  8, 5 * 390,     0.0, 0.0, 0.0, 0),
+    ("intramonth", 10, 30 * 390,   0.0, 0.0, 0.0, 0),
+    ("longterm",   10, 10**9,      0.0, 0.0, 0.0, 0),
+    # exp80: per-symbol trade-frequency caps — at most one buy per symbol per [day|week|month].
+    ("daily_capped",   4, 5 * 390,   0.0, 0.0, 0.0, 390),         # 1 trade/sym/day,   1d horizon
+    ("weekly_capped",  8, 30 * 390,  0.0, 0.0, 0.0, 5 * 390),     # 1 trade/sym/week,  5d horizon
+    ("monthly_capped", 10, 10**9,    0.0, 0.0, 0.0, 30 * 390),    # 1 trade/sym/month, 30d horizon
 ]
 PASSIVE_TOPN_VARIANTS = [(1,), (3,), (5,), (10,), (20,)]   # exp70: add extreme concentration to test if top3/top1 beats top5
 
@@ -1593,7 +1603,12 @@ def run_profile_suite(model, eval_feat, device, seed, precomputed_preds=None):
     try:
         from prepare import sharpe_ratio as _sr, max_drawdown_pct as _dd
         for preset in PROFILE_PRESETS:
-            pname, hidx, max_hold, buy_t, sell_t, rank_pct = preset
+            # exp80: 7th field is optional cooldown_bars_per_sym
+            if len(preset) >= 7:
+                pname, hidx, max_hold, buy_t, sell_t, rank_pct, cooldown_b = preset
+            else:
+                pname, hidx, max_hold, buy_t, sell_t, rank_pct = preset
+                cooldown_b = 0
             try:
                 pb = simulate_profile(
                     model, eval_feat, device,
@@ -1601,6 +1616,7 @@ def run_profile_suite(model, eval_feat, device, seed, precomputed_preds=None):
                     buy_threshold=buy_t, sell_threshold=sell_t,
                     rank_percentile=rank_pct, name=pname,
                     precomputed_preds=precomputed_preds,
+                    cooldown_bars_per_sym=cooldown_b,
                 )
                 end_eq = float(pb.equity_curve[-1][1]) if pb.equity_curve else 0.0
                 start_eq = float(pb.equity_curve[0][1]) if pb.equity_curve else float(STARTING_CASH_USD)
@@ -1656,6 +1672,50 @@ def run_profile_suite(model, eval_feat, device, seed, precomputed_preds=None):
         prof_path.write_text(_json.dumps(profile_results, indent=2, default=str))
     except Exception as e:
         print(f"[prof-dump] seed {seed} failed: {e}", flush=True)
+    # exp80: also dump per-profile equity curves for the multi-profile chart.
+    # Subsamples every 30 minutes to keep file size sane.
+    try:
+        import json as _json
+        curves: dict = {}
+        def _dump_curve(name: str, broker):
+            if not broker.equity_curve:
+                return
+            pts = broker.equity_curve
+            stride = max(1, len(pts) // 600)
+            curves[name] = [(str(t), float(v)) for (t, v) in pts[::stride]]
+        # re-run profile sims to capture full curves (cheap with precomputed_preds)
+        for preset in PROFILE_PRESETS:
+            if len(preset) >= 7:
+                pname, hidx, max_hold, buy_t, sell_t, rank_pct, cooldown_b = preset
+            else:
+                pname, hidx, max_hold, buy_t, sell_t, rank_pct = preset
+                cooldown_b = 0
+            try:
+                pb = simulate_profile(model, eval_feat, device,
+                                      horizon_idx=hidx, max_hold_bars=max_hold,
+                                      buy_threshold=buy_t, sell_threshold=sell_t,
+                                      rank_percentile=rank_pct, name=pname,
+                                      precomputed_preds=precomputed_preds,
+                                      cooldown_bars_per_sym=cooldown_b)
+                _dump_curve(pname, pb)
+            except Exception:
+                pass
+        for (n,) in PASSIVE_TOPN_VARIANTS:
+            try:
+                pb = simulate_passive_topn(model, eval_feat, device, top_n=n, name=f"top{n}",
+                                           precomputed_preds=precomputed_preds)
+                _dump_curve(f"top{n}_picker", pb)
+            except Exception:
+                pass
+        try:
+            spy = simulate_buyhold_spy(eval_feat)
+            _dump_curve("spy_buyhold", spy)
+        except Exception:
+            pass
+        curves_path = CHECKPOINT_DIR / f"last_seed{seed}_profile_curves.json"
+        curves_path.write_text(_json.dumps(curves, default=str))
+    except Exception as e:
+        print(f"[prof-curves-dump] seed {seed} failed: {e}", flush=True)
 
 
 # ============================================================================

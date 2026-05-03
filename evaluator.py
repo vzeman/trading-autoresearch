@@ -377,6 +377,11 @@ def run(n_workers: int = 3) -> dict:
                                       trades_per_seed=weighted_trades_per_seed,
                                       cash_curves=weighted_cash_curves,
                                       window_days=30, suffix="1m", label="1 month")
+    # exp80: multi-profile equity comparison chart (overlays all simulator strategies)
+    try:
+        _render_profile_compare_chart(commit)
+    except Exception as e:
+        print(f"[profile-compare-chart] failed: {e}", flush=True)
     _append_results_row(commit, summary, status, desc)
     _render_progress_chart()
     _update_readme(summary, commit)
@@ -773,6 +778,78 @@ def _render_weighted_window_chart(curves, commit, summary, *, trades_per_seed=No
     fig.tight_layout()
     fig.savefig(DOCS / f"weighted_{suffix}_latest.png", dpi=110)
     fig.savefig(DOCS / f"weighted_{suffix}_{commit}.png", dpi=110)
+    plt.close(fig)
+
+
+def _render_profile_compare_chart(commit: str) -> None:
+    """exp80: overlay equity curves of every profile (intraday/intraweek/intramonth/
+    longterm/daily_capped/weekly_capped/monthly_capped/topN_pickers/spy_buyhold)
+    so the user can visually compare trade-frequency variants on one chart.
+    Uses median-across-seeds curve for each profile.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as _np
+    import pandas as _pd
+
+    curves_by_profile: dict = {}
+    for f in sorted(CHECKPOINTS.glob("last_seed*_profile_curves.json")):
+        try:
+            data = json.loads(f.read_text())
+        except Exception:
+            continue
+        for pname, pts in data.items():
+            try:
+                # convert string ts → datetime
+                tsv = [(_pd.to_datetime(t), float(v)) for (t, v) in pts]
+            except Exception:
+                continue
+            curves_by_profile.setdefault(pname, []).append(tsv)
+    if not curves_by_profile:
+        return
+    # For each profile, take median final equity across seeds (sort by it for legend order)
+    final_eq = {}
+    for pname, seed_curves in curves_by_profile.items():
+        ends = [c[-1][1] for c in seed_curves if c]
+        final_eq[pname] = _np.median(ends) if ends else 0.0
+    sorted_profiles = sorted(curves_by_profile.keys(), key=lambda p: -final_eq[p])
+
+    fig, ax = plt.subplots(figsize=(11, 6.2))
+    cmap = plt.get_cmap("tab20")
+    for i, pname in enumerate(sorted_profiles):
+        seed_curves = curves_by_profile[pname]
+        if not seed_curves:
+            continue
+        # Pick the seed whose final equity is closest to the median (representative)
+        ends = [c[-1][1] for c in seed_curves if c]
+        if not ends:
+            continue
+        med = _np.median(ends)
+        rep_idx = int(_np.argmin([abs(e - med) for e in ends]))
+        rep = seed_curves[rep_idx]
+        if not rep:
+            continue
+        ts = [t for (t, _v) in rep]
+        ev = [v for (_t, v) in rep]
+        is_spy = pname == "spy_buyhold"
+        ax.plot(ts, ev, label=f"{pname}  (${final_eq[pname]:,.0f})",
+                color=cmap(i % 20), linewidth=2.0 if is_spy else 1.3,
+                linestyle="--" if is_spy else "-",
+                alpha=0.95 if is_spy else 0.80)
+    ax.axhline(50000, color="grey", linewidth=0.7, alpha=0.5, linestyle=":")
+    ax.set_title(
+        f"Strategy comparison — equity curves (median seed) — commit {commit}",
+        fontsize=10,
+    )
+    ax.set_xlabel("time (UTC)")
+    ax.set_ylabel("portfolio equity ($)")
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="best", fontsize=7, ncol=2)
+    fig.autofmt_xdate()
+    fig.tight_layout()
+    fig.savefig(DOCS / "profile_compare_latest.png", dpi=110)
+    fig.savefig(DOCS / f"profile_compare_{commit}.png", dpi=110)
     plt.close(fig)
 
 

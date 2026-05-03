@@ -26,6 +26,8 @@ import sys
 import time
 from pathlib import Path
 
+import pandas as pd  # exp80: per-symbol summary uses pd.to_datetime for hold-time math
+
 REPO = Path(__file__).resolve().parent
 RESULTS_TSV = REPO / "results.tsv"
 RUN_LOG = REPO / "run.log"
@@ -417,6 +419,17 @@ def write_iteration_md(
     md.append(f"![weighted 1m]({weighted_1m})")
     md.append("")
 
+    # exp80: multi-strategy equity comparison chart (overlays all profiles + SPY)
+    profile_compare = f"../docs/profile_compare_{commit}.png"
+    md.append("## Strategy comparison (equity curves)")
+    md.append("")
+    md.append("Overlays every profile (intraday/intraweek/intramonth/longterm + ")
+    md.append("daily-capped/weekly-capped/monthly-capped trade-frequency variants ")
+    md.append("+ topN pickers + SPY benchmark) on one chart, using the median-seed run.")
+    md.append("")
+    md.append(f"![strategy comparison]({profile_compare})")
+    md.append("")
+
     # exp60+: trader-profile comparison (if last_seed*_profiles.json present)
     profile_blocks = []
     for pf in sorted(CHECKPOINTS.glob("last_seed*_profiles.json")):
@@ -488,9 +501,8 @@ def write_iteration_md(
         md.append(f"**Median holdout sharpe: {med:+.3f}** (vs in-symbol {metrics.get('sharpe', '—')})")
         md.append("")
 
-    # Per-seed transactions
-    md.append("## Transactions")
-    md.append("")
+    # exp80: per-symbol transaction summary (aggregated across all seeds).
+    # Pairs each BUY with the next SELL on the same symbol to compute holding bars.
     trades_blocks = []
     for trades_file in sorted(CHECKPOINTS.glob("last_seed*_trades.json")):
         try:
@@ -503,6 +515,52 @@ def write_iteration_md(
             trades_blocks.append((seed, trades, n, ending_eq, starting))
         except Exception:
             continue
+
+    if trades_blocks:
+        # Aggregate: per-symbol counts + avg holding days across all seeds
+        from collections import defaultdict
+        per_sym = defaultdict(lambda: {"buys": 0, "sells": 0, "hold_days": []})
+        for _seed, trades, _n, _e, _s in trades_blocks:
+            # pair BUYs with subsequent SELLs per symbol within this seed
+            open_buy_ts: dict[str, str] = {}
+            for t in trades:
+                sym = t.get("symbol", "?")
+                side = t.get("side", "?")
+                ts = t.get("ts", "")
+                if side == "BUY":
+                    per_sym[sym]["buys"] += 1
+                    open_buy_ts[sym] = ts
+                elif side == "SELL":
+                    per_sym[sym]["sells"] += 1
+                    if sym in open_buy_ts:
+                        try:
+                            t_buy = pd.to_datetime(open_buy_ts[sym])
+                            t_sell = pd.to_datetime(ts)
+                            held_days = (t_sell - t_buy).total_seconds() / 86400.0
+                            per_sym[sym]["hold_days"].append(held_days)
+                        except Exception:
+                            pass
+                        del open_buy_ts[sym]
+        if per_sym:
+            md.append("## Per-symbol summary (aggregated across all seeds)")
+            md.append("")
+            md.append("| symbol | total trades | buys | sells | avg hold (days) | held-to-end |")
+            md.append("|---|---:|---:|---:|---:|---:|")
+            rows = []
+            for sym, d in per_sym.items():
+                total = d["buys"] + d["sells"]
+                avg_hold = (sum(d["hold_days"]) / len(d["hold_days"])) if d["hold_days"] else None
+                avg_str = f"{avg_hold:.1f}" if avg_hold is not None else "—"
+                still_open = max(0, d["buys"] - d["sells"])  # unpaired BUYs = still held at eval end
+                rows.append((sym, total, d["buys"], d["sells"], avg_str, still_open))
+            rows.sort(key=lambda r: -r[1])  # by total trades desc
+            for sym, total, buys, sells, avg_str, still_open in rows:
+                md.append(f"| **{sym}** | {total} | {buys} | {sells} | {avg_str} | {still_open} |")
+            md.append("")
+
+    # Per-seed transactions
+    md.append("## Transactions")
+    md.append("")
     if not trades_blocks:
         md.append("_(no per-seed trade JSON found — driver/experiment.py mismatch?)_")
         md.append("")
