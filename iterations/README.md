@@ -4,6 +4,7 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
+| 🟢 | [iter 101 — e360b24](iter_101_e360b24.md) | exp101: top4 with 28.75pct cash reserve | **+1.550** | **$+4750.35** (+9.501%) |
 | 🟢 | [iter 100 — 573f243](iter_100_573f243.md) | exp100: top4 with 27.5pct cash reserve | **+1.548** | **$+4828.61** (+9.657%) |
 | 🔴 | [iter 099 — 6f01b87](iter_099_6f01b87.md) | exp99: top4 with 30pct cash reserve | **+1.552** | **$+4671.92** (+9.344%) |
 | 🟢 | [iter 098 — 14809c9](iter_098_14809c9.md) | exp98: top4 with 25pct cash reserve | **+1.545** | **$+4984.60** (+9.969%) |
