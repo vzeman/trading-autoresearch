@@ -1953,9 +1953,11 @@ def train_and_eval(seed: int = 0) -> tuple:
     # artefact, not a real per-seed median.
     canonical_broker = weighted
     try:
-        # exp85: single 1-day horizon for ranking (was 4h+1d). Simpler signal.
+        # exp86: single 4h horizon (was (4h+1d) combo or (1d) alone).
+        # exp85 showed (1d) alone regressed; try (4h) alone — maybe the SHORTER
+        # of the two horizons does the heavy lifting and the 1d adds noise.
         top5_broker = simulate_passive_topn(model, eval_feat, device, top_n=5, name="top5",
-                                            ranking_horizons=(4,),
+                                            ranking_horizons=(3,),
                                             precomputed_preds=pred_cache)
         if top5_broker.equity_curve and len(top5_broker.equity_curve) > 5:
             canonical_broker = top5_broker
