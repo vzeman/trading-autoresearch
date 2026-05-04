@@ -150,3 +150,4 @@ d5b40ef	3.2142	0.9041	-1.91	3994.86	1	keep	exp153: SPY-alpha objective with top2
 6ccdd60	3.2126	0.8996	-2.05	4277.70	1	discard	exp154: top2 with 81.25pct reserve	59.366
 7647aa7	3.2158	0.9086	-1.78	3711.68	1	discard	exp155: top2 with 83.75pct reserve	59.960
 0e7ff00	3.2138	0.9030	-1.95	4065.60	1	keep	exp156: top2 with 82.1875pct reserve	60.068
+e6675b8	3.2134	0.9018	-1.98	4136.32	1	discard	exp157: top2 with 81.875pct reserve	59.880
