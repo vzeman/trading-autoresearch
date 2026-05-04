@@ -924,7 +924,7 @@ PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at on
 # MAX_POS_FRACTION_OF_FREE_CASH of free cash.
 # ============================================================================
 MAX_POS_FRACTION_OF_FREE_CASH = 0.50  # exp47: SWAP + cap 0.50. exp46 (SWAP+0.65) gave best sharpe yet (+1.42) but DD -10.85% over floor on seed 1 only. Drop cap from 0.65 to 0.50 to bring worst-seed DD comfortably under -10%.
-MIN_CASH_RESERVE_PCT = 0.696875       # exp142: restore best reserve; test as-of top4 universe
+MIN_CASH_RESERVE_PCT = 0.696875       # exp143: restore best reserve; test top3 concentration
 MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
 KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effect — cap saturates)
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
@@ -1550,7 +1550,7 @@ def simulate_passive_topn(
         for sym, i_now in events_here:
             last_idx_by_sym[sym] = i_now
         if not picked:
-            ready = [(sym, i_now) for sym, i_now in last_idx_by_sym.items() if i_now >= C - 1]
+            ready = [(sym, i_now) for sym, i_now in events_here if i_now >= C - 1]
             if len(ready) >= max(top_n, len(features) // 4):
                 if precomputed_preds is not None and model.horizons_minutes:
                     kept, mh_mean_np, mh_log_std_np = _lookup_mh(ready, precomputed_preds, C)
@@ -1961,18 +1961,18 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp142: canonical top4 quarter-readiness with best 69.6875% reserve and as-of universe ranking.
+    # exp143: canonical top3 quarter-readiness with best 69.6875% reserve.
     canonical_broker = weighted
     try:
         # exp87: REVERT to (3,4) = 4h + 1d combo. Both single-horizon variants
         # (exp85=(4,) and exp86=(3,)) regressed materially. The combo is the
         # local optimum.
-        topn_broker = simulate_passive_topn(model, eval_feat, device, top_n=4, name="top4",
+        topn_broker = simulate_passive_topn(model, eval_feat, device, top_n=3, name="top3",
                                             ranking_horizons=(3, 4),
                                             precomputed_preds=pred_cache)
         if topn_broker.equity_curve and len(topn_broker.equity_curve) > 5:
             canonical_broker = topn_broker
-            print(f"[experiment] canonical = top4_picker (final equity ${topn_broker.equity_curve[-1][1]:,.2f})", flush=True)
+            print(f"[experiment] canonical = top3_picker (final equity ${topn_broker.equity_curve[-1][1]:,.2f})", flush=True)
     except Exception as e:
         print(f"[experiment] top4 canonical failed ({e}); falling back to weighted", flush=True)
     return (
