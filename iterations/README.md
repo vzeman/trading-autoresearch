@@ -4,6 +4,9 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
+| 🟢 | [iter 147 — 62426b6](iter_147_62426b6.md) | exp147: top2 with 75pct reserve | **+3.204** | **$+5686.77** (+11.374%) |
+| 🔴 | [iter 146 — 7e17f20](iter_146_7e17f20.md) | exp146: top2 with 65pct reserve | **+3.190** | **$+7923.57** (+15.847%) |
+| 🔴 | [iter 145 — 84c489d](iter_145_84c489d.md) | exp145: top1 canonical concentration | **+3.148** | **$+13556.84** (+27.114%) |
 | 🟢 | [iter 144 — 760c138](iter_144_760c138.md) | exp144: top2 canonical concentration | **+3.197** | **$+6877.78** (+13.756%) |
 | 🟢 | [iter 143 — 0c6968a](iter_143_0c6968a.md) | exp143: top3 canonical concentration | **+3.212** | **$+5821.34** (+11.643%) |
 | 🔴 | [iter 142 — 949ca99](iter_142_949ca99.md) | exp142: as-of top4 universe ranking | **+0.980** | **$+1198.96** (+2.398%) |

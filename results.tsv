@@ -140,3 +140,4 @@ b21f174	2.4263	-0.1795	-4.82	4264.81	3	discard	exp138: quarter readiness with 69
 760c138	3.1967	0.8416	-3.29	6877.78	1	keep	exp144: top2 canonical concentration	54.304
 84c489d	3.1476	0.7567	-6.51	13556.84	1	discard	exp145: top1 canonical concentration	44.789
 7e17f20	3.1898	0.8092	-3.79	7923.57	1	discard	exp146: top2 with 65pct reserve	53.039
+62426b6	3.2043	0.8773	-2.72	5686.77	1	keep	exp147: top2 with 75pct reserve	55.289
