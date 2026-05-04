@@ -379,6 +379,18 @@ def run(n_workers: int = 3) -> dict:
                                       trades_per_seed=weighted_trades_per_seed,
                                       cash_curves=weighted_cash_curves,
                                       window_days=30, suffix="1m", label="1 month")
+        for days, suffix, label in [
+            (1, "1d", "1 day"),
+            (7, "1w", "1 week"),
+            (30, "1mo", "1 month"),
+            (90, "3mo", "3 months"),
+            (180, "6mo", "6 months"),
+        ]:
+            _render_weighted_trailing_chart(
+                weighted_curves, commit,
+                trades_per_seed=weighted_trades_per_seed,
+                days=days, suffix=suffix, label=label,
+            )
     # exp80: multi-profile equity comparison chart (overlays all simulator strategies)
     try:
         _render_profile_compare_chart(commit)
@@ -684,6 +696,93 @@ def _slice_window(curves: list[list[tuple]], days: int) -> list[list[tuple]]:
         cutoff = t0 + pd.Timedelta(days=days)
         out.append([(t, v) for (t, v) in c if t <= cutoff])
     return out
+
+
+def _slice_trailing_window(curves: list[list[tuple]], days: int) -> list[list[tuple]]:
+    """Keep the last `days` calendar days from each curve and rebase to its first value."""
+    import pandas as pd
+    out = []
+    for c in curves:
+        if not c:
+            out.append([])
+            continue
+        end = c[-1][0]
+        start = end - pd.Timedelta(days=days)
+        window = [(t, v) for (t, v) in c if start <= t <= end]
+        if not window:
+            out.append([])
+            continue
+        base = float(window[0][1])
+        scale = STARTING_CASH_USD / base if base else 1.0
+        out.append([(t, float(v) * scale) for t, v in window])
+    return out
+
+
+def _render_weighted_trailing_chart(curves, commit, *, trades_per_seed=None,
+                                    days=30, suffix="30d", label="1 month") -> None:
+    """Render recent performance window ending at the latest available bar vs SPY."""
+    if not any(curves):
+        return
+    sliced = _slice_trailing_window(curves, days)
+    if not any(sliced):
+        return
+    import pandas as pd
+    sliced_trades = None
+    if trades_per_seed:
+        sliced_trades = []
+        for tlist, c in zip(trades_per_seed, curves):
+            if not c or not tlist:
+                sliced_trades.append([])
+                continue
+            end = c[-1][0]
+            start = end - pd.Timedelta(days=days)
+            sliced_trades.append([t for t in tlist if start <= t[0] <= end])
+
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(10, 5))
+    for i, eq in enumerate(sliced):
+        if eq:
+            ax.plot([t for t, _ in eq], [v for _, v in eq], alpha=0.75, linewidth=1.1, label=f"seed {i}")
+
+    med = _median_curve(sliced)
+    spy_curve, _ = _spy_benchmark_curve()
+    spy_window = []
+    if spy_curve and med:
+        start, end = med[0][0], med[-1][0]
+        raw_spy = [(t, v) for (t, v) in spy_curve if start <= t <= end]
+        if raw_spy:
+            base = float(raw_spy[0][1])
+            scale = STARTING_CASH_USD / base if base else 1.0
+            spy_window = [(t, float(v) * scale) for t, v in raw_spy]
+            ax.plot([t for t, _ in spy_window], [v for _, v in spy_window],
+                    color="black", linestyle="--", linewidth=2.0, alpha=0.8,
+                    label="SP500 B&H", zorder=5)
+
+    pct_over = _pct_time_over_spy(med, spy_window) if med and spy_window else 0.0
+    pnl = med[-1][1] - STARTING_CASH_USD if med else 0.0
+    spy_pnl = spy_window[-1][1] - STARTING_CASH_USD if spy_window else 0.0
+    if sliced_trades and sliced_trades[0]:
+        for ts, sym, side in sliced_trades[0]:
+            color = "#22c55e" if side == "BUY" else "#ef4444"
+            ax.axvline(ts, color=color, alpha=0.35, linewidth=0.7, linestyle=":")
+
+    ax.axhline(y=STARTING_CASH_USD, linestyle=":", color="gray", alpha=0.5, label="rebased start")
+    ax.set_title(
+        f"Winning strategy trailing {label} — commit {commit}  ·  "
+        f"strategy ${pnl:+,.0f} vs SPY ${spy_pnl:+,.0f}  ·  over SPY {pct_over:.0f}%",
+        fontsize=10,
+    )
+    ax.set_ylabel("rebased equity ($)")
+    ax.set_xlabel("time (UTC)")
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="best", fontsize=7, ncol=2)
+    fig.autofmt_xdate()
+    fig.tight_layout()
+    fig.savefig(DOCS / f"winning_{suffix}_latest.png", dpi=110)
+    fig.savefig(DOCS / f"winning_{suffix}_{commit}.png", dpi=110)
+    plt.close(fig)
 
 
 def _render_weighted_window_chart(curves, commit, summary, *, trades_per_seed=None,

@@ -418,6 +418,26 @@ def write_iteration_md(
     md.append("")
     md.append(f"**Decision reason:** {reason}")
     md.append("")
+    md.append("## Winning strategy")
+    md.append("")
+    md.append(
+        "Canonical strategy for this iteration: **top4 cross-sectional picker** — "
+        "rank symbols by the transformer's 4h + 1d forecast Sharpe, buy the top four "
+        "once enough symbols are ready, hold through the eval window, and keep "
+        f"{metrics.get('trades', '0')} median trades after costs."
+    )
+    md.append("")
+    md.append(
+        "A **seed** is one independent training/evaluation run with a different random "
+        "initialization and sampling path. The gate uses median/worst-tail statistics "
+        "across seeds so one lucky seed cannot define the best checkpoint."
+    )
+    md.append("")
+    md.append(
+        "Positive seed transaction tables are shown later in this report; losing or flat "
+        "seed transaction tables are omitted to keep reports focused on actionable winners."
+    )
+    md.append("")
     if seed_lines:
         md.append("## Per-seed details")
         md.append("")
@@ -444,6 +464,24 @@ def write_iteration_md(
     md.append("")
     md.append(f"![strategy comparison]({profile_compare})")
     md.append("")
+    md.append("## Recent live-style simulations vs SP500")
+    md.append("")
+    md.append(
+        "Each chart rebases the winning strategy and SP500 to $50,000 at the start "
+        "of the trailing window, ending at the latest available bar."
+    )
+    md.append("")
+    for suffix, label in [
+        ("1d", "1 day"),
+        ("1w", "1 week"),
+        ("1mo", "1 month"),
+        ("3mo", "3 months"),
+        ("6mo", "6 months"),
+    ]:
+        md.append(f"### Trailing {label}")
+        md.append("")
+        md.append(f"![winning strategy trailing {label}](../docs/winning_{suffix}_{commit}.png)")
+        md.append("")
 
     # exp60+: trader-profile comparison (if last_seed*_profiles.json present)
     profile_blocks = []
