@@ -4,6 +4,12 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
+| 🟢 | [iter 143 — 0c6968a](iter_143_0c6968a.md) | exp143: top3 canonical concentration | **+3.212** | **$+5821.34** (+11.643%) |
+| 🔴 | [iter 142 — 949ca99](iter_142_949ca99.md) | exp142: as-of top4 universe ranking | **+0.980** | **$+1198.96** (+2.398%) |
+| 🔴 | [iter 141 — 9b1409e](iter_141_9b1409e.md) | exp141: quarter readiness with 69.70703125pct reserve | **+2.884** | **$+4485.27** (+8.971%) |
+| 🔴 | [iter 140 — 8f968f4](iter_140_8f968f4.md) | exp140: quarter readiness with 69.7265625pct reserve | **+2.426** | **$+4281.01** (+8.562%) |
+| 🔴 | [iter 139 — 053333d](iter_139_053333d.md) | exp139: quarter readiness with 69.765625pct reserve | **+2.426** | **$+4275.61** (+8.551%) |
+| 🔴 | [iter 138 — b21f174](iter_138_b21f174.md) | exp138: quarter readiness with 69.84375pct reserve | **+2.426** | **$+4264.81** (+8.530%) |
 | 🟢 | [iter 137 — d00a152](iter_137_d00a152.md) | exp137: quarter readiness with 69.6875pct reserve | **+2.884** | **$+4488.09** (+8.976%) |
 | 🟢 | [iter 136 — 6ad4c5e](iter_136_6ad4c5e.md) | exp136: quarter readiness with 69.375pct reserve | **+2.883** | **$+4533.20** (+9.066%) |
 | 🟢 | [iter 135 — b30cf45](iter_135_b30cf45.md) | exp135: quarter readiness with 68.75pct reserve | **+2.881** | **$+4623.36** (+9.247%) |
