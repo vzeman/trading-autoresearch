@@ -531,11 +531,16 @@ def write_iteration_md(
         except Exception:
             continue
 
-    if trades_blocks:
-        # Aggregate: per-symbol counts + avg holding days across all seeds
+    positive_trades_blocks = [
+        block for block in trades_blocks
+        if block[4] and block[3] > block[4]
+    ]
+
+    if positive_trades_blocks:
+        # Aggregate: per-symbol counts + avg holding days across profitable seeds only.
         from collections import defaultdict
         per_sym = defaultdict(lambda: {"buys": 0, "sells": 0, "hold_days": []})
-        for _seed, trades, _n, _e, _s in trades_blocks:
+        for _seed, trades, _n, _e, _s in positive_trades_blocks:
             # pair BUYs with subsequent SELLs per symbol within this seed
             open_buy_ts: dict[str, str] = {}
             for t in trades:
@@ -557,7 +562,7 @@ def write_iteration_md(
                             pass
                         del open_buy_ts[sym]
         if per_sym:
-            md.append("## Per-symbol summary (aggregated across all seeds)")
+            md.append("## Per-symbol summary (profitable seeds only)")
             md.append("")
             md.append("| symbol | total trades | buys | sells | avg hold (days) | held-to-end |")
             md.append("|---|---:|---:|---:|---:|---:|")
@@ -573,14 +578,18 @@ def write_iteration_md(
                 md.append(f"| **{sym}** | {total} | {buys} | {sells} | {avg_str} | {still_open} |")
             md.append("")
 
-    # Per-seed transactions
+    # Per-seed transactions: keep reports readable by only showing profitable
+    # seeds. Losing/flat seed transaction tables are intentionally omitted.
     md.append("## Transactions")
     md.append("")
     if not trades_blocks:
         md.append("_(no per-seed trade JSON found — driver/experiment.py mismatch?)_")
         md.append("")
+    elif not positive_trades_blocks:
+        md.append("_(no profitable per-seed transaction table; losing/flat seeds omitted)_")
+        md.append("")
     else:
-        for seed, trades, n, ending_eq, starting in trades_blocks:
+        for seed, trades, n, ending_eq, starting in positive_trades_blocks:
             pnl = ending_eq - starting if starting else 0.0
             pnl_pct = (pnl / starting * 100) if starting else 0.0
             md.append(f"### Seed {seed} — {n} trades · ending equity ${ending_eq:,.2f} ({pnl:+,.2f} = {pnl_pct:+.2f}%)")
