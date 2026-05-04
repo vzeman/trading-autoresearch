@@ -16,23 +16,13 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-04 02:14 UTC** · `4d45772` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_111_4d45772.md](iterations/iter_111_4d45772.md)** · 📁 [all iterations](iterations/)
+### 🟡 LIVE — iter 112 — d5b2c32
 
-### Latest iteration: iter 111 — 4d45772
+_Started **2026-05-04 04:47 UTC** · `d5b2c32` · status: **RUNNING**_
 
-🔴 DISCARD · exp111: top4 with 28.5pct cash reserve
+**exp112: reward time above SPY benchmark**
 
-| metric | value |
-|---|---|
-| Sharpe (median) | **+1.550** |
-| Sharpe CI low (5%) | -0.398 |
-| Net PnL | **$+4766.02** (+9.532%) |
-| Max drawdown | -8.80% |
-| Trades | 2 |
-| Wall time | 364.1s |
-
-![iteration equity](docs/weighted_4d45772.png)
+Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
 
 ### Current best (`e360b24`)
 
@@ -40,6 +30,7 @@ _Last iteration: **2026-05-04 02:14 UTC** · `4d45772` · 🔴 DISCARD_
 |---|---|
 | Sharpe (median) | **+1.550** |
 | Sharpe CI low (5%) | -0.398 |
+| % time above SPY | —% |
 | Net PnL | **$+4750.35** (+9.501%) |
 | Max drawdown | -8.77% |
 | Trades | 2 |
