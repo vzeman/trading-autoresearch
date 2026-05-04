@@ -109,11 +109,6 @@ ALL_FEATURES = [
     "tlt_logret_1",   # 20yr Treasury ETF — interest-rate signal
     "uup_logret_1",   # USD-index ETF (DXY proxy) — currency macro
     "spy_logret_1",   # SPY return as a market factor (for SPY itself this == log_return_1)
-    # exp117: explicit SPY market-regime trend features (causal rolling log returns).
-    "spy_trend_1h", "spy_trend_4h", "spy_trend_1d",
-    "spy_trend_7d", "spy_trend_14d", "spy_trend_28d", "spy_trend_2mo",
-    "spy_trend_1h_minus_1d", "spy_trend_1d_minus_14d",
-    "spy_rv_1d", "spy_drawdown_1d", "spy_drawdown_7d",
     # exp82: REVERTED exp79's universe-context features — they regressed sharpe
     # +1.549 → +0.055. Probably scale-mismatch (pct_above_ma60 in [0,1] vs others
     # ~1e-4). Re-add later with proper z-score normalization. The featurize() stub
@@ -145,50 +140,15 @@ def fetch_context() -> dict[str, pd.DataFrame]:
         c = df["close"].to_numpy(np.float64)
         lr = np.zeros_like(c)
         lr[1:] = np.log(c[1:] / np.maximum(c[:-1], 1e-12))
-        ctx = pd.DataFrame({"timestamp": df["timestamp"], "logret": lr.astype(np.float32)})
-        if sym == "SPY":
-            lr_s = pd.Series(lr)
-            close_s = pd.Series(c)
-            windows = {
-                "spy_trend_1h": 60,
-                "spy_trend_4h": 240,
-                "spy_trend_1d": 390,
-                "spy_trend_7d": 1950,
-                "spy_trend_14d": 5460,
-                "spy_trend_28d": 10920,
-                "spy_trend_2mo": 23400,
-            }
-            for name, bars_window in windows.items():
-                ctx[name] = lr_s.rolling(bars_window, min_periods=1).sum().astype(np.float32)
-            ctx["spy_trend_1h_minus_1d"] = (ctx["spy_trend_1h"] - ctx["spy_trend_1d"]).astype(np.float32)
-            ctx["spy_trend_1d_minus_14d"] = (ctx["spy_trend_1d"] - ctx["spy_trend_14d"]).astype(np.float32)
-            ctx["spy_rv_1d"] = lr_s.rolling(390, min_periods=2).std(ddof=0).fillna(0.0).astype(np.float32)
-            for name, bars_window in {"spy_drawdown_1d": 390, "spy_drawdown_7d": 1950}.items():
-                roll_max = close_s.rolling(bars_window, min_periods=1).max()
-                ctx[name] = (np.log(close_s / np.maximum(roll_max, 1e-12))).fillna(0.0).astype(np.float32)
-        out[sym] = ctx
+        out[sym] = pd.DataFrame({"timestamp": df["timestamp"], "logret": lr.astype(np.float32)})
         print(f"[context] {sym}: {len(out[sym]):,} bars cached", flush=True)
     return out
 
 
 _CONTEXT_KEY_TO_FEATURE = {
-    "TLT":  [("logret", "tlt_logret_1")],
-    "UUP":  [("logret", "uup_logret_1")],
-    "SPY":  [
-        ("logret", "spy_logret_1"),
-        ("spy_trend_1h", "spy_trend_1h"),
-        ("spy_trend_4h", "spy_trend_4h"),
-        ("spy_trend_1d", "spy_trend_1d"),
-        ("spy_trend_7d", "spy_trend_7d"),
-        ("spy_trend_14d", "spy_trend_14d"),
-        ("spy_trend_28d", "spy_trend_28d"),
-        ("spy_trend_2mo", "spy_trend_2mo"),
-        ("spy_trend_1h_minus_1d", "spy_trend_1h_minus_1d"),
-        ("spy_trend_1d_minus_14d", "spy_trend_1d_minus_14d"),
-        ("spy_rv_1d", "spy_rv_1d"),
-        ("spy_drawdown_1d", "spy_drawdown_1d"),
-        ("spy_drawdown_7d", "spy_drawdown_7d"),
-    ],
+    "TLT":  "tlt_logret_1",
+    "UUP":  "uup_logret_1",
+    "SPY":  "spy_logret_1",
 }
 
 
@@ -276,20 +236,15 @@ def featurize(bars: pd.DataFrame, context: dict[str, pd.DataFrame] | None = None
 
     # ---- Context features: backward merge_asof (causal) ----
     feat = feat.sort_values("timestamp").reset_index(drop=True)
-    for ctx_sym, feature_specs in _CONTEXT_KEY_TO_FEATURE.items():
+    for ctx_sym, feat_name in _CONTEXT_KEY_TO_FEATURE.items():
         if context is not None and ctx_sym in context:
             ctx_df = context[ctx_sym].sort_values("timestamp").reset_index(drop=True)
             merged = pd.merge_asof(
                 feat[["timestamp"]], ctx_df, on="timestamp", direction="backward",
             )
-            for ctx_col, feat_name in feature_specs:
-                if ctx_col in merged:
-                    feat[feat_name] = merged[ctx_col].fillna(0.0).astype(np.float32).to_numpy()
-                else:
-                    feat[feat_name] = np.zeros(len(feat), dtype=np.float32)
+            feat[feat_name] = merged["logret"].fillna(0.0).astype(np.float32).to_numpy()
         else:
-            for _ctx_col, feat_name in feature_specs:
-                feat[feat_name] = np.zeros(len(feat), dtype=np.float32)
+            feat[feat_name] = np.zeros(len(feat), dtype=np.float32)
     # exp79: stub-init the universe-context columns; populated by add_universe_context()
     # after all symbols have been featurized. Keeps featurize() signature unchanged.
     feat["univ_mean_logret_1"] = np.zeros(len(feat), dtype=np.float32)
@@ -969,7 +924,7 @@ PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at on
 # MAX_POS_FRACTION_OF_FREE_CASH of free cash.
 # ============================================================================
 MAX_POS_FRACTION_OF_FREE_CASH = 0.50  # exp47: SWAP + cap 0.50. exp46 (SWAP+0.65) gave best sharpe yet (+1.42) but DD -10.85% over floor on seed 1 only. Drop cap from 0.65 to 0.50 to bring worst-seed DD comfortably under -10%.
-MIN_CASH_RESERVE_PCT = 0.2875         # exp117: fresh pretrain with SPY regime features and best quarter-readiness
+MIN_CASH_RESERVE_PCT = 0.30           # exp118: best quarter-readiness with higher reserve for tail-risk control
 MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
 KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effect — cap saturates)
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
@@ -2006,7 +1961,7 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp117: canonical top4 uses best quarter-readiness with explicit SPY trend regime features.
+    # exp118: canonical top4 quarter-readiness with 30% cash reserve.
     canonical_broker = weighted
     try:
         # exp87: REVERT to (3,4) = 4h + 1d combo. Both single-horizon variants
