@@ -924,40 +924,12 @@ PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at on
 # MAX_POS_FRACTION_OF_FREE_CASH of free cash.
 # ============================================================================
 MAX_POS_FRACTION_OF_FREE_CASH = 0.50  # exp47: SWAP + cap 0.50. exp46 (SWAP+0.65) gave best sharpe yet (+1.42) but DD -10.85% over floor on seed 1 only. Drop cap from 0.65 to 0.50 to bring worst-seed DD comfortably under -10%.
-MIN_CASH_RESERVE_PCT = 0.2875         # exp110: keep best reserve and test sector-capped top4
+MIN_CASH_RESERVE_PCT = 0.285          # exp111: refine successful reserve band between 27.5% and 28.75%
 MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
 KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effect — cap saturates)
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
 WEIGHTED_MIN_TRADE_USD = 100.0        # too small → fee dominates
 WEIGHTED_SWAP_MARGIN = 0.15           # exp50: keep 0.15
-TOPN_MAX_PER_SECTOR = 2               # exp110: avoid top4 over-concentration in one sector/theme
-SECTOR_MAP = {
-    "SPY": "broad_etf", "QQQ": "broad_etf", "IWM": "broad_etf", "EEM": "broad_etf",
-    "XLF": "financials", "BAC": "financials", "JPM": "financials", "GS": "financials",
-    "MS": "financials", "C": "financials", "COF": "financials", "SCHW": "financials",
-    "USB": "financials", "BLK": "financials", "AXP": "financials", "V": "financials",
-    "MA": "financials", "SPGI": "financials",
-    "AAPL": "tech", "MSFT": "tech", "NVDA": "tech", "GOOGL": "tech", "META": "tech",
-    "AMD": "tech", "INTC": "tech", "ORCL": "tech", "CRM": "tech", "ADBE": "tech",
-    "QCOM": "tech", "TXN": "tech", "IBM": "tech", "AMAT": "tech", "INTU": "tech",
-    "NOW": "tech", "ADI": "tech",
-    "AMZN": "consumer", "TSLA": "consumer", "NFLX": "consumer", "F": "consumer",
-    "NKE": "consumer", "MCD": "consumer", "HD": "consumer", "LOW": "consumer",
-    "COST": "consumer", "SBUX": "consumer", "BKNG": "consumer", "CMCSA": "consumer",
-    "DIS": "consumer",
-    "UNH": "healthcare", "LLY": "healthcare", "ABBV": "healthcare", "TMO": "healthcare",
-    "MRK": "healthcare", "ABT": "healthcare", "PFE": "healthcare", "DHR": "healthcare",
-    "BMY": "healthcare", "AMGN": "healthcare", "ELV": "healthcare", "ISRG": "healthcare",
-    "GILD": "healthcare", "ZTS": "healthcare", "REGN": "healthcare", "VRTX": "healthcare",
-    "CI": "healthcare", "BSX": "healthcare", "SYK": "healthcare", "JNJ": "healthcare",
-    "XOM": "energy", "CVX": "energy", "GE": "industrials", "BA": "industrials",
-    "RTX": "industrials", "UPS": "industrials", "HON": "industrials", "LMT": "industrials",
-    "CAT": "industrials", "DE": "industrials", "ETN": "industrials", "LIN": "materials",
-    "PG": "staples", "KO": "staples", "PEP": "staples", "MDLZ": "staples", "PM": "staples",
-    "MO": "staples", "WMT": "staples", "NEE": "utilities", "DUK": "utilities",
-    "PLD": "real_estate", "AMT": "real_estate", "COIN": "crypto_beta",
-    "PLTR": "high_beta_growth", "NIO": "high_beta_growth",
-}
 # exp58: realistic transaction friction (re-applied — was reset by exp57 discard)
 VOLUME_IMPACT_BPS_PER_PCT = 50.0      # extra slippage per 1% of bar's $-volume our order represents
 VOLUME_IMPACT_MAX_BPS = 200.0         # cap extra slippage at 2%
@@ -1614,16 +1586,7 @@ def simulate_passive_topn(
                             scores = [0.0] * len(ready)
                     model.train()
                 ranked = sorted(zip(ready, scores), key=lambda r: -r[1])
-                top = []
-                sector_counts: dict[str, int] = {}
-                for item in ranked:
-                    sector = SECTOR_MAP.get(item[0][0], f"single_{item[0][0]}")
-                    if sector_counts.get(sector, 0) >= TOPN_MAX_PER_SECTOR:
-                        continue
-                    top.append(item)
-                    sector_counts[sector] = sector_counts.get(sector, 0) + 1
-                    if len(top) >= top_n:
-                        break
+                top = ranked[:top_n]
                 if top:
                     per_pos = broker.free_cash() / len(top)
                     for (sym, i_now), score in top:
@@ -1983,7 +1946,7 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp110: canonical top4 with max two names per sector/theme.
+    # exp111: canonical top4 at 28.5% reserve.
     canonical_broker = weighted
     try:
         # exp87: REVERT to (3,4) = 4h + 1d combo. Both single-horizon variants
