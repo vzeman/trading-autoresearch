@@ -924,7 +924,7 @@ PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at on
 # MAX_POS_FRACTION_OF_FREE_CASH of free cash.
 # ============================================================================
 MAX_POS_FRACTION_OF_FREE_CASH = 0.50  # exp47: SWAP + cap 0.50. exp46 (SWAP+0.65) gave best sharpe yet (+1.42) but DD -10.85% over floor on seed 1 only. Drop cap from 0.65 to 0.50 to bring worst-seed DD comfortably under -10%.
-MIN_CASH_RESERVE_PCT = 0.2875         # exp112: restore best reserve while driver rewards time above SPY
+MIN_CASH_RESERVE_PCT = 0.2875         # exp113: keep best reserve while ranking top4 by alpha vs SPY
 MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
 KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effect — cap saturates)
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
@@ -1525,6 +1525,7 @@ def simulate_passive_topn(
     ranking_horizons: tuple = (4, 8, 10),
     name: str = "topn",
     precomputed_preds: dict | None = None,
+    rank_vs_spy: bool = False,
 ) -> WeightedBroker:
     """Pick top-N at first ready bar, equal-weight buy, hold to end."""
     broker = WeightedBroker(STARTING_CASH_USD, min_reserve_frac=MIN_CASH_RESERVE_PCT)
@@ -1559,12 +1560,18 @@ def simulate_passive_topn(
                     else:
                         ready = kept
                         scores_np = np.zeros(mh_mean_np.shape[0], dtype=np.float32)
+                        spy_sharpe = np.zeros(mh_mean_np.shape[1], dtype=np.float32)
+                        if rank_vs_spy:
+                            for row_idx, (sym, _i_now) in enumerate(ready):
+                                if sym == "SPY":
+                                    spy_sharpe = mh_mean_np[row_idx] / (np.exp(mh_log_std_np[row_idx]) + 1e-12)
+                                    break
                         for hi in ranking_horizons:
                             if hi >= mh_mean_np.shape[1]:
                                 continue
                             mu = mh_mean_np[:, hi]
                             sd = np.exp(mh_log_std_np[:, hi])
-                            scores_np += (mu / (sd + 1e-12))
+                            scores_np += (mu / (sd + 1e-12)) - spy_sharpe[hi]
                         scores = scores_np.tolist()
                 else:
                     batch_X = [feat_arrays[sym][i_now - C + 1 : i_now + 1] for sym, i_now in ready]
@@ -1574,12 +1581,20 @@ def simulate_passive_topn(
                         if model.horizons_minutes:
                             mh_mean, mh_log_std = model.forward_multi_horizon(xb)
                             scores = None
+                            spy_sharpe = None
+                            if rank_vs_spy:
+                                for row_idx, (sym, _i_now) in enumerate(ready):
+                                    if sym == "SPY":
+                                        spy_sharpe = mh_mean[row_idx] / (torch.exp(mh_log_std[row_idx]) + 1e-12)
+                                        break
                             for hi in ranking_horizons:
                                 if hi >= mh_mean.size(1):
                                     continue
                                 mu = mh_mean[:, hi]
                                 sd = torch.exp(mh_log_std[:, hi])
                                 s = mu / (sd + 1e-12)
+                                if spy_sharpe is not None:
+                                    s = s - spy_sharpe[hi]
                                 scores = s if scores is None else scores + s
                             scores = scores.cpu().tolist() if scores is not None else [0.0] * len(ready)
                         else:
@@ -1946,7 +1961,7 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp112: canonical top4 at best reserve; evaluator rewards longer time above SPY.
+    # exp113: canonical top4 ranks alpha vs SPY instead of absolute forecast Sharpe.
     canonical_broker = weighted
     try:
         # exp87: REVERT to (3,4) = 4h + 1d combo. Both single-horizon variants
@@ -1954,7 +1969,8 @@ def train_and_eval(seed: int = 0) -> tuple:
         # local optimum.
         topn_broker = simulate_passive_topn(model, eval_feat, device, top_n=4, name="top4",
                                             ranking_horizons=(3, 4),
-                                            precomputed_preds=pred_cache)
+                                            precomputed_preds=pred_cache,
+                                            rank_vs_spy=True)
         if topn_broker.equity_curve and len(topn_broker.equity_curve) > 5:
             canonical_broker = topn_broker
             print(f"[experiment] canonical = top4_picker (final equity ${topn_broker.equity_curve[-1][1]:,.2f})", flush=True)
