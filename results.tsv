@@ -137,3 +137,4 @@ b21f174	2.4263	-0.1795	-4.82	4264.81	3	discard	exp138: quarter readiness with 69
 9b1409e	2.8843	0.5513	-4.84	4485.27	3	discard	exp141: quarter readiness with 69.70703125pct reserve	44.096
 949ca99	0.9796	-1.6332	-4.09	1198.96	3	discard	exp142: as-of top4 universe ranking	39.161
 0c6968a	3.2122	0.7389	-4.50	5821.34	2	keep	exp143: top3 canonical concentration	53.189
+760c138	3.1967	0.8416	-3.29	6877.78	1	keep	exp144: top2 canonical concentration	54.304
