@@ -8,7 +8,7 @@ Assumes the agent has ALREADY edited experiment.py and committed. This script:
   3. Decides keep/discard per program.md rules:
        - max_dd_pct < -15 → discard (auto)
        - objective score improves → keep
-         objective = sharpe_ci_low + 0.10 * (% time above SPY / 100)
+         objective = sharpe_ci_low + 0.30 * (% time above SPY / 100) + 0.01 * pnl_pct
        - otherwise → discard
   4. Updates the last row of results.tsv with the decided status
   5. discard → git reset --hard HEAD~1
@@ -39,7 +39,9 @@ ITERATIONS_DIR = REPO / "iterations"
 LATEST_LINK = ITERATIONS_DIR / "latest.md"
 DOCS = REPO / "docs"
 DD_FLOOR = -15.0   # exp65: SPY itself has had > -10% intra-period DDs; -15 is the realistic floor
-OVER_SPY_OBJECTIVE_WEIGHT = 0.10  # reward strategies that stay above SPY longer: +0.10 CI-score at 100% over-SPY time
+STARTING_CASH_USD = 50_000.0
+OVER_SPY_OBJECTIVE_WEIGHT = 0.30  # stronger reward for staying above SPY longer: +0.30 CI-score at 100% over-SPY time
+PNL_PCT_OBJECTIVE_WEIGHT = 0.01   # small anti-cash-drift reward for real net return after costs
 
 
 def git(args: list[str]) -> str:
@@ -62,9 +64,13 @@ def parse_canonical(text: str) -> dict[str, str]:
     return out
 
 
-def _objective_score(ci_low: float, over_spy_pct: float) -> float:
-    """Autoresearch keep score: robust Sharpe lower bound plus SPY-duration reward."""
-    return ci_low + OVER_SPY_OBJECTIVE_WEIGHT * (over_spy_pct / 100.0)
+def _objective_score(ci_low: float, over_spy_pct: float, pnl_pct: float) -> float:
+    """Autoresearch keep score: robust Sharpe lower bound plus SPY-duration and return rewards."""
+    return (
+        ci_low
+        + OVER_SPY_OBJECTIVE_WEIGHT * (over_spy_pct / 100.0)
+        + PNL_PCT_OBJECTIVE_WEIGHT * pnl_pct
+    )
 
 
 def best_kept_objective() -> float:
@@ -89,8 +95,10 @@ def best_kept_objective() -> float:
                 if trades <= 0:
                     continue
                 ci_low = float(parts[2])
+                pnl_usd = float(parts[4])
+                pnl_pct = pnl_usd / STARTING_CASH_USD * 100.0 if STARTING_CASH_USD > 0 else 0.0
                 over_spy_pct = float(parts[8]) if len(parts) >= 9 and parts[8] else 0.0
-                v = _objective_score(ci_low, over_spy_pct)
+                v = _objective_score(ci_low, over_spy_pct, pnl_pct)
                 best = max(best, v)
             except ValueError:
                 continue
@@ -736,6 +744,7 @@ def main() -> None:
         dd = float(metrics["max_dd_pct"])
         sharpe = float(metrics.get("sharpe", "0"))
         trades = int(metrics.get("trades", "0"))
+        pnl_pct = float(metrics.get("pnl_pct", "0"))
         over_spy_pct = float(metrics.get("primary_pct_over_spy", metrics.get("weighted_pct_over_spy", "0")))
     except (KeyError, ValueError) as e:
         print(f"STATUS=crash reason=parse_failed: {e}", flush=True)
@@ -744,7 +753,7 @@ def main() -> None:
         return
 
     iter_num = next_iter_number(description)
-    objective = _objective_score(ci_low, over_spy_pct)
+    objective = _objective_score(ci_low, over_spy_pct, pnl_pct)
     prior_best = best_kept_objective()
     if dd < DD_FLOOR:
         status, reason = "discard", f"dd={dd:+.2f} < {DD_FLOOR}"
@@ -765,7 +774,7 @@ def main() -> None:
         status, reason = (
             "keep",
             f"objective={objective:+.4f} > prior best {prior_best:+.4f} "
-            f"(ci_low={ci_low:+.4f}, over_spy={over_spy_pct:.1f}%)",
+            f"(ci_low={ci_low:+.4f}, over_spy={over_spy_pct:.1f}%, pnl={pnl_pct:+.2f}%)",
         )
         update_last_row_status(status, description)
         promoted = promote_checkpoints(commit, ci_low)
@@ -778,7 +787,7 @@ def main() -> None:
         status, reason = (
             "discard",
             f"objective={objective:+.4f} ≤ prior best {prior_best:+.4f} "
-            f"(ci_low={ci_low:+.4f}, over_spy={over_spy_pct:.1f}%)",
+            f"(ci_low={ci_low:+.4f}, over_spy={over_spy_pct:.1f}%, pnl={pnl_pct:+.2f}%)",
         )
         update_last_row_status(status, description)
         write_iteration_md(iter_num, commit, description, status, reason, metrics, elapsed, proc.stdout)
@@ -795,7 +804,7 @@ def main() -> None:
     print(
         f"STATUS={status}  COMMIT={commit}  SHARPE={sharpe:+.3f}  "
         f"CI_LOW={ci_low:+.4f}  OVER_SPY={over_spy_pct:.1f}%  "
-        f"SCORE={objective:+.4f}  DD={dd:+.2f}  ELAPSED={elapsed:.0f}s  REASON={reason}",
+        f"PNL={pnl_pct:+.2f}%  SCORE={objective:+.4f}  DD={dd:+.2f}  ELAPSED={elapsed:.0f}s  REASON={reason}",
         flush=True,
     )
 
