@@ -16,25 +16,36 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 120 — 2b434bd
+_Last iteration: **2026-05-04 12:49 UTC** · `2b434bd` · 🟢 KEEP — new best_  
+📄 **[Full iteration report → iterations/iter_120_2b434bd.md](iterations/iter_120_2b434bd.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-04 12:42 UTC** · `2b434bd` · status: **RUNNING**_
+### Latest iteration: iter 120 — 2b434bd
 
-**exp120: quarter readiness with 32.5pct reserve**
-
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
-
-### Current best (`d2fe4cb`)
+🟢 KEEP — new best · exp120: quarter readiness with 32.5pct reserve
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **+2.753** |
-| Sharpe CI low (5%) | +0.508 |
-| % time above SPY | 22.723% |
-| Net PnL | **$+9926.36** (+19.853%) |
-| Max drawdown | -10.91% |
+| Sharpe (median) | **+2.755** |
+| Sharpe CI low (5%) | +0.509 |
+| % time above SPY | 23.398% |
+| Net PnL | **$+9748.13** (+19.496%) |
+| Max drawdown | -10.71% |
 | Trades | 3 |
-| Saved at | 2026-05-04 12:42:08 |
+| Wall time | 372.3s |
+
+![iteration equity](docs/weighted_2b434bd.png)
+
+### Current best (`2b434bd`)
+
+| metric | value |
+|---|---|
+| Sharpe (median) | **+2.755** |
+| Sharpe CI low (5%) | +0.509 |
+| % time above SPY | 23.398% |
+| Net PnL | **$+9748.13** (+19.496%) |
+| Max drawdown | -10.71% |
+| Trades | 3 |
+| Saved at | 2026-05-04 12:49:03 |
 
 ![weighted equity, current best](docs/weighted_latest.png)
 
@@ -228,8 +239,8 @@ MIT — copy, fork, modify, anything.
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-05-04 10:42 UTC_  
-_Total experiments: **8**  ·  kept: **4**  ·  latest commit: `d2fe4cb`_
+_Last updated: 2026-05-04 10:49 UTC_  
+_Total experiments: **9**  ·  kept: **5**  ·  latest commit: `2b434bd`_
 
 ### Weighted strategy — full eval window (~73 days)
 
@@ -243,7 +254,7 @@ _Total experiments: **8**  ·  kept: **4**  ·  latest commit: `d2fe4cb`_
 
 | Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees | % time > SPY |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+2.753** 🏆 | **$+9,926.36** 🏆 | +19.853% | -10.91% | 3 | $3.00 | **23%** 🏆 |
+| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+2.755** 🏆 | **$+9,748.13** 🏆 | +19.496% | -10.71% | 3 | $3.00 | **23%** 🏆 |
 | **SP500 (SPY) buy-and-hold** — passive benchmark | +1.011 | $+2,017.61 | +4.035% | **-9.73%** 🏆 | 1 | **$1.00** 🏆 | 0% |
 
 **Best by Sharpe:** Weighted (Kelly-sized, max 20% free cash, ≤5/step)
@@ -252,12 +263,12 @@ _Total experiments: **8**  ·  kept: **4**  ·  latest commit: `d2fe4cb`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+2.753** |
-| Net PnL | $+9,926.36 (+19.853%) |
-| Max drawdown | -10.91% |
+| Sharpe (median over seeds) | **+2.755** |
+| Net PnL | $+9,748.13 (+19.496%) |
+| Max drawdown | -10.71% |
 | Trades | 3 |
 | % time above SPY | 23% |
-| Wall time | 370.4s |
+| Wall time | 372.3s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
@@ -268,9 +279,10 @@ _Total experiments: **8**  ·  kept: **4**  ·  latest commit: `d2fe4cb`_
 
 | # | commit | Sharpe | CI-low | DD% | PnL | Trades | Description |
 |---|---|---:|---:|---:|---:|---:|---|
-| 1 | `12f2906` | +2.75 | +0.51 | -11.11 | $+10,104.51 | 3 | exp118: quarter readiness with 30pct reserve |
-| 2 | `f0d293d` | +2.75 | +0.51 | -11.30 | $+10,282.57 | 3 | exp115: quarter universe top4 readiness |
-| 3 | `ca24c64` | +2.21 | -0.33 | -7.89 | $+4,096.66 | 2 | exp114: earlier top4 deployment |
-| 4 | `d5b2c32` | +1.55 | -0.40 | -8.77 | $+4,750.35 | 2 | exp112: reward time above SPY benchmark |
+| 1 | `d2fe4cb` | +2.75 | +0.51 | -10.91 | $+9,926.36 | 3 | exp119: quarter readiness with 31.25pct reserve |
+| 2 | `12f2906` | +2.75 | +0.51 | -11.11 | $+10,104.51 | 3 | exp118: quarter readiness with 30pct reserve |
+| 3 | `f0d293d` | +2.75 | +0.51 | -11.30 | $+10,282.57 | 3 | exp115: quarter universe top4 readiness |
+| 4 | `ca24c64` | +2.21 | -0.33 | -7.89 | $+4,096.66 | 2 | exp114: earlier top4 deployment |
+| 5 | `d5b2c32` | +1.55 | -0.40 | -8.77 | $+4,750.35 | 2 | exp112: reward time above SPY benchmark |
 
 <!-- RESULTS_END -->
