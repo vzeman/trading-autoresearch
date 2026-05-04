@@ -16,25 +16,36 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 119 — d2fe4cb
+_Last iteration: **2026-05-04 12:42 UTC** · `d2fe4cb` · 🟢 KEEP — new best_  
+📄 **[Full iteration report → iterations/iter_119_d2fe4cb.md](iterations/iter_119_d2fe4cb.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-04 12:35 UTC** · `d2fe4cb` · status: **RUNNING**_
+### Latest iteration: iter 119 — d2fe4cb
 
-**exp119: quarter readiness with 31.25pct reserve**
-
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
-
-### Current best (`12f2906`)
+🟢 KEEP — new best · exp119: quarter readiness with 31.25pct reserve
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **+2.750** |
-| Sharpe CI low (5%) | +0.506 |
-| % time above SPY | 22.312% |
-| Net PnL | **$+10104.51** (+20.209%) |
-| Max drawdown | -11.11% |
+| Sharpe (median) | **+2.753** |
+| Sharpe CI low (5%) | +0.508 |
+| % time above SPY | 22.723% |
+| Net PnL | **$+9926.36** (+19.853%) |
+| Max drawdown | -10.91% |
 | Trades | 3 |
-| Saved at | 2026-05-04 12:35:15 |
+| Wall time | 370.4s |
+
+![iteration equity](docs/weighted_d2fe4cb.png)
+
+### Current best (`d2fe4cb`)
+
+| metric | value |
+|---|---|
+| Sharpe (median) | **+2.753** |
+| Sharpe CI low (5%) | +0.508 |
+| % time above SPY | 22.723% |
+| Net PnL | **$+9926.36** (+19.853%) |
+| Max drawdown | -10.91% |
+| Trades | 3 |
+| Saved at | 2026-05-04 12:42:08 |
 
 ![weighted equity, current best](docs/weighted_latest.png)
 
@@ -228,8 +239,8 @@ MIT — copy, fork, modify, anything.
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-05-04 10:35 UTC_  
-_Total experiments: **7**  ·  kept: **3**  ·  latest commit: `12f2906`_
+_Last updated: 2026-05-04 10:42 UTC_  
+_Total experiments: **8**  ·  kept: **4**  ·  latest commit: `d2fe4cb`_
 
 ### Weighted strategy — full eval window (~73 days)
 
@@ -243,7 +254,7 @@ _Total experiments: **7**  ·  kept: **3**  ·  latest commit: `12f2906`_
 
 | Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees | % time > SPY |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+2.750** 🏆 | **$+10,104.51** 🏆 | +20.209% | -11.11% | 3 | $3.00 | **22%** 🏆 |
+| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+2.753** 🏆 | **$+9,926.36** 🏆 | +19.853% | -10.91% | 3 | $3.00 | **23%** 🏆 |
 | **SP500 (SPY) buy-and-hold** — passive benchmark | +1.011 | $+2,017.61 | +4.035% | **-9.73%** 🏆 | 1 | **$1.00** 🏆 | 0% |
 
 **Best by Sharpe:** Weighted (Kelly-sized, max 20% free cash, ≤5/step)
@@ -252,12 +263,12 @@ _Total experiments: **7**  ·  kept: **3**  ·  latest commit: `12f2906`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+2.750** |
-| Net PnL | $+10,104.51 (+20.209%) |
-| Max drawdown | -11.11% |
+| Sharpe (median over seeds) | **+2.753** |
+| Net PnL | $+9,926.36 (+19.853%) |
+| Max drawdown | -10.91% |
 | Trades | 3 |
-| % time above SPY | 22% |
-| Wall time | 368.0s |
+| % time above SPY | 23% |
+| Wall time | 370.4s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
@@ -268,8 +279,9 @@ _Total experiments: **7**  ·  kept: **3**  ·  latest commit: `12f2906`_
 
 | # | commit | Sharpe | CI-low | DD% | PnL | Trades | Description |
 |---|---|---:|---:|---:|---:|---:|---|
-| 1 | `f0d293d` | +2.75 | +0.51 | -11.30 | $+10,282.57 | 3 | exp115: quarter universe top4 readiness |
-| 2 | `ca24c64` | +2.21 | -0.33 | -7.89 | $+4,096.66 | 2 | exp114: earlier top4 deployment |
-| 3 | `d5b2c32` | +1.55 | -0.40 | -8.77 | $+4,750.35 | 2 | exp112: reward time above SPY benchmark |
+| 1 | `12f2906` | +2.75 | +0.51 | -11.11 | $+10,104.51 | 3 | exp118: quarter readiness with 30pct reserve |
+| 2 | `f0d293d` | +2.75 | +0.51 | -11.30 | $+10,282.57 | 3 | exp115: quarter universe top4 readiness |
+| 3 | `ca24c64` | +2.21 | -0.33 | -7.89 | $+4,096.66 | 2 | exp114: earlier top4 deployment |
+| 4 | `d5b2c32` | +1.55 | -0.40 | -8.77 | $+4,750.35 | 2 | exp112: reward time above SPY benchmark |
 
 <!-- RESULTS_END -->
