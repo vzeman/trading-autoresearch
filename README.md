@@ -16,25 +16,36 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 130 — 746aed3
+_Last iteration: **2026-05-04 22:40 UTC** · `746aed3` · 🟢 KEEP — new best_  
+📄 **[Full iteration report → iterations/iter_130_746aed3.md](iterations/iter_130_746aed3.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-04 22:33 UTC** · `746aed3` · status: **RUNNING**_
+### Latest iteration: iter 130 — 746aed3
 
-**exp130: quarter readiness with 55pct reserve**
-
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
-
-### Current best (`314b81f`)
+🟢 KEEP — new best · exp130: quarter readiness with 55pct reserve
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **+2.808** |
-| Sharpe CI low (5%) | +0.531 |
-| % time above SPY | 34.929% |
-| Net PnL | **$+7283.93** (+14.568%) |
-| Max drawdown | -7.95% |
+| Sharpe (median) | **+2.828** |
+| Sharpe CI low (5%) | +0.537 |
+| % time above SPY | 36.263% |
+| Net PnL | **$+6582.79** (+13.166%) |
+| Max drawdown | -7.16% |
 | Trades | 3 |
-| Saved at | 2026-05-04 22:33:18 |
+| Wall time | 409.9s |
+
+![iteration equity](docs/weighted_746aed3.png)
+
+### Current best (`746aed3`)
+
+| metric | value |
+|---|---|
+| Sharpe (median) | **+2.828** |
+| Sharpe CI low (5%) | +0.537 |
+| % time above SPY | 36.263% |
+| Net PnL | **$+6582.79** (+13.166%) |
+| Max drawdown | -7.16% |
+| Trades | 3 |
+| Saved at | 2026-05-04 22:40:39 |
 
 ![weighted equity, current best](docs/weighted_latest.png)
 
@@ -228,8 +239,8 @@ MIT — copy, fork, modify, anything.
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-05-04 20:33 UTC_  
-_Total experiments: **18**  ·  kept: **14**  ·  latest commit: `314b81f`_
+_Last updated: 2026-05-04 20:40 UTC_  
+_Total experiments: **19**  ·  kept: **15**  ·  latest commit: `746aed3`_
 
 ### Weighted strategy — full eval window (~73 days)
 
@@ -243,7 +254,7 @@ _Total experiments: **18**  ·  kept: **14**  ·  latest commit: `314b81f`_
 
 | Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees | % time > SPY |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+2.808** 🏆 | **$+7,283.93** 🏆 | +14.568% | **-7.95%** 🏆 | 3 | $3.00 | **35%** 🏆 |
+| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+2.828** 🏆 | **$+6,582.79** 🏆 | +13.166% | **-7.16%** 🏆 | 3 | $3.00 | **36%** 🏆 |
 | **SP500 (SPY) buy-and-hold** — passive benchmark | +1.011 | $+2,017.61 | +4.035% | -9.73% | 1 | **$1.00** 🏆 | 0% |
 
 **Best by Sharpe:** Weighted (Kelly-sized, max 20% free cash, ≤5/step)
@@ -252,12 +263,12 @@ _Total experiments: **18**  ·  kept: **14**  ·  latest commit: `314b81f`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+2.808** |
-| Net PnL | $+7,283.93 (+14.568%) |
-| Max drawdown | -7.95% |
+| Sharpe (median over seeds) | **+2.828** |
+| Net PnL | $+6,582.79 (+13.166%) |
+| Max drawdown | -7.16% |
 | Trades | 3 |
-| % time above SPY | 35% |
-| Wall time | 593.4s |
+| % time above SPY | 36% |
+| Wall time | 409.9s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
@@ -268,10 +279,10 @@ _Total experiments: **18**  ·  kept: **14**  ·  latest commit: `314b81f`_
 
 | # | commit | Sharpe | CI-low | DD% | PnL | Trades | Description |
 |---|---|---:|---:|---:|---:|---:|---|
-| 1 | `0967d0c` | +2.80 | +0.53 | -8.34 | $+7,632.96 | 3 | exp128: quarter readiness with 47.5pct reserve |
-| 2 | `64c4f8b` | +2.79 | +0.53 | -8.74 | $+7,985.34 | 3 | exp127: quarter readiness with 45pct reserve |
-| 3 | `c1a0d12` | +2.78 | +0.52 | -9.13 | $+8,336.71 | 3 | exp126: quarter readiness with 42.5pct reserve |
-| 4 | `b60a033` | +2.78 | +0.52 | -9.53 | $+8,687.08 | 3 | exp125: quarter readiness with 40pct reserve |
-| 5 | `d09093a` | +2.77 | +0.52 | -9.92 | $+9,036.44 | 3 | exp124: quarter readiness with 37.5pct reserve |
+| 1 | `314b81f` | +2.81 | +0.53 | -7.95 | $+7,283.93 | 3 | exp129: quarter readiness with 50pct reserve |
+| 2 | `0967d0c` | +2.80 | +0.53 | -8.34 | $+7,632.96 | 3 | exp128: quarter readiness with 47.5pct reserve |
+| 3 | `64c4f8b` | +2.79 | +0.53 | -8.74 | $+7,985.34 | 3 | exp127: quarter readiness with 45pct reserve |
+| 4 | `c1a0d12` | +2.78 | +0.52 | -9.13 | $+8,336.71 | 3 | exp126: quarter readiness with 42.5pct reserve |
+| 5 | `b60a033` | +2.78 | +0.52 | -9.53 | $+8,687.08 | 3 | exp125: quarter readiness with 40pct reserve |
 
 <!-- RESULTS_END -->
