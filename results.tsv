@@ -104,3 +104,4 @@ c77b022	1.5500	-1.0117	-8.76	4745.45	2	discard	exp105: top4 with 28.828125pct ca
 2e53623	1.5499	-1.0117	-8.77	4750.35	3	discard	exp108: top4 with 5d rank horizon
 bc20b19	1.5499	-0.3976	-8.77	4749.72	2	discard	exp109: fee aware top4 sizing
 f9eb5bb	1.5499	-0.3976	-8.77	4750.35	2	discard	exp110: sector capped top4 picker
+4d45772	1.5496	-0.3982	-8.80	4766.02	2	discard	exp111: top4 with 28.5pct cash reserve
