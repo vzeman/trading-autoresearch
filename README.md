@@ -16,13 +16,24 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 113 — c90ac3b
+_Last iteration: **2026-05-04 05:48 UTC** · `c90ac3b` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_113_c90ac3b.md](iterations/iter_113_c90ac3b.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-04 05:41 UTC** · `c90ac3b` · status: **RUNNING**_
+### Latest iteration: iter 113 — c90ac3b
 
-**exp113: rank top4 by alpha vs SPY**
+🔴 DISCARD · exp113: rank top4 by alpha vs SPY
 
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
+| metric | value |
+|---|---|
+| Sharpe (median) | **+1.550** |
+| Sharpe CI low (5%) | -0.398 |
+| % time above SPY | 28.039% |
+| Net PnL | **$+4750.35** (+9.501%) |
+| Max drawdown | -8.77% |
+| Trades | 2 |
+| Wall time | 408.8s |
+
+![iteration equity](docs/weighted_c90ac3b.png)
 
 ### Current best (`d5b2c32`)
 

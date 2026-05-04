@@ -106,3 +106,4 @@ bc20b19	1.5499	-0.3976	-8.77	4749.72	2	discard	exp109: fee aware top4 sizing
 f9eb5bb	1.5499	-0.3976	-8.77	4750.35	2	discard	exp110: sector capped top4 picker
 4d45772	1.5496	-0.3982	-8.80	4766.02	2	discard	exp111: top4 with 28.5pct cash reserve
 d5b2c32	1.5499	-0.3976	-8.77	4750.35	2	keep	exp112: reward time above SPY benchmark	28.039
+c90ac3b	1.5499	-0.3976	-8.77	4750.35	2	discard	exp113: rank top4 by alpha vs SPY	28.039
