@@ -16,25 +16,36 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 153 — d5b40ef
+_Last iteration: **2026-05-05 01:24 UTC** · `d5b40ef` · 🟢 KEEP — new best_  
+📄 **[Full iteration report → iterations/iter_153_d5b40ef.md](iterations/iter_153_d5b40ef.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-05 01:18 UTC** · `d5b40ef` · status: **RUNNING**_
+### Latest iteration: iter 153 — d5b40ef
 
-**exp153: SPY-alpha objective with top2 82.5pct reserve**
-
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
-
-### Current best (`d412eeb`)
+🟢 KEEP — new best · exp153: SPY-alpha objective with top2 82.5pct reserve
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **+3.227** |
-| Sharpe CI low (5%) | +0.960 |
-| % time above SPY | 49.943% |
-| Net PnL | **$+573.98** (+1.148%) |
-| Max drawdown | -0.27% |
+| Sharpe (median) | **+3.214** |
+| Sharpe CI low (5%) | +0.904 |
+| % time above SPY | 60.114% |
+| Net PnL | **$+3994.86** (+7.990%) |
+| Max drawdown | -1.91% |
 | Trades | 1 |
-| Saved at | 2026-05-05 01:16:30 |
+| Wall time | 363.5s |
+
+![iteration equity](docs/weighted_d5b40ef.png)
+
+### Current best (`d5b40ef`)
+
+| metric | value |
+|---|---|
+| Sharpe (median) | **+3.214** |
+| Sharpe CI low (5%) | +0.904 |
+| % time above SPY | 60.114% |
+| Net PnL | **$+3994.86** (+7.990%) |
+| Max drawdown | -1.91% |
+| Trades | 1 |
+| Saved at | 2026-05-05 01:24:19 |
 
 ![weighted equity, current best](docs/weighted_latest.png)
 
@@ -228,8 +239,8 @@ MIT — copy, fork, modify, anything.
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-05-04 23:16 UTC_  
-_Total experiments: **41**  ·  kept: **29**  ·  latest commit: `d412eeb`_
+_Last updated: 2026-05-04 23:24 UTC_  
+_Total experiments: **42**  ·  kept: **30**  ·  latest commit: `d5b40ef`_
 
 ### Weighted strategy — full eval window (~73 days)
 
@@ -243,8 +254,8 @@ _Total experiments: **41**  ·  kept: **29**  ·  latest commit: `d412eeb`_
 
 | Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees | % time > SPY |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+3.227** 🏆 | $+573.98 | +1.148% | **-0.27%** 🏆 | 1 | **$1.00** 🏆 | **50%** 🏆 |
-| **SP500 (SPY) buy-and-hold** — passive benchmark | +1.011 | **$+2,017.61** 🏆 | +4.035% | -9.73% | 1 | $1.00 | 0% |
+| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+3.214** 🏆 | **$+3,994.86** 🏆 | +7.990% | **-1.91%** 🏆 | 1 | **$1.00** 🏆 | **60%** 🏆 |
+| **SP500 (SPY) buy-and-hold** — passive benchmark | +1.011 | $+2,017.61 | +4.035% | -9.73% | 1 | $1.00 | 0% |
 
 **Best by Sharpe:** Weighted (Kelly-sized, max 20% free cash, ≤5/step)
 
@@ -252,12 +263,12 @@ _Total experiments: **41**  ·  kept: **29**  ·  latest commit: `d412eeb`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+3.227** |
-| Net PnL | $+573.98 (+1.148%) |
-| Max drawdown | -0.27% |
+| Sharpe (median over seeds) | **+3.214** |
+| Net PnL | $+3,994.86 (+7.990%) |
+| Max drawdown | -1.91% |
 | Trades | 1 |
-| % time above SPY | 50% |
-| Wall time | 363.7s |
+| % time above SPY | 60% |
+| Wall time | 363.5s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
@@ -268,10 +279,10 @@ _Total experiments: **41**  ·  kept: **29**  ·  latest commit: `d412eeb`_
 
 | # | commit | Sharpe | CI-low | DD% | PnL | Trades | Description |
 |---|---|---:|---:|---:|---:|---:|---|
-| 1 | `ab6f02d` | +3.23 | +0.95 | -0.55 | $+1,147.57 | 1 | exp151: top2 with 95pct reserve |
-| 2 | `b4df7c6` | +3.22 | +0.93 | -1.10 | $+2,290.62 | 1 | exp150: top2 with 90pct reserve |
-| 3 | `514a197` | +3.22 | +0.91 | -1.64 | $+3,428.15 | 1 | exp149: top2 with 85pct reserve |
-| 4 | `7ca2ce2` | +3.21 | +0.90 | -2.18 | $+4,560.20 | 1 | exp148: top2 with 80pct reserve |
-| 5 | `62426b6` | +3.20 | +0.88 | -2.72 | $+5,686.77 | 1 | exp147: top2 with 75pct reserve |
+| 1 | `d412eeb` | +3.23 | +0.96 | -0.27 | $+573.98 | 1 | exp152: top2 with 97.5pct reserve |
+| 2 | `ab6f02d` | +3.23 | +0.95 | -0.55 | $+1,147.57 | 1 | exp151: top2 with 95pct reserve |
+| 3 | `b4df7c6` | +3.22 | +0.93 | -1.10 | $+2,290.62 | 1 | exp150: top2 with 90pct reserve |
+| 4 | `514a197` | +3.22 | +0.91 | -1.64 | $+3,428.15 | 1 | exp149: top2 with 85pct reserve |
+| 5 | `7ca2ce2` | +3.21 | +0.90 | -2.18 | $+4,560.20 | 1 | exp148: top2 with 80pct reserve |
 
 <!-- RESULTS_END -->
