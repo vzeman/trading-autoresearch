@@ -16,24 +16,13 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-04 06:09 UTC** · `3cf71f7` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_116_3cf71f7.md](iterations/iter_116_3cf71f7.md)** · 📁 [all iterations](iterations/)
+### 🟡 LIVE — iter 117 — ee9a64f
 
-### Latest iteration: iter 116 — 3cf71f7
+_Started **2026-05-04 06:13 UTC** · `ee9a64f` · status: **RUNNING**_
 
-🔴 DISCARD · exp116: one fifth universe top4 readiness
+**exp117: add SPY regime features and live windows**
 
-| metric | value |
-|---|---|
-| Sharpe (median) | **+2.303** |
-| Sharpe CI low (5%) | -0.119 |
-| % time above SPY | 37.134% |
-| Net PnL | **$+7648.02** (+15.296%) |
-| Max drawdown | -9.00% |
-| Trades | 3 |
-| Wall time | 368.5s |
-
-![iteration equity](docs/weighted_3cf71f7.png)
+Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
 
 ### Current best (`f0d293d`)
 
