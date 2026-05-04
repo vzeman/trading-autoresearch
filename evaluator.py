@@ -351,6 +351,8 @@ def run(n_workers: int = 3) -> dict:
     print(f"trades:           {trades_med}")
     print(f"fees_usd:         {fees_med:.2f}")
     print(f"slippage_usd:     {slip_med:.2f}")
+    print(f"primary_pct_over_spy: {summary['primary_pct_over_spy']:.3f}")
+    print(f"weighted_pct_over_spy: {summary['weighted_pct_over_spy']:.3f}")
     print(f"elapsed_seconds:  {elapsed:.1f}")
     print(f"seeds_completed:  {seeds_done}")
     print(f"---")
@@ -899,7 +901,7 @@ def _render_progress_chart() -> None:
     plt.close(fig)
 
 
-RESULTS_HEADER = "commit\tsharpe\tsharpe_ci_low\tmax_dd_pct\tpnl_usd\ttrades\tstatus\tdescription"
+RESULTS_HEADER = "commit\tsharpe\tsharpe_ci_low\tmax_dd_pct\tpnl_usd\ttrades\tstatus\tdescription\tover_spy_pct"
 
 
 def _append_results_row(commit: str, summary: dict, status: str, description: str) -> None:
@@ -915,6 +917,7 @@ def _append_results_row(commit: str, summary: dict, status: str, description: st
             str(int(summary['trades'])),
             status,
             description.replace("\t", " ")[:120],
+            f"{summary.get('primary_pct_over_spy', 0.0):.3f}",
         ]) + "\n")
 
 

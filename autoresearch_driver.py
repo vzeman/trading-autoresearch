@@ -7,7 +7,8 @@ Assumes the agent has ALREADY edited experiment.py and committed. This script:
   2. Parses the canonical metrics block
   3. Decides keep/discard per program.md rules:
        - max_dd_pct < -15 → discard (auto)
-       - sharpe_ci_low > prior best (across status=keep rows) → keep
+       - objective score improves → keep
+         objective = sharpe_ci_low + 0.10 * (% time above SPY / 100)
        - otherwise → discard
   4. Updates the last row of results.tsv with the decided status
   5. discard → git reset --hard HEAD~1
@@ -38,6 +39,7 @@ ITERATIONS_DIR = REPO / "iterations"
 LATEST_LINK = ITERATIONS_DIR / "latest.md"
 DOCS = REPO / "docs"
 DD_FLOOR = -15.0   # exp65: SPY itself has had > -10% intra-period DDs; -15 is the realistic floor
+OVER_SPY_OBJECTIVE_WEIGHT = 0.10  # reward strategies that stay above SPY longer: +0.10 CI-score at 100% over-SPY time
 
 
 def git(args: list[str]) -> str:
@@ -60,11 +62,18 @@ def parse_canonical(text: str) -> dict[str, str]:
     return out
 
 
-def best_kept_ci_low() -> float:
-    """Highest sharpe_ci_low across status=keep rows with REAL trades.
+def _objective_score(ci_low: float, over_spy_pct: float) -> float:
+    """Autoresearch keep score: robust Sharpe lower bound plus SPY-duration reward."""
+    return ci_low + OVER_SPY_OBJECTIVE_WEIGHT * (over_spy_pct / 100.0)
+
+
+def best_kept_objective() -> float:
+    """Highest keep objective across status=keep rows with REAL trades.
 
     Skips rows with trades==0 (their ci_low=0.0 is artificial — bootstrap on
     an empty equity curve returns 0, which would set an unbeatable bar).
+    Rows before exp112 do not have over_spy_pct; treat them as 0 for backward
+    compatibility, so new strategies get explicit credit for time above SPY.
     """
     if not RESULTS_TSV.exists():
         return float("-inf")
@@ -79,7 +88,9 @@ def best_kept_ci_low() -> float:
                 trades = int(parts[5])
                 if trades <= 0:
                     continue
-                v = float(parts[2])
+                ci_low = float(parts[2])
+                over_spy_pct = float(parts[8]) if len(parts) >= 9 and parts[8] else 0.0
+                v = _objective_score(ci_low, over_spy_pct)
                 best = max(best, v)
             except ValueError:
                 continue
@@ -103,12 +114,12 @@ def update_last_row_status(status: str, description: str) -> None:
 
 
 def append_crash_row(commit: str, description: str) -> None:
-    header = "commit\tsharpe\tsharpe_ci_low\tmax_dd_pct\tpnl_usd\ttrades\tstatus\tdescription"
+    header = "commit\tsharpe\tsharpe_ci_low\tmax_dd_pct\tpnl_usd\ttrades\tstatus\tdescription\tover_spy_pct"
     if not RESULTS_TSV.exists():
         RESULTS_TSV.write_text(header + "\n")
     with open(RESULTS_TSV, "a") as f:
         desc = description.replace("\t", " ")[:120]
-        f.write(f"{commit}\t0.0000\t0.0000\t0.00\t0.00\t0\tcrash\t{desc}\n")
+        f.write(f"{commit}\t0.0000\t0.0000\t0.00\t0.00\t0\tcrash\t{desc}\t0.000\n")
 
 
 def promote_checkpoints(commit: str, ci_low: float) -> list[str]:
@@ -193,6 +204,7 @@ def update_readme_for_iteration(
                 f"| metric | value |\n|---|---|\n"
                 f"| Sharpe (median) | **{bm.get('sharpe','—')}** |\n"
                 f"| Sharpe CI low (5%) | {bm.get('sharpe_ci_low','—')} |\n"
+                f"| % time above SPY | {bm.get('primary_pct_over_spy', bm.get('weighted_pct_over_spy','—'))}% |\n"
                 f"| Net PnL | **${bm.get('pnl_usd','0')}** ({bm.get('pnl_pct','0')}%) |\n"
                 f"| Max drawdown | {bm.get('max_dd_pct','0')}% |\n"
                 f"| Trades | {bm.get('trades','0')} |\n"
@@ -214,6 +226,7 @@ def update_readme_for_iteration(
         f"| metric | value |\n|---|---|\n"
         f"| Sharpe (median) | **{metrics.get('sharpe','—')}** |\n"
         f"| Sharpe CI low (5%) | {metrics.get('sharpe_ci_low','—')} |\n"
+        f"| % time above SPY | {metrics.get('primary_pct_over_spy', metrics.get('weighted_pct_over_spy','—'))}% |\n"
         f"| Net PnL | **${metrics.get('pnl_usd','0')}** ({metrics.get('pnl_pct','0')}%) |\n"
         f"| Max drawdown | {metrics.get('max_dd_pct','0')}% |\n"
         f"| Trades | {metrics.get('trades','0')} |\n"
@@ -256,6 +269,7 @@ def write_live_iteration_block(commit: str, description: str, iter_num: int | No
                 f"| metric | value |\n|---|---|\n"
                 f"| Sharpe (median) | **{bm.get('sharpe','—')}** |\n"
                 f"| Sharpe CI low (5%) | {bm.get('sharpe_ci_low','—')} |\n"
+                f"| % time above SPY | {bm.get('primary_pct_over_spy', bm.get('weighted_pct_over_spy','—'))}% |\n"
                 f"| Net PnL | **${bm.get('pnl_usd','0')}** ({bm.get('pnl_pct','0')}%) |\n"
                 f"| Max drawdown | {bm.get('max_dd_pct','0')}% |\n"
                 f"| Trades | {bm.get('trades','0')} |\n"
@@ -395,6 +409,7 @@ def write_iteration_md(
     md.append(f"| Sharpe (median) | **{metrics.get('sharpe', '—')}** |")
     md.append(f"| Sharpe CI low (5%) | {metrics.get('sharpe_ci_low', '—')} |")
     md.append(f"| Sharpe CI high (95%) | {metrics.get('sharpe_ci_high', '—')} |")
+    md.append(f"| % time above SPY | {metrics.get('primary_pct_over_spy', metrics.get('weighted_pct_over_spy', '—'))}% |")
     md.append(f"| Net PnL | **${metrics.get('pnl_usd', '0')}** ({metrics.get('pnl_pct', '0')}%) |")
     md.append(f"| Max drawdown | {metrics.get('max_dd_pct', '0')}% |")
     md.append(f"| Trades | {metrics.get('trades', '0')} |")
@@ -674,6 +689,7 @@ def main() -> None:
         dd = float(metrics["max_dd_pct"])
         sharpe = float(metrics.get("sharpe", "0"))
         trades = int(metrics.get("trades", "0"))
+        over_spy_pct = float(metrics.get("primary_pct_over_spy", metrics.get("weighted_pct_over_spy", "0")))
     except (KeyError, ValueError) as e:
         print(f"STATUS=crash reason=parse_failed: {e}", flush=True)
         append_crash_row(commit, description)
@@ -681,7 +697,8 @@ def main() -> None:
         return
 
     iter_num = next_iter_number(description)
-    prior_best = best_kept_ci_low()
+    objective = _objective_score(ci_low, over_spy_pct)
+    prior_best = best_kept_objective()
     if dd < DD_FLOOR:
         status, reason = "discard", f"dd={dd:+.2f} < {DD_FLOOR}"
         update_last_row_status(status, description)
@@ -697,8 +714,12 @@ def main() -> None:
         write_iteration_md(iter_num, commit, description, status, reason, metrics, elapsed, proc.stdout)
         update_iterations_index()
         safe_reset_head_minus_1()
-    elif ci_low > prior_best:
-        status, reason = "keep", f"ci_low={ci_low:+.4f} > prior best {prior_best:+.4f}"
+    elif objective > prior_best:
+        status, reason = (
+            "keep",
+            f"objective={objective:+.4f} > prior best {prior_best:+.4f} "
+            f"(ci_low={ci_low:+.4f}, over_spy={over_spy_pct:.1f}%)",
+        )
         update_last_row_status(status, description)
         promoted = promote_checkpoints(commit, ci_low)
         write_best_json(commit, metrics)
@@ -707,7 +728,11 @@ def main() -> None:
         update_readme_for_iteration(iter_num, commit, description, status, metrics)
         print(f"  promoted {len(promoted)} checkpoint(s) → {BEST_DIR}", flush=True)
     else:
-        status, reason = "discard", f"ci_low={ci_low:+.4f} ≤ prior best {prior_best:+.4f}"
+        status, reason = (
+            "discard",
+            f"objective={objective:+.4f} ≤ prior best {prior_best:+.4f} "
+            f"(ci_low={ci_low:+.4f}, over_spy={over_spy_pct:.1f}%)",
+        )
         update_last_row_status(status, description)
         write_iteration_md(iter_num, commit, description, status, reason, metrics, elapsed, proc.stdout)
         update_iterations_index()
@@ -722,7 +747,8 @@ def main() -> None:
 
     print(
         f"STATUS={status}  COMMIT={commit}  SHARPE={sharpe:+.3f}  "
-        f"CI_LOW={ci_low:+.4f}  DD={dd:+.2f}  ELAPSED={elapsed:.0f}s  REASON={reason}",
+        f"CI_LOW={ci_low:+.4f}  OVER_SPY={over_spy_pct:.1f}%  "
+        f"SCORE={objective:+.4f}  DD={dd:+.2f}  ELAPSED={elapsed:.0f}s  REASON={reason}",
         flush=True,
     )
 
