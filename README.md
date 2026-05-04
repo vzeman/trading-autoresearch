@@ -16,25 +16,36 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 112 — d5b2c32
+_Last iteration: **2026-05-04 04:59 UTC** · `d5b2c32` · 🟢 KEEP — new best_  
+📄 **[Full iteration report → iterations/iter_112_d5b2c32.md](iterations/iter_112_d5b2c32.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-04 04:47 UTC** · `d5b2c32` · status: **RUNNING**_
+### Latest iteration: iter 112 — d5b2c32
 
-**exp112: reward time above SPY benchmark**
-
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
-
-### Current best (`e360b24`)
+🟢 KEEP — new best · exp112: reward time above SPY benchmark
 
 | metric | value |
 |---|---|
 | Sharpe (median) | **+1.550** |
 | Sharpe CI low (5%) | -0.398 |
-| % time above SPY | —% |
+| % time above SPY | 28.039% |
 | Net PnL | **$+4750.35** (+9.501%) |
 | Max drawdown | -8.77% |
 | Trades | 2 |
-| Saved at | 2026-05-04 01:03:13 |
+| Wall time | 729.8s |
+
+![iteration equity](docs/weighted_d5b2c32.png)
+
+### Current best (`d5b2c32`)
+
+| metric | value |
+|---|---|
+| Sharpe (median) | **+1.550** |
+| Sharpe CI low (5%) | -0.398 |
+| % time above SPY | 28.039% |
+| Net PnL | **$+4750.35** (+9.501%) |
+| Max drawdown | -8.77% |
+| Trades | 2 |
+| Saved at | 2026-05-04 04:59:54 |
 
 ![weighted equity, current best](docs/weighted_latest.png)
 
@@ -228,8 +239,8 @@ MIT — copy, fork, modify, anything.
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-05-03 23:03 UTC_  
-_Total experiments: **96**  ·  kept: **27**  ·  latest commit: `e360b24`_
+_Last updated: 2026-05-04 02:59 UTC_  
+_Total experiments: **1**  ·  kept: **0**  ·  latest commit: `d5b2c32`_
 
 ### Weighted strategy — full eval window (~73 days)
 
@@ -257,7 +268,7 @@ _Total experiments: **96**  ·  kept: **27**  ·  latest commit: `e360b24`_
 | Max drawdown | -8.77% |
 | Trades | 2 |
 | % time above SPY | 28% |
-| Wall time | 373.7s |
+| Wall time | 729.8s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
@@ -268,10 +279,5 @@ _Total experiments: **96**  ·  kept: **27**  ·  latest commit: `e360b24`_
 
 | # | commit | Sharpe | CI-low | DD% | PnL | Trades | Description |
 |---|---|---:|---:|---:|---:|---:|---|
-| 1 | `d38cd93` | +0.00 | +0.00 | -1.34 | $+0.00 | 0 | exp26 KEEP: LONG_ONLY=True. Per-seed: 1/3 keeps profitable +$194, 2/3 don't trade ($0 vs v5's -$220 each). Mean pnl +$65 (vs v5's -$82). Killed catastrophic SELL-dominant equilibrium. Still loses to passive but no longer to v5. |
-| 2 | `573f243` | +1.55 | -0.40 | -8.92 | $+4,828.61 | 2 | exp100: top4 with 27.5pct cash reserve |
-| 3 | `14809c9` | +1.54 | -0.41 | -9.24 | $+4,984.60 | 2 | exp98: top4 with 25pct cash reserve |
-| 4 | `be9d0b9` | +1.54 | -0.42 | -9.88 | $+5,294.50 | 2 | exp96: top4 with 20pct cash reserve |
-| 5 | `ea5f1f4` | +1.53 | -0.42 | -10.50 | $+5,615.13 | 2 | exp92: top4 with 15pct cash reserve |
 
 <!-- RESULTS_END -->

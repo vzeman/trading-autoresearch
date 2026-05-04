@@ -4,6 +4,17 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
+| 🟢 | [iter 112 — d5b2c32](iter_112_d5b2c32.md) | exp112: reward time above SPY benchmark | **+1.550** | **$+4750.35** (+9.501%) |
+| 🔴 | [iter 111 — 4d45772](iter_111_4d45772.md) | exp111: top4 with 28.5pct cash reserve | **+1.550** | **$+4766.02** (+9.532%) |
+| 🔴 | [iter 110 — f9eb5bb](iter_110_f9eb5bb.md) | exp110: sector capped top4 picker | **+1.550** | **$+4750.35** (+9.501%) |
+| 🔴 | [iter 109 — bc20b19](iter_109_bc20b19.md) | exp109: fee aware top4 sizing | **+1.550** | **$+4749.72** (+9.499%) |
+| 🔴 | [iter 108 — 2e53623](iter_108_2e53623.md) | exp108: top4 with 5d rank horizon | **+1.550** | **$+4750.35** (+9.501%) |
+| 🔴 | [iter 107 — 278aa97](iter_107_278aa97.md) | exp107: canonical top3 at best reserve | **+0.000** | **$+0.00** (+0.000%) |
+| 🔴 | [iter 106 — 7dbaa24](iter_106_7dbaa24.md) | exp106: require positive topN score | **+0.000** | **$+0.00** (+0.000%) |
+| 🔴 | [iter 105 — c77b022](iter_105_c77b022.md) | exp105: top4 with 28.828125pct cash reserve | **+1.550** | **$+4745.45** (+9.491%) |
+| 🔴 | [iter 104 — e206a1b](iter_104_e206a1b.md) | exp104: top4 with 28.90625pct cash reserve | **+1.550** | **$+4740.56** (+9.481%) |
+| 🔴 | [iter 103 — ade77fe](iter_103_ade77fe.md) | exp103: top4 with 29.0625pct cash reserve | **+1.550** | **$+4730.76** (+9.462%) |
+| 🔴 | [iter 102 — 82e5d1e](iter_102_82e5d1e.md) | exp102: top4 with 29.375pct cash reserve | **+1.551** | **$+4711.16** (+9.422%) |
 | 🟢 | [iter 101 — e360b24](iter_101_e360b24.md) | exp101: top4 with 28.75pct cash reserve | **+1.550** | **$+4750.35** (+9.501%) |
 | 🟢 | [iter 100 — 573f243](iter_100_573f243.md) | exp100: top4 with 27.5pct cash reserve | **+1.548** | **$+4828.61** (+9.657%) |
 | 🔴 | [iter 099 — 6f01b87](iter_099_6f01b87.md) | exp99: top4 with 30pct cash reserve | **+1.552** | **$+4671.92** (+9.344%) |
