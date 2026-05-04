@@ -111,3 +111,4 @@ ca24c64	2.2089	-0.3318	-7.89	4096.66	2	keep	exp114: earlier top4 deployment	27.4
 f0d293d	2.7468	0.5050	-11.30	10282.57	3	keep	exp115: quarter universe top4 readiness	22.106
 3cf71f7	2.3033	-0.1193	-9.00	7648.02	3	discard	exp116: one fifth universe top4 readiness	37.134
 ee9a64f	2.4131	0.0007	-11.82	7687.57	3	discard	exp117: add SPY regime features and live windows	22.910
+12f2906	2.7497	0.5063	-11.11	10104.51	3	keep	exp118: quarter readiness with 30pct reserve	22.312

@@ -4,6 +4,9 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
+| 🟢 | [iter 118 — 12f2906](iter_118_12f2906.md) | exp118: quarter readiness with 30pct reserve | **+2.750** | **$+10104.51** (+20.209%) |
+| 🔴 | [iter 117 — ee9a64f](iter_117_ee9a64f.md) | exp117: add SPY regime features and live windows | **+2.413** | **$+7687.57** (+15.375%) |
+| 🔴 | [iter 116 — 3cf71f7](iter_116_3cf71f7.md) | exp116: one fifth universe top4 readiness | **+2.303** | **$+7648.02** (+15.296%) |
 | 🟢 | [iter 115 — f0d293d](iter_115_f0d293d.md) | exp115: quarter universe top4 readiness | **+2.747** | **$+10282.57** (+20.565%) |
 | 🟢 | [iter 114 — ca24c64](iter_114_ca24c64.md) | exp114: earlier top4 deployment | **+2.209** | **$+4096.66** (+8.193%) |
 | 🔴 | [iter 113 — c90ac3b](iter_113_c90ac3b.md) | exp113: rank top4 by alpha vs SPY | **+1.550** | **$+4750.35** (+9.501%) |
