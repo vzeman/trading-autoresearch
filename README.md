@@ -16,13 +16,24 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 141 — 9b1409e
+_Last iteration: **2026-05-04 23:58 UTC** · `9b1409e` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_141_9b1409e.md](iterations/iter_141_9b1409e.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-04 23:52 UTC** · `9b1409e` · status: **RUNNING**_
+### Latest iteration: iter 141 — 9b1409e
 
-**exp141: quarter readiness with 69.70703125pct reserve**
+🔴 DISCARD · exp141: quarter readiness with 69.70703125pct reserve
 
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
+| metric | value |
+|---|---|
+| Sharpe (median) | **+2.884** |
+| Sharpe CI low (5%) | +0.551 |
+| % time above SPY | 44.096% |
+| Net PnL | **$+4485.27** (+8.971%) |
+| Max drawdown | -4.84% |
+| Trades | 3 |
+| Wall time | 365.0s |
+
+![iteration equity](docs/weighted_9b1409e.png)
 
 ### Current best (`d00a152`)
 
