@@ -16,25 +16,36 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 156 — 0e7ff00
+_Last iteration: **2026-05-05 01:44 UTC** · `0e7ff00` · 🟢 KEEP — new best_  
+📄 **[Full iteration report → iterations/iter_156_0e7ff00.md](iterations/iter_156_0e7ff00.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-05 01:38 UTC** · `0e7ff00` · status: **RUNNING**_
+### Latest iteration: iter 156 — 0e7ff00
 
-**exp156: top2 with 82.1875pct reserve**
-
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
-
-### Current best (`d5b40ef`)
+🟢 KEEP — new best · exp156: top2 with 82.1875pct reserve
 
 | metric | value |
 |---|---|
 | Sharpe (median) | **+3.214** |
-| Sharpe CI low (5%) | +0.904 |
-| % time above SPY | 60.114% |
-| Net PnL | **$+3994.86** (+7.990%) |
-| Max drawdown | -1.91% |
+| Sharpe CI low (5%) | +0.903 |
+| % time above SPY | 60.068% |
+| Net PnL | **$+4065.60** (+8.131%) |
+| Max drawdown | -1.95% |
 | Trades | 1 |
-| Saved at | 2026-05-05 01:24:19 |
+| Wall time | 363.8s |
+
+![iteration equity](docs/weighted_0e7ff00.png)
+
+### Current best (`0e7ff00`)
+
+| metric | value |
+|---|---|
+| Sharpe (median) | **+3.214** |
+| Sharpe CI low (5%) | +0.903 |
+| % time above SPY | 60.068% |
+| Net PnL | **$+4065.60** (+8.131%) |
+| Max drawdown | -1.95% |
+| Trades | 1 |
+| Saved at | 2026-05-05 01:44:44 |
 
 ![weighted equity, current best](docs/weighted_latest.png)
 
@@ -228,8 +239,8 @@ MIT — copy, fork, modify, anything.
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-05-04 23:24 UTC_  
-_Total experiments: **42**  ·  kept: **30**  ·  latest commit: `d5b40ef`_
+_Last updated: 2026-05-04 23:44 UTC_  
+_Total experiments: **45**  ·  kept: **31**  ·  latest commit: `0e7ff00`_
 
 ### Weighted strategy — full eval window (~73 days)
 
@@ -243,7 +254,7 @@ _Total experiments: **42**  ·  kept: **30**  ·  latest commit: `d5b40ef`_
 
 | Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees | % time > SPY |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+3.214** 🏆 | **$+3,994.86** 🏆 | +7.990% | **-1.91%** 🏆 | 1 | **$1.00** 🏆 | **60%** 🏆 |
+| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+3.214** 🏆 | **$+4,065.60** 🏆 | +8.131% | **-1.95%** 🏆 | 1 | **$1.00** 🏆 | **60%** 🏆 |
 | **SP500 (SPY) buy-and-hold** — passive benchmark | +1.011 | $+2,017.61 | +4.035% | -9.73% | 1 | $1.00 | 0% |
 
 **Best by Sharpe:** Weighted (Kelly-sized, max 20% free cash, ≤5/step)
@@ -253,11 +264,11 @@ _Total experiments: **42**  ·  kept: **30**  ·  latest commit: `d5b40ef`_
 | metric | value |
 |---|---|
 | Sharpe (median over seeds) | **+3.214** |
-| Net PnL | $+3,994.86 (+7.990%) |
-| Max drawdown | -1.91% |
+| Net PnL | $+4,065.60 (+8.131%) |
+| Max drawdown | -1.95% |
 | Trades | 1 |
 | % time above SPY | 60% |
-| Wall time | 363.5s |
+| Wall time | 363.8s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
@@ -272,6 +283,6 @@ _Total experiments: **42**  ·  kept: **30**  ·  latest commit: `d5b40ef`_
 | 2 | `ab6f02d` | +3.23 | +0.95 | -0.55 | $+1,147.57 | 1 | exp151: top2 with 95pct reserve |
 | 3 | `b4df7c6` | +3.22 | +0.93 | -1.10 | $+2,290.62 | 1 | exp150: top2 with 90pct reserve |
 | 4 | `514a197` | +3.22 | +0.91 | -1.64 | $+3,428.15 | 1 | exp149: top2 with 85pct reserve |
-| 5 | `7ca2ce2` | +3.21 | +0.90 | -2.18 | $+4,560.20 | 1 | exp148: top2 with 80pct reserve |
+| 5 | `d5b40ef` | +3.21 | +0.90 | -1.91 | $+3,994.86 | 1 | exp153: SPY-alpha objective with top2 82.5pct reserve |
 
 <!-- RESULTS_END -->
