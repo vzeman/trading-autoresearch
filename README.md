@@ -16,24 +16,13 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-04 05:56 UTC** · `ca24c64` · 🟢 KEEP — new best_  
-📄 **[Full iteration report → iterations/iter_114_ca24c64.md](iterations/iter_114_ca24c64.md)** · 📁 [all iterations](iterations/)
+### 🟡 LIVE — iter 115 — f0d293d
 
-### Latest iteration: iter 114 — ca24c64
+_Started **2026-05-04 05:56 UTC** · `f0d293d` · status: **RUNNING**_
 
-🟢 KEEP — new best · exp114: earlier top4 deployment
+**exp115: quarter universe top4 readiness**
 
-| metric | value |
-|---|---|
-| Sharpe (median) | **+2.209** |
-| Sharpe CI low (5%) | -0.332 |
-| % time above SPY | 27.461% |
-| Net PnL | **$+4096.66** (+8.193%) |
-| Max drawdown | -7.89% |
-| Trades | 2 |
-| Wall time | 382.0s |
-
-![iteration equity](docs/weighted_ca24c64.png)
+Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
 
 ### Current best (`ca24c64`)
 
