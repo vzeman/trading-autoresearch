@@ -110,3 +110,4 @@ c90ac3b	1.5499	-0.3976	-8.77	4750.35	2	discard	exp113: rank top4 by alpha vs SPY
 ca24c64	2.2089	-0.3318	-7.89	4096.66	2	keep	exp114: earlier top4 deployment	27.461
 f0d293d	2.7468	0.5050	-11.30	10282.57	3	keep	exp115: quarter universe top4 readiness	22.106
 3cf71f7	2.3033	-0.1193	-9.00	7648.02	3	discard	exp116: one fifth universe top4 readiness	37.134
+ee9a64f	2.4131	0.0007	-11.82	7687.57	3	discard	exp117: add SPY regime features and live windows	22.910
