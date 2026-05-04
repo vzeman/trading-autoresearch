@@ -4,6 +4,7 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
+| 🟢 | [iter 125 — b60a033](iter_125_b60a033.md) | exp125: quarter readiness with 40pct reserve | **+2.775** | **$+8687.08** (+17.374%) |
 | 🟢 | [iter 124 — d09093a](iter_124_d09093a.md) | exp124: quarter readiness with 37.5pct reserve | **+2.767** | **$+9036.44** (+18.073%) |
 | 🟢 | [iter 123 — d0a7b39](iter_123_d0a7b39.md) | exp123: quarter readiness with 36.25pct reserve | **+2.764** | **$+9212.94** (+18.426%) |
 | 🟢 | [iter 122 — 69bf5eb](iter_122_69bf5eb.md) | exp122: quarter readiness with 35pct reserve | **+2.761** | **$+9391.42** (+18.783%) |
