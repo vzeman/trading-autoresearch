@@ -4,6 +4,8 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
+| 🟢 | [iter 158 — 290bcab](iter_158_290bcab.md) | exp158: top2 with 82.34375pct reserve | **+3.214** | **$+4030.24** (+8.060%) |
+| 🔴 | [iter 157 — e6675b8](iter_157_e6675b8.md) | exp157: top2 with 81.875pct reserve | **+3.213** | **$+4136.32** (+8.273%) |
 | 🟢 | [iter 156 — 0e7ff00](iter_156_0e7ff00.md) | exp156: top2 with 82.1875pct reserve | **+3.214** | **$+4065.60** (+8.131%) |
 | 🔴 | [iter 155 — 7647aa7](iter_155_7647aa7.md) | exp155: top2 with 83.75pct reserve | **+3.216** | **$+3711.68** (+7.423%) |
 | 🔴 | [iter 154 — 6ccdd60](iter_154_6ccdd60.md) | exp154: top2 with 81.25pct reserve | **+3.213** | **$+4277.70** (+8.555%) |
