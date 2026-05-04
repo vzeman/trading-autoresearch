@@ -4,6 +4,7 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
+| 🟢 | [iter 115 — f0d293d](iter_115_f0d293d.md) | exp115: quarter universe top4 readiness | **+2.747** | **$+10282.57** (+20.565%) |
 | 🟢 | [iter 114 — ca24c64](iter_114_ca24c64.md) | exp114: earlier top4 deployment | **+2.209** | **$+4096.66** (+8.193%) |
 | 🔴 | [iter 113 — c90ac3b](iter_113_c90ac3b.md) | exp113: rank top4 by alpha vs SPY | **+1.550** | **$+4750.35** (+9.501%) |
 | 🟢 | [iter 112 — d5b2c32](iter_112_d5b2c32.md) | exp112: reward time above SPY benchmark | **+1.550** | **$+4750.35** (+9.501%) |
