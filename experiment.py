@@ -1012,7 +1012,7 @@ PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at on
 # MAX_POS_FRACTION_OF_FREE_CASH of free cash.
 # ============================================================================
 MAX_POS_FRACTION_OF_FREE_CASH = 0.50  # exp47: SWAP + cap 0.50. exp46 (SWAP+0.65) gave best sharpe yet (+1.42) but DD -10.85% over floor on seed 1 only. Drop cap from 0.65 to 0.50 to bring worst-seed DD comfortably under -10%.
-MIN_CASH_RESERVE_PCT = 0.8265625      # exp192: baseline reserve kept for weighted/profile sims; canonical uses no-reserve score allocation
+MIN_CASH_RESERVE_PCT = 0.8265625      # exp194: baseline reserve kept for weighted/profile sims; canonical tests SPY-only timing
 MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
 KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effect — cap saturates)
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
@@ -2279,18 +2279,18 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp192: full-budget score allocation. Removes the topN strategy's
-    # 82.65625% reserve and equal-position budget; model scores choose budgets.
+    # exp194: canonical SPY-only 4h timing. Profile runs showed this can beat
+    # SPY buy-hold PnL in several seeds; now test it under the canonical gate.
     canonical_broker = weighted
     try:
-        topn_broker = simulate_passive_score_alloc_topn(model, eval_feat, device, top_n=4, name="top4_score_alloc",
-                                                        ranking_horizons=(3, 4),
-                                                        precomputed_preds=pred_cache)
-        if topn_broker.equity_curve and len(topn_broker.equity_curve) > 5:
-            canonical_broker = topn_broker
-            print(f"[experiment] canonical = top4_score_alloc_picker (final equity ${topn_broker.equity_curve[-1][1]:,.2f})", flush=True)
+        spy_timing_broker = simulate_spy_timing(model, eval_feat, device,
+                                                horizon_idx=3, decision_cooldown_bars=240,
+                                                name="spy_timing_4h", precomputed_preds=pred_cache)
+        if spy_timing_broker.equity_curve and len(spy_timing_broker.equity_curve) > 5:
+            canonical_broker = spy_timing_broker
+            print(f"[experiment] canonical = spy_timing_4h (final equity ${spy_timing_broker.equity_curve[-1][1]:,.2f})", flush=True)
     except Exception as e:
-        print(f"[experiment] top4 canonical failed ({e}); falling back to weighted", flush=True)
+        print(f"[experiment] spy_timing_4h canonical failed ({e}); falling back to weighted", flush=True)
     return (
         canonical_broker.equity_curve, canonical_broker.n_trades,
         canonical_broker.total_fees, 0.0,
