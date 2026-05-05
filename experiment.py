@@ -1012,7 +1012,7 @@ PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at on
 # MAX_POS_FRACTION_OF_FREE_CASH of free cash.
 # ============================================================================
 MAX_POS_FRACTION_OF_FREE_CASH = 0.50  # exp47: SWAP + cap 0.50. exp46 (SWAP+0.65) gave best sharpe yet (+1.42) but DD -10.85% over floor on seed 1 only. Drop cap from 0.65 to 0.50 to bring worst-seed DD comfortably under -10%.
-MIN_CASH_RESERVE_PCT = 0.8265625      # exp194: baseline reserve kept for weighted/profile sims; canonical tests SPY-only timing
+MIN_CASH_RESERVE_PCT = 0.8265625      # exp195: six-condition multi-timeframe setup checker
 MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
 KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effect — cap saturates)
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
@@ -1816,6 +1816,107 @@ def simulate_passive_score_alloc_topn(
     return broker
 
 
+def simulate_setup_checker_topn(
+    model: PatchTransformer,
+    features: dict[str, pd.DataFrame],
+    device: str,
+    *,
+    top_n: int = 4,
+    precomputed_preds: dict | None = None,
+) -> WeightedBroker:
+    """Claude/TradingView-style setup checker.
+
+    Inspired by the transcript: do not ask the model for an opinion; run a
+    deterministic checklist across multiple timeframes, then only trade symbols
+    that pass the setup. Six checks:
+      1) positive 4h forecast Sharpe,
+      2) positive 1d forecast Sharpe,
+      3) 4h forecast ranks in the top quartile,
+      4) 1d forecast ranks above median,
+      5) symbol is above its 60-bar EMA,
+      6) SPY 1d trend is positive and 7d trend is not deeply negative.
+    """
+    broker = WeightedBroker(STARTING_CASH_USD, min_reserve_frac=MIN_CASH_RESERVE_PCT)
+    cols = USE_FEATURES
+    feat_arrays = {s: f[cols].to_numpy(np.float32) for s, f in features.items()}
+    close_arrays = {s: f["close"].to_numpy(np.float32) for s, f in features.items()}
+    volume_arrays = {
+        s: (f["volume"].to_numpy(np.float32) if "volume" in f.columns
+            else np.zeros(len(f), dtype=np.float32))
+        for s, f in features.items()
+    }
+    events_by_ts: dict[pd.Timestamp, list[tuple[str, int]]] = {}
+    for sym, f in features.items():
+        for i, ts in enumerate(f["timestamp"]):
+            events_by_ts.setdefault(ts, []).append((sym, i))
+    sorted_ts = sorted(events_by_ts.keys())
+    C = model.context_len
+    last_idx_by_sym: dict[str, int] = {s: -1 for s in features}
+    picked = False
+    for ts in sorted_ts:
+        events_here = events_by_ts[ts]
+        for sym, i_now in events_here:
+            last_idx_by_sym[sym] = i_now
+        if not picked:
+            ready = [(sym, i_now) for sym, i_now in events_here if i_now >= C - 1 and sym != "SPY"]
+            if len(ready) >= max(top_n, len(features) // 4):
+                if precomputed_preds is not None and model.horizons_minutes:
+                    kept, mh_mean_np, mh_log_std_np = _lookup_mh(ready, precomputed_preds, C)
+                    if not kept:
+                        ready = []
+                        score_4h = np.array([], dtype=np.float32)
+                        score_1d = np.array([], dtype=np.float32)
+                    else:
+                        ready = kept
+                        score_4h = mh_mean_np[:, 3] / (np.exp(mh_log_std_np[:, 3]) + 1e-12)
+                        score_1d = mh_mean_np[:, 4] / (np.exp(mh_log_std_np[:, 4]) + 1e-12)
+                else:
+                    batch_X = [feat_arrays[sym][i_now - C + 1 : i_now + 1] for sym, i_now in ready]
+                    with torch.no_grad():
+                        model.eval()
+                        xb = torch.from_numpy(np.stack(batch_X)).to(device)
+                        mh_mean, mh_log_std = model.forward_multi_horizon(xb)
+                        score_4h = (mh_mean[:, 3] / (torch.exp(mh_log_std[:, 3]) + 1e-12)).detach().cpu().numpy()
+                        score_1d = (mh_mean[:, 4] / (torch.exp(mh_log_std[:, 4]) + 1e-12)).detach().cpu().numpy()
+                    model.train()
+                candidates = []
+                if len(ready) > 0:
+                    q4h = float(np.quantile(score_4h, 0.75))
+                    q1d = float(np.quantile(score_1d, 0.50))
+                    for row_idx, (sym, i_now) in enumerate(ready):
+                        row = features[sym].iloc[i_now]
+                        market_ok = (
+                            float(row.get("spy_logret_390", 0.0)) > 0.0 and
+                            float(row.get("spy_logret_2730", 0.0)) > -0.02
+                        )
+                        passed = (
+                            float(score_4h[row_idx]) > 0.0 and
+                            float(score_1d[row_idx]) > 0.0 and
+                            float(score_4h[row_idx]) >= q4h and
+                            float(score_1d[row_idx]) >= q1d and
+                            float(row.get("ema_dev_60", 0.0)) > 0.0 and
+                            market_ok
+                        )
+                        if passed:
+                            combined = float(score_4h[row_idx] + score_1d[row_idx])
+                            candidates.append((sym, i_now, combined))
+                candidates.sort(key=lambda t: -t[2])
+                selected = candidates[:top_n]
+                if selected:
+                    per_pos = broker.free_cash() / len(selected)
+                    for sym, i_now, _score in selected:
+                        if per_pos < WEIGHTED_MIN_TRADE_USD:
+                            continue
+                        price = float(close_arrays[sym][i_now])
+                        bar_dv = float(volume_arrays[sym][i_now]) * price
+                        broker.buy_usd(sym, price, ts, per_pos, bar_dollar_volume=bar_dv)
+                picked = True
+        prices = {s: float(close_arrays[s][last_idx_by_sym[s]])
+                  for s in features if last_idx_by_sym[s] >= 0}
+        broker.mark_to_market(ts, prices)
+    return broker
+
+
 def simulate_buyhold_spy(features: dict[str, pd.DataFrame]) -> WeightedBroker:
     """Passive baseline: invest all (less reserve) into SPY at first bar, hold."""
     broker = WeightedBroker(STARTING_CASH_USD, min_reserve_frac=MIN_CASH_RESERVE_PCT)
@@ -2279,18 +2380,17 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp194: canonical SPY-only 4h timing. Profile runs showed this can beat
-    # SPY buy-hold PnL in several seeds; now test it under the canonical gate.
+    # exp195: Claude/TradingView-style setup checker. Six deterministic
+    # conditions across model timeframes + trend filters; no subjective opinion.
     canonical_broker = weighted
     try:
-        spy_timing_broker = simulate_spy_timing(model, eval_feat, device,
-                                                horizon_idx=3, decision_cooldown_bars=240,
-                                                name="spy_timing_4h", precomputed_preds=pred_cache)
-        if spy_timing_broker.equity_curve and len(spy_timing_broker.equity_curve) > 5:
-            canonical_broker = spy_timing_broker
-            print(f"[experiment] canonical = spy_timing_4h (final equity ${spy_timing_broker.equity_curve[-1][1]:,.2f})", flush=True)
+        setup_broker = simulate_setup_checker_topn(model, eval_feat, device, top_n=4,
+                                                   precomputed_preds=pred_cache)
+        if setup_broker.equity_curve and len(setup_broker.equity_curve) > 5:
+            canonical_broker = setup_broker
+            print(f"[experiment] canonical = setup_checker_top4 (final equity ${setup_broker.equity_curve[-1][1]:,.2f})", flush=True)
     except Exception as e:
-        print(f"[experiment] spy_timing_4h canonical failed ({e}); falling back to weighted", flush=True)
+        print(f"[experiment] setup_checker_top4 canonical failed ({e}); falling back to weighted", flush=True)
     return (
         canonical_broker.equity_curve, canonical_broker.n_trades,
         canonical_broker.total_fees, 0.0,
