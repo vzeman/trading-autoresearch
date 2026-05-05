@@ -35,11 +35,9 @@ UNIVERSE = [
 
 # ---- v6: extended to 6 years for much longer eval window. ----
 DAYS = 2190                  # 6 years of 1-min bars (Alpaca IEX serves back to ~2016)
-# v7: day-based eval window (90 days). User directive: train on 6 years of
-# bars, evaluate on the LAST 90 calendar days. Switching from a fraction-based
-# split (which was 0.20 → ~438 days) gives a tighter, fixed eval horizon that
-# matches a typical "last quarter" out-of-sample window.
-EVAL_DAYS = 90
+# v8: day-based eval window (180 days). User directive: validate continuous
+# long-term performance over the last ~6 calendar months, not only one quarter.
+EVAL_DAYS = 180
 SEED = 0                     # for any deterministic shuffles in evaluator
 
 # ---- Fixed economic constants for the simulator (the broker is the evaluator) ----
