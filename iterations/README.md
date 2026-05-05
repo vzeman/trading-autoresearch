@@ -4,6 +4,10 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
+| 🟢 | [iter 166 — d986b69](iter_166_d986b69.md) | exp166: top2 SPY-relative rank signal | **+3.214** | **$+3959.48** (+7.919%) |
+| 🔴 | [iter 165 — e8f48e9](iter_165_e8f48e9.md) | exp165: top2 4h-only rank signal | **+0.596** | **$+248.48** (+0.497%) |
+| 🔴 | [iter 164 — 54e296f](iter_164_54e296f.md) | exp164: top2 1d-only rank signal | **+0.915** | **$+272.50** (+0.545%) |
+| 🔴 | [iter 163 — 604d5c1](iter_163_604d5c1.md) | exp163: top2 add 3d rank horizon | **+1.451** | **$+1050.29** (+2.101%) |
 | 🟢 | [iter 162 — 528f9ec](iter_162_528f9ec.md) | exp162: top2 add 2d rank horizon | **+3.214** | **$+3959.48** (+7.919%) |
 | 🔴 | [iter 161 — 751a63e](iter_161_751a63e.md) | exp161: top2 with 82.8125pct reserve | **+3.215** | **$+3924.10** (+7.848%) |
 | 🔴 | [iter 160 — e99ebf0](iter_160_e99ebf0.md) | exp160: top2 with 82.96875pct reserve | **+3.215** | **$+3888.71** (+7.777%) |
