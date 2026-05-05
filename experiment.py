@@ -37,6 +37,7 @@ CHECKPOINT_DIR.mkdir(exist_ok=True)
 # Set USE_CACHED_PRETRAIN=1 in the env when launching the driver.
 USE_CACHED_PRETRAIN = os.environ.get("USE_CACHED_PRETRAIN", "0") == "1"
 REFRESH_DATA = os.environ.get("REFRESH_DATA_IN_EVALUATOR", "0") == "1"
+MAX_DATA_STALENESS_DAYS = 7
 # exp81/83: bfloat16 autocast on MPS — was on by default but exp83 measured it
 # is actually SLOWER than fp32 on Apple Metal (~75min/seed bf16 vs ~55min/seed fp32).
 # Apple's Metal doesn't have specialized bf16 tensor cores like NVIDIA. Leaving as
@@ -951,7 +952,7 @@ PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at on
 # MAX_POS_FRACTION_OF_FREE_CASH of free cash.
 # ============================================================================
 MAX_POS_FRACTION_OF_FREE_CASH = 0.50  # exp47: SWAP + cap 0.50. exp46 (SWAP+0.65) gave best sharpe yet (+1.42) but DD -10.85% over floor on seed 1 only. Drop cap from 0.65 to 0.50 to bring worst-seed DD comfortably under -10%.
-MIN_CASH_RESERVE_PCT = 0.8265625      # exp182: 180d validation; test top10 diversification
+MIN_CASH_RESERVE_PCT = 0.8265625      # exp183: 180d validation; drop stale symbols and retest top2
 MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
 KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effect — cap saturates)
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
@@ -1834,6 +1835,23 @@ def train_and_eval(seed: int = 0) -> tuple:
                 extended_added += 1
             except Exception as e:
                 print(f"[extended] {sym}: skipped ({e})", flush=True)
+    last_ts_by_sym = {
+        sym: pd.to_datetime(bars["timestamp"], utc=True).max()
+        for sym, bars in bars_by_sym.items()
+        if len(bars) > 0 and "timestamp" in bars
+    }
+    if last_ts_by_sym:
+        global_last_ts = max(last_ts_by_sym.values())
+        stale_cutoff = global_last_ts - pd.Timedelta(days=MAX_DATA_STALENESS_DAYS)
+        stale_symbols = sorted(sym for sym, last_ts in last_ts_by_sym.items() if last_ts < stale_cutoff)
+        if stale_symbols:
+            for sym in stale_symbols:
+                print(
+                    f"[data-freshness] dropping stale {sym}: last={last_ts_by_sym[sym]} "
+                    f"cutoff={stale_cutoff}",
+                    flush=True,
+                )
+                bars_by_sym.pop(sym, None)
     print(f"[experiment] universe size: {len(bars_by_sym)} ({extended_added} extended added beyond UNIVERSE)", flush=True)
     _write_data_freshness(seed, bars_by_sym)
     training_universe = list(bars_by_sym.keys())
@@ -1991,18 +2009,18 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp182: canonical top10 quarter-readiness with 82.65625% reserve and 4h+1d rank blend on 180d eval.
+    # exp183: canonical top2 quarter-readiness with 82.65625% reserve and stale symbols filtered on 180d eval.
     canonical_broker = weighted
     try:
         # exp87: REVERT to (3,4) = 4h + 1d combo. Both single-horizon variants
         # (exp85=(4,) and exp86=(3,)) regressed materially. The combo is the
         # local optimum.
-        topn_broker = simulate_passive_topn(model, eval_feat, device, top_n=10, name="top10",
+        topn_broker = simulate_passive_topn(model, eval_feat, device, top_n=2, name="top2",
                                             ranking_horizons=(3, 4),
                                             precomputed_preds=pred_cache)
         if topn_broker.equity_curve and len(topn_broker.equity_curve) > 5:
             canonical_broker = topn_broker
-            print(f"[experiment] canonical = top10_picker (final equity ${topn_broker.equity_curve[-1][1]:,.2f})", flush=True)
+            print(f"[experiment] canonical = top2_picker (final equity ${topn_broker.equity_curve[-1][1]:,.2f})", flush=True)
     except Exception as e:
         print(f"[experiment] top4 canonical failed ({e}); falling back to weighted", flush=True)
     return (
