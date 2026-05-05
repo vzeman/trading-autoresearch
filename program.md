@@ -10,6 +10,7 @@ robustly improve a portfolio's risk-adjusted return.
    `autoresearch/<tag>` branch.
 2. **Read these files** for full context:
    - `README.md` — repo overview
+   - `AUTORESEARCH_POLICY.md` — current loop policy: decide training epochs vs strategy/portfolio optimization every iteration.
    - `prepare.py` — frozen: data download, broker, metrics, train/eval split. **Do not modify.**
    - `experiment.py` — the file you edit. Features, model, RL policy, train loop.
    - `evaluator.py` — frozen evaluator harness. **Do not modify.**
@@ -21,20 +22,27 @@ robustly improve a portfolio's risk-adjusted return.
 
 ## Experimentation loop
 
-`experiment.py` is the ONLY file you may edit. The agent loop:
+Use `AUTORESEARCH_POLICY.md` before each iteration to choose whether to train
+weights, optimize portfolio management, add causal features/model changes, or
+refresh/adapt data. The agent loop:
 
 ```
 LOOP FOREVER:
   1. Read results.tsv to remember what's been tried
-  2. Hypothesize ONE small, well-motivated change
-  3. Edit experiment.py (one focused diff)
-  4. git commit -am "<short description>"
-  5. python evaluator.py > run.log 2>&1
-  6. Parse the canonical metrics block at the end of run.log
-  7. Decide keep / discard (rule below) and append to results.tsv
-  8. If discard: git reset --hard HEAD~1
-  9. GOTO 1 (NEVER STOP, NEVER ASK PERMISSION)
+  2. Decide the lever: train epochs, portfolio/risk strategy, feature/model change, or data adaptation
+  3. Hypothesize ONE small, well-motivated change
+  4. Edit the minimum necessary files
+  5. git commit -am "<short description>"
+  6. python evaluator.py > run.log 2>&1
+  7. Parse the canonical metrics block at the end of run.log
+  8. Decide keep / discard (rule below) and append to results.tsv
+  9. If discard: git reset --hard HEAD~1
+  10. GOTO 1 (NEVER STOP, NEVER ASK PERMISSION)
 ```
+
+Training loss is diagnostic only. More epochs are useful only if held-out
+portfolio metrics improve. Always compare against SPY/SP500 duration, Sharpe
+CI-low, drawdown, PnL, and transaction costs.
 
 ## Decision rule (apply in order)
 
