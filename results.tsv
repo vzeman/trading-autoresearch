@@ -183,3 +183,4 @@ e182351	0.6524	-1.3263	-4.11	492.60	3	discard	exp184: 180d top4 canonical	29.705
 b4ba841	-0.3733	-2.5802	-2.47	-305.93	3	discard	exp191: SPY trend context fresh train	19.195
 1680fdc	0.9284	-1.2993	-2.80	435.04	3	discard	exp192: SPY-only timing profile evaluation	22.780
 dbb6c2d	0.6172	-1.2279	-20.17	2485.78	3	discard	exp193: full-budget score allocation cached	0.310
+ba16a06	0.9386	-1.7702	-9.79	3321.83	1	discard	exp194: canonical SPY 4h timing cached	0.238
