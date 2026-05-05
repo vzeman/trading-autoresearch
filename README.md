@@ -16,11 +16,11 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 185 — 1c1d55c
+### 🟡 LIVE — iter 186 — 3b12c45
 
-_Started **2026-05-05 08:02 UTC** · `1c1d55c` · status: **RUNNING**_
+_Started **2026-05-05 08:45 UTC** · `3b12c45` · status: **RUNNING**_
 
-**exp185: fresh 2 epoch pretrain top4 180d**
+**exp186: fresh 2 epoch pretrain with async refresh**
 
 Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
 
