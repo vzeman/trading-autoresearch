@@ -173,3 +173,4 @@ e7b37b9	0.5957	-1.6510	-2.26	248.48	1	discard	exp172: top2 double 1d rank weight
 087771d	0.3695	-1.3077	-6.14	496.48	1	discard	exp180: 180d top2 with 65pct reserve	42.803
 432b68c	-0.6463	-2.5710	-5.37	-767.31	1	discard	exp181: 180d top2 long horizon blend	38.321
 1090c3b	0.0146	-1.7640	-3.14	2.98	9	discard	exp182: 180d top10 diversification	42.634
+e94b381	0.4304	-1.7376	-3.08	263.20	1	discard	exp183: 180d filter stale symbols	31.590
