@@ -36,7 +36,7 @@ CHECKPOINT_DIR.mkdir(exist_ok=True)
 # changed between iterations. Loads checkpoints/last_seed{seed}.pt instead.
 # Set USE_CACHED_PRETRAIN=1 in the env when launching the driver.
 USE_CACHED_PRETRAIN = os.environ.get("USE_CACHED_PRETRAIN", "0") == "1"
-REFRESH_DATA = os.environ.get("REFRESH_DATA", "0") == "1"
+REFRESH_DATA = os.environ.get("REFRESH_DATA_IN_EVALUATOR", "0") == "1"
 # exp81/83: bfloat16 autocast on MPS — was on by default but exp83 measured it
 # is actually SLOWER than fp32 on Apple Metal (~75min/seed bf16 vs ~55min/seed fp32).
 # Apple's Metal doesn't have specialized bf16 tensor cores like NVIDIA. Leaving as

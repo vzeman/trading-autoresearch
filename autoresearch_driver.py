@@ -726,6 +726,15 @@ def main() -> None:
     # original SHA so evaluator names its chart files with the experiment commit
     # (matches the iter md links written by write_iteration_md).
     env["EXPERIMENT_COMMIT"] = commit
+    if os.environ.get("REFRESH_DATA", "0") == "1":
+        print("[driver] REFRESH_DATA=1 — refreshing data cache once before evaluator", flush=True)
+        refresh_cmd = [str(REPO / ".venv" / "bin" / "python"), str(REPO / "refresh_data.py"), "--force"]
+        refresh_proc = subprocess.run(refresh_cmd, cwd=REPO, text=True, capture_output=True, env=env)
+        RUN_LOG.write_text(
+            f"$ {' '.join(refresh_cmd)}\n\n--STDOUT--\n{refresh_proc.stdout}\n\n--STDERR--\n{refresh_proc.stderr}\n"
+        )
+        if refresh_proc.returncode != 0:
+            print(f"[driver] data refresh exited {refresh_proc.returncode}; continuing with available cache", flush=True)
     # EVAL_WORKERS env var → call evaluator.run(N).
     # N_SEEDS_OVERRIDE env var → monkey-patch prepare.N_SEEDS AND evaluator.N_SEEDS
     # before the run starts. evaluator does `from prepare import N_SEEDS` which
