@@ -28,6 +28,7 @@ import time
 from pathlib import Path
 
 import pandas as pd  # exp80: per-symbol summary uses pd.to_datetime for hold-time math
+from prepare import EVAL_DAYS
 
 REPO = Path(__file__).resolve().parent
 RESULTS_TSV = REPO / "results.tsv"
@@ -73,7 +74,7 @@ def _objective_score(ci_low: float, over_spy_pct: float, pnl_pct: float) -> floa
     )
 
 
-def best_kept_objective() -> float:
+def best_kept_objective(eval_days: int | None = None) -> float:
     """Highest keep objective across status=keep rows with REAL trades.
 
     Skips rows with trades==0 (their ci_low=0.0 is artificial — bootstrap on
@@ -91,6 +92,8 @@ def best_kept_objective() -> float:
             if len(parts) < 8 or parts[6] != "keep":
                 continue
             try:
+                if eval_days is not None and f"{eval_days}d" not in parts[7]:
+                    continue
                 trades = int(parts[5])
                 if trades <= 0:
                     continue
@@ -783,7 +786,11 @@ def main() -> None:
 
     iter_num = next_iter_number(description)
     objective = _objective_score(ci_low, over_spy_pct, pnl_pct)
-    prior_best = best_kept_objective()
+    prior_best = best_kept_objective(EVAL_DAYS)
+    if prior_best == float("-inf") and EVAL_DAYS != 90:
+        prior_best = 0.0
+    elif prior_best == float("-inf"):
+        prior_best = best_kept_objective()
     if dd < DD_FLOOR:
         status, reason = "discard", f"dd={dd:+.2f} < {DD_FLOOR}"
         update_last_row_status(status, description)
