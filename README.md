@@ -16,24 +16,13 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-05 07:19 UTC** · `432b68c` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_181_432b68c.md](iterations/iter_181_432b68c.md)** · 📁 [all iterations](iterations/)
+### 🟡 LIVE — iter 182 — 1090c3b
 
-### Latest iteration: iter 181 — 432b68c
+_Started **2026-05-05 07:20 UTC** · `1090c3b` · status: **RUNNING**_
 
-🔴 DISCARD · exp181: 180d top2 long horizon blend
+**exp182: 180d top10 diversification**
 
-| metric | value |
-|---|---|
-| Sharpe (median) | **-0.646** |
-| Sharpe CI low (5%) | -2.571 |
-| % time above SPY | 38.321% |
-| Net PnL | **$-767.31** (-1.535%) |
-| Max drawdown | -5.37% |
-| Trades | 1 |
-| Wall time | 687.8s |
-
-![iteration equity](docs/weighted_432b68c.png)
+Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
 
 ### Current best (`f9dfd67`)
 
