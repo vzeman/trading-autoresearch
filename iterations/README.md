@@ -4,6 +4,9 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
+| 🟢 | [iter 169 — bb73b19](iter_169_bb73b19.md) | exp169: top2 exclude SPY candidate | **+3.214** | **$+3959.48** (+7.919%) |
+| 🔴 | [iter 168 — c4f1f42](iter_168_c4f1f42.md) | exp168: top2 one-fifth readiness | **+0.599** | **$+349.47** (+0.699%) |
+| 🔴 | [iter 167 — d097e12](iter_167_d097e12.md) | exp167: top2 half-universe readiness | **-1.404** | **$-896.47** (-1.793%) |
 | 🟢 | [iter 166 — d986b69](iter_166_d986b69.md) | exp166: top2 SPY-relative rank signal | **+3.214** | **$+3959.48** (+7.919%) |
 | 🔴 | [iter 165 — e8f48e9](iter_165_e8f48e9.md) | exp165: top2 4h-only rank signal | **+0.596** | **$+248.48** (+0.497%) |
 | 🔴 | [iter 164 — 54e296f](iter_164_54e296f.md) | exp164: top2 1d-only rank signal | **+0.915** | **$+272.50** (+0.545%) |
