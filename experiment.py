@@ -347,7 +347,7 @@ HORIZONS_MINUTES = [5, 60, 120, 240, 390, 780, 1170, 1560, 1950, 5460, 11700]
 RL_REWARD_HORIZON = 3
 ACTION_HEAD_HOLD_BIAS = 1.5     # exp10: softmax([-1.5,1.5,-1.5]) ≈ [4.7%,90.6%,4.7%]: be even more selective
 
-PRETRAIN_EPOCHS = 1             # exp88: REVERT 2→1 — exp87 (2 epochs) regressed sharpe +1.55 → +0.34. Classic overfit: NLL went lower (−10.98 vs −9.5) but seed-2 generalization collapsed to −1.14.
+PRETRAIN_EPOCHS = int(os.environ.get("PRETRAIN_EPOCHS", "1"))  # default 1; override per fresh-training experiment.
 # exp67: validate same canonical with N_SEEDS=3 — driver gate compares ci_low against
 # the prior best (set by 3-seed exp51); a 1-seed bootstrap CI is unfair. With the exp66
 # precompute speedup each seed costs ~120s so 3 seeds is affordable (~6min total).
@@ -373,7 +373,7 @@ RANK_LOSS_COEF = 1.0             # weight of ranking loss vs Gaussian NLL
 TRAIN_LOOKBACK_DAYS = 365       # exp41: subset train slice to last N days. Hypothesis: model trained on full 6yr is too conservative for recent regime → exp40 = 0 trades. Recent-only data should produce more confident predictions.
 PRETRAIN_BATCH = 128
 PRETRAIN_LR = 3e-4
-RL_PRETRAIN_EPOCHS = 1          # offline RL pass(es) on TRAIN slice
+RL_PRETRAIN_EPOCHS = int(os.environ.get("RL_PRETRAIN_EPOCHS", "1"))  # offline RL pass(es) on TRAIN slice
 RL_LR = 2e-5     # exp7 KEPT setting (known stable, no rogue seeds)
 RL_COEF = 1.0
 ENTROPY_COEF = 0.005   # exp50: 0.01→0.005. exp49 (SWAP_MARGIN=0.15) had best raw sharpe (+1.548) and PnL (+$3,442) but ci_low -1.523 missed exp47's -1.513 by 0.01 — wider per-seed variance suggested too much exploration. Tighter convergence should narrow CI.
