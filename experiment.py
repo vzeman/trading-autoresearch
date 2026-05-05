@@ -104,8 +104,13 @@ ALL_FEATURES = [
     "rv_15", "rv_60", "rv_15_div_60",
     # Range features (intraday volatility proxy)
     "hl_range",
-    # Time of day
+    # Calendar / session seasonality
     "tod_sin", "tod_cos",
+    "minute_from_open_norm", "minute_to_close_norm",
+    "is_open_30m", "is_close_30m", "is_lunch",
+    "dow_sin", "dow_cos",
+    "month_sin", "month_cos",
+    "day_of_month_norm", "is_month_end_window", "is_quarter_end_window",
     # exp11: cross-asset / macro context (forward-filled to each universe bar)
     # exp58: dropped vix_logret_1 (only 27 days of yfinance data)
     "tlt_logret_1",   # 20yr Treasury ETF — interest-rate signal
@@ -233,12 +238,30 @@ def featurize(bars: pd.DataFrame, context: dict[str, pd.DataFrame] | None = None
     # ---- range features ----
     hl_range = (high - low) / np.maximum(close, 1e-12)
 
-    # ---- time of day (regular session 09:30-16:00 ET, i.e. 23,400 sec) ----
+    # ---- calendar/session features (causal timestamp metadata only) ----
     et = df["timestamp"].dt.tz_convert("America/New_York")
     sec = ((et.dt.hour - 9) * 3600 + (et.dt.minute - 30) * 60 + et.dt.second).to_numpy(np.float64)
     period = 6.5 * 3600
     tod_sin = np.sin(2 * math.pi * sec / period)
     tod_cos = np.cos(2 * math.pi * sec / period)
+    session_frac = np.clip(sec / period, 0.0, 1.0)
+    minute_from_open_norm = session_frac
+    minute_to_close_norm = 1.0 - session_frac
+    is_open_30m = ((sec >= 0) & (sec < 30 * 60)).astype(np.float32)
+    is_close_30m = ((sec <= period) & (sec > period - 30 * 60)).astype(np.float32)
+    is_lunch = ((et.dt.hour >= 12) & ((et.dt.hour < 13) | ((et.dt.hour == 13) & (et.dt.minute < 30)))).astype(np.float32).to_numpy()
+    dow = et.dt.dayofweek.to_numpy(np.float64)
+    dow_sin = np.sin(2 * math.pi * dow / 5.0)
+    dow_cos = np.cos(2 * math.pi * dow / 5.0)
+    month_zero = (et.dt.month.to_numpy(np.float64) - 1.0)
+    month_sin = np.sin(2 * math.pi * month_zero / 12.0)
+    month_cos = np.cos(2 * math.pi * month_zero / 12.0)
+    days_in_month = et.dt.days_in_month.to_numpy(np.float64)
+    day = et.dt.day.to_numpy(np.float64)
+    day_of_month_norm = (day - 1.0) / np.maximum(days_in_month - 1.0, 1.0)
+    days_to_month_end = days_in_month - day
+    is_month_end_window = (days_to_month_end <= 3).astype(np.float32)
+    is_quarter_end_window = (((et.dt.month % 3) == 0) & (days_to_month_end <= 5)).astype(np.float32).to_numpy()
 
     feat = pd.DataFrame({
         "timestamp": df["timestamp"],
@@ -260,6 +283,18 @@ def featurize(bars: pd.DataFrame, context: dict[str, pd.DataFrame] | None = None
         "hl_range": hl_range.astype(np.float32),
         "tod_sin": tod_sin.astype(np.float32),
         "tod_cos": tod_cos.astype(np.float32),
+        "minute_from_open_norm": minute_from_open_norm.astype(np.float32),
+        "minute_to_close_norm": minute_to_close_norm.astype(np.float32),
+        "is_open_30m": is_open_30m.astype(np.float32),
+        "is_close_30m": is_close_30m.astype(np.float32),
+        "is_lunch": is_lunch.astype(np.float32),
+        "dow_sin": dow_sin.astype(np.float32),
+        "dow_cos": dow_cos.astype(np.float32),
+        "month_sin": month_sin.astype(np.float32),
+        "month_cos": month_cos.astype(np.float32),
+        "day_of_month_norm": day_of_month_norm.astype(np.float32),
+        "is_month_end_window": is_month_end_window.astype(np.float32),
+        "is_quarter_end_window": is_quarter_end_window.astype(np.float32),
     })
 
     # ---- Context features: backward merge_asof (causal) ----
