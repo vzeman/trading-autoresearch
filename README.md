@@ -16,13 +16,24 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 187 — 1f2fa6a
+_Last iteration: **2026-05-05 16:19 UTC** · `1f2fa6a` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_187_1f2fa6a.md](iterations/iter_187_1f2fa6a.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-05 13:53 UTC** · `1f2fa6a` · status: **RUNNING**_
+### Latest iteration: iter 187 — 1f2fa6a
 
-**exp187: calendar session features fresh train**
+🔴 DISCARD · exp187: calendar session features fresh train
 
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
+| metric | value |
+|---|---|
+| Sharpe (median) | **+1.420** |
+| Sharpe CI low (5%) | -0.676 |
+| % time above SPY | 50.473% |
+| Net PnL | **$+889.40** (+1.779%) |
+| Max drawdown | -1.89% |
+| Trades | 3 |
+| Wall time | 8760.9s |
+
+![iteration equity](docs/weighted_1f2fa6a.png)
 
 ### Current best (`f9dfd67`)
 
