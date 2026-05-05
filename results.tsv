@@ -168,3 +168,4 @@ f9dfd67	3.2144	0.9047	-1.89	3959.48	1	keep	exp171: top2 double 4h rank weight	60
 e7b37b9	0.5957	-1.6510	-2.26	248.48	1	discard	exp172: top2 double 1d rank weight	49.898
 5c717b9	0.7696	-1.5447	-1.88	272.50	1	discard	exp173: fresh pretrain best top2 strategy	41.715
 33c1540	0.3826	-1.2951	-3.08	263.20	1	discard	exp176: 180d validation on refreshed data	45.944
+9554160	-0.3374	-2.2550	-4.77	-323.18	2	discard	exp178: 180d top3 diversification	37.426
