@@ -1012,7 +1012,7 @@ PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at on
 # MAX_POS_FRACTION_OF_FREE_CASH of free cash.
 # ============================================================================
 MAX_POS_FRACTION_OF_FREE_CASH = 0.50  # exp47: SWAP + cap 0.50. exp46 (SWAP+0.65) gave best sharpe yet (+1.42) but DD -10.85% over floor on seed 1 only. Drop cap from 0.65 to 0.50 to bring worst-seed DD comfortably under -10%.
-MIN_CASH_RESERVE_PCT = 0.8265625      # exp195: six-condition multi-timeframe setup checker
+MIN_CASH_RESERVE_PCT = 0.8265625      # exp196: relaxed 4-of-6 multi-timeframe setup checker
 MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
 KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effect — cap saturates)
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
@@ -1881,22 +1881,23 @@ def simulate_setup_checker_topn(
                     model.train()
                 candidates = []
                 if len(ready) > 0:
-                    q4h = float(np.quantile(score_4h, 0.75))
-                    q1d = float(np.quantile(score_1d, 0.50))
+                    q4h = float(np.quantile(score_4h, 0.60))
+                    q1d = float(np.quantile(score_1d, 0.40))
                     for row_idx, (sym, i_now) in enumerate(ready):
                         row = features[sym].iloc[i_now]
                         market_ok = (
                             float(row.get("spy_logret_390", 0.0)) > 0.0 and
                             float(row.get("spy_logret_2730", 0.0)) > -0.02
                         )
-                        passed = (
-                            float(score_4h[row_idx]) > 0.0 and
-                            float(score_1d[row_idx]) > 0.0 and
-                            float(score_4h[row_idx]) >= q4h and
-                            float(score_1d[row_idx]) >= q1d and
-                            float(row.get("ema_dev_60", 0.0)) > 0.0 and
-                            market_ok
-                        )
+                        checks = [
+                            float(score_4h[row_idx]) > 0.0,
+                            float(score_1d[row_idx]) > 0.0,
+                            float(score_4h[row_idx]) >= q4h,
+                            float(score_1d[row_idx]) >= q1d,
+                            float(row.get("ema_dev_60", 0.0)) > 0.0,
+                            market_ok,
+                        ]
+                        passed = sum(bool(x) for x in checks) >= 4 and market_ok
                         if passed:
                             combined = float(score_4h[row_idx] + score_1d[row_idx])
                             candidates.append((sym, i_now, combined))
@@ -2380,8 +2381,8 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp195: Claude/TradingView-style setup checker. Six deterministic
-    # conditions across model timeframes + trend filters; no subjective opinion.
+    # exp196: relaxed Claude/TradingView-style setup checker. Requires market
+    # filter plus at least 4 of 6 deterministic conditions to avoid 0-trade runs.
     canonical_broker = weighted
     try:
         setup_broker = simulate_setup_checker_topn(model, eval_feat, device, top_n=4,
