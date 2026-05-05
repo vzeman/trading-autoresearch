@@ -145,7 +145,9 @@ def fetch_bars(symbol: str, force: bool = False) -> pd.DataFrame:
         except Exception as e:
             print(f"[prepare] {symbol}: Alpaca failed ({e}); falling back to yfinance", flush=True)
             df = _fetch_via_yfinance(symbol, DAYS)
-    df.to_parquet(p, index=False)
+    tmp = p.with_suffix(p.suffix + ".tmp")
+    df.to_parquet(tmp, index=False)
+    os.replace(tmp, p)
     print(f"[prepare] {symbol}: {len(df):,} bars → {p}")
     return df
 

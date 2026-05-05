@@ -426,6 +426,26 @@ def write_iteration_md(
     md.append("")
     md.append(f"**Decision reason:** {reason}")
     md.append("")
+    freshness_blocks = []
+    for ff in sorted(CHECKPOINTS.glob("last_seed*_data_freshness.json")):
+        try:
+            freshness_blocks.append(json.loads(ff.read_text()))
+        except Exception:
+            pass
+    if freshness_blocks:
+        min_last = min((p.get("min_last_ts") for p in freshness_blocks if p.get("min_last_ts")), default="—")
+        max_last = max((p.get("max_last_ts") for p in freshness_blocks if p.get("max_last_ts")), default="—")
+        refreshed = any(bool(p.get("refresh_data")) for p in freshness_blocks)
+        symbol_counts = [len(p.get("symbols", [])) for p in freshness_blocks]
+        md.append("## Data Freshness")
+        md.append("")
+        md.append(f"| metric | value |")
+        md.append(f"|---|---|")
+        md.append(f"| REFRESH_DATA used | {'yes' if refreshed else 'no'} |")
+        md.append(f"| Symbols loaded per seed | {min(symbol_counts)}–{max(symbol_counts)} |")
+        md.append(f"| Earliest latest bar | {min_last} |")
+        md.append(f"| Latest latest bar | {max_last} |")
+        md.append("")
     md.append("## Winning strategy")
     md.append("")
     md.append(

@@ -36,6 +36,7 @@ CHECKPOINT_DIR.mkdir(exist_ok=True)
 # changed between iterations. Loads checkpoints/last_seed{seed}.pt instead.
 # Set USE_CACHED_PRETRAIN=1 in the env when launching the driver.
 USE_CACHED_PRETRAIN = os.environ.get("USE_CACHED_PRETRAIN", "0") == "1"
+REFRESH_DATA = os.environ.get("REFRESH_DATA", "0") == "1"
 # exp81/83: bfloat16 autocast on MPS — was on by default but exp83 measured it
 # is actually SLOWER than fp32 on Apple Metal (~75min/seed bf16 vs ~55min/seed fp32).
 # Apple's Metal doesn't have specialized bf16 tensor cores like NVIDIA. Leaving as
@@ -123,7 +124,7 @@ def _ema(x: np.ndarray, span: int) -> np.ndarray:
     return pd.Series(x).ewm(span=span, adjust=False).mean().to_numpy()
 
 
-def fetch_context() -> dict[str, pd.DataFrame]:
+def fetch_context(force: bool = False) -> dict[str, pd.DataFrame]:
     """Fetch & cache the context symbols' bars; return {sym: log_return_series}.
 
     Each value is a DataFrame with columns ['timestamp', 'logret'] — sorted by ts.
@@ -132,7 +133,7 @@ def fetch_context() -> dict[str, pd.DataFrame]:
     out: dict[str, pd.DataFrame] = {}
     for sym in CONTEXT_SYMBOLS:
         try:
-            bars = fetch_bars(sym)
+            bars = fetch_bars(sym, force=force)
         except Exception as e:
             print(f"[context] {sym}: fetch failed ({e}) — feature will be 0", flush=True)
             continue
@@ -143,6 +144,32 @@ def fetch_context() -> dict[str, pd.DataFrame]:
         out[sym] = pd.DataFrame({"timestamp": df["timestamp"], "logret": lr.astype(np.float32)})
         print(f"[context] {sym}: {len(out[sym]):,} bars cached", flush=True)
     return out
+
+
+def _write_data_freshness(seed: int, bars_by_sym: dict[str, pd.DataFrame]) -> None:
+    try:
+        import json as _json
+        rows = []
+        for sym, bars in sorted(bars_by_sym.items()):
+            if len(bars) == 0 or "timestamp" not in bars:
+                continue
+            ts = pd.to_datetime(bars["timestamp"], utc=True)
+            rows.append({
+                "symbol": sym,
+                "bars": int(len(bars)),
+                "first_ts": str(ts.min()),
+                "last_ts": str(ts.max()),
+            })
+        payload = {
+            "seed": int(seed),
+            "refresh_data": bool(REFRESH_DATA),
+            "symbols": rows,
+            "min_last_ts": min((r["last_ts"] for r in rows), default=None),
+            "max_last_ts": max((r["last_ts"] for r in rows), default=None),
+        }
+        (CHECKPOINT_DIR / f"last_seed{seed}_data_freshness.json").write_text(_json.dumps(payload, indent=2))
+    except Exception as e:
+        print(f"[data-freshness] seed {seed} failed: {e}", flush=True)
 
 
 _CONTEXT_KEY_TO_FEATURE = {
@@ -1790,7 +1817,9 @@ def train_and_eval(seed: int = 0) -> tuple:
     np.random.seed(seed)
     device = pick_device()
 
-    bars_by_sym = prepare_all()
+    if REFRESH_DATA:
+        print("[experiment] REFRESH_DATA=1 — refreshing cached Alpaca/yfinance bars before split", flush=True)
+    bars_by_sym = prepare_all(force=REFRESH_DATA)
     # exp56: extend universe with EXTENDED_UNIVERSE names whose cache exists.
     # fetch_bars is cache-aware; if download script hasn't fetched a name yet
     # it'll either download (slow) or fail — we silently skip failures.
@@ -1799,16 +1828,17 @@ def train_and_eval(seed: int = 0) -> tuple:
     for sym in EXTENDED_UNIVERSE:
         if sym in bars_by_sym:
             continue
-        if _cache_path(sym).exists():
+        if REFRESH_DATA or _cache_path(sym).exists():
             try:
-                bars_by_sym[sym] = fetch_bars(sym)
+                bars_by_sym[sym] = fetch_bars(sym, force=REFRESH_DATA)
                 extended_added += 1
             except Exception as e:
                 print(f"[extended] {sym}: skipped ({e})", flush=True)
     print(f"[experiment] universe size: {len(bars_by_sym)} ({extended_added} extended added beyond UNIVERSE)", flush=True)
+    _write_data_freshness(seed, bars_by_sym)
     training_universe = list(bars_by_sym.keys())
 
-    context = fetch_context()   # cached after first call
+    context = fetch_context(force=REFRESH_DATA)   # cached after first call
     train_feat: dict[str, pd.DataFrame] = {}
     eval_feat: dict[str, pd.DataFrame] = {}
     for sym in training_universe:
@@ -1927,7 +1957,7 @@ def train_and_eval(seed: int = 0) -> tuple:
         holdout_feat: dict[str, pd.DataFrame] = {}
         for sym in HOLDOUT_UNIVERSE:
             try:
-                bars = fetch_bars(sym)
+                bars = fetch_bars(sym, force=REFRESH_DATA)
             except Exception as e:
                 print(f"[holdout] {sym}: fetch failed ({e})", flush=True)
                 continue
