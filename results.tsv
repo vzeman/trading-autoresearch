@@ -178,3 +178,4 @@ e182351	0.6524	-1.3263	-4.11	492.60	3	discard	exp184: 180d top4 canonical	29.705
 3b12c45	0.0087	-2.0974	-3.16	-3.02	3	discard	exp186: fresh 2 epoch pretrain with async refresh	24.824
 1f2fa6a	1.4204	-0.6761	-1.89	889.40	3	discard	exp187: calendar session features fresh train	50.473
 9affd07	0.5648	-1.5578	-1.66	327.29	9	discard	exp188: calendar top10 cached canonical	36.319
+301a6bb	0.8658	-1.2017	-1.32	437.61	19	discard	exp189: calendar top20 cached canonical	34.870
