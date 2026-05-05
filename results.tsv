@@ -158,3 +158,4 @@ e99ebf0	3.2148	0.9058	-1.86	3888.71	1	discard	exp160: top2 with 82.96875pct rese
 528f9ec	3.2144	0.9047	-1.89	3959.48	1	keep	exp162: top2 add 2d rank horizon	60.220
 604d5c1	1.4508	-1.2702	-2.28	1050.29	1	discard	exp163: top2 add 3d rank horizon	47.073
 54e296f	0.9145	-1.5447	-2.26	272.50	1	discard	exp164: top2 1d-only rank signal	47.862
+e8f48e9	0.5957	-1.6510	-1.89	248.48	1	discard	exp165: top2 4h-only rank signal	49.989
