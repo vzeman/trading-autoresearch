@@ -163,3 +163,4 @@ d986b69	3.2144	0.9047	-1.89	3959.48	1	keep	exp166: top2 SPY-relative rank signal
 d097e12	-1.4044	-3.8388	-2.77	-896.47	1	discard	exp167: top2 half-universe readiness	30.506
 c4f1f42	0.5987	-1.8539	-1.90	349.47	1	discard	exp168: top2 one-fifth readiness	45.323
 bb73b19	3.2144	0.9047	-1.89	3959.48	1	keep	exp169: top2 exclude SPY candidate	60.220
+d06d5c6	0.8527	-1.8445	-1.90	327.76	1	discard	exp170: top2 exclude broad ETF candidates	47.705
