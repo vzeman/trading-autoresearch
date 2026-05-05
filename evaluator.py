@@ -38,7 +38,7 @@ from pathlib import Path
 import numpy as np
 
 from prepare import (
-    N_SEEDS, STARTING_CASH_USD,
+    N_SEEDS, STARTING_CASH_USD, EVAL_DAYS,
     sharpe_ratio, max_drawdown_pct, bootstrap_sharpe_ci,
 )
 
@@ -718,6 +718,13 @@ def _slice_trailing_window(curves: list[list[tuple]], days: int) -> list[list[tu
     return out
 
 
+def _curve_span_days(curve: list[tuple]) -> float:
+    if not curve:
+        return 0.0
+    span = curve[-1][0] - curve[0][0]
+    return max(0.0, span.total_seconds() / 86400.0)
+
+
 def _render_weighted_trailing_chart(curves, commit, *, trades_per_seed=None,
                                     days=30, suffix="30d", label="1 month") -> None:
     """Render recent performance window ending at the latest available bar vs SPY."""
@@ -763,6 +770,10 @@ def _render_weighted_trailing_chart(curves, commit, *, trades_per_seed=None,
     pct_over = _pct_time_over_spy(med, spy_window) if med and spy_window else 0.0
     pnl = med[-1][1] - STARTING_CASH_USD if med else 0.0
     spy_pnl = spy_window[-1][1] - STARTING_CASH_USD if spy_window else 0.0
+    actual_days = _curve_span_days(med)
+    coverage = f"{actual_days:.0f}d available"
+    if actual_days + 1 < days:
+        coverage = f"only {actual_days:.0f}d available for requested {days}d"
     if sliced_trades and sliced_trades[0]:
         for ts, sym, side in sliced_trades[0]:
             color = "#22c55e" if side == "BUY" else "#ef4444"
@@ -771,7 +782,7 @@ def _render_weighted_trailing_chart(curves, commit, *, trades_per_seed=None,
     ax.axhline(y=STARTING_CASH_USD, linestyle=":", color="gray", alpha=0.5, label="rebased start")
     ax.set_title(
         f"Winning strategy trailing {label} — commit {commit}  ·  "
-        f"strategy ${pnl:+,.0f} vs SPY ${spy_pnl:+,.0f}  ·  over SPY {pct_over:.0f}%",
+        f"{coverage}  ·  strategy ${pnl:+,.0f} vs SPY ${spy_pnl:+,.0f}  ·  over SPY {pct_over:.0f}%",
         fontsize=10,
     )
     ax.set_ylabel("rebased equity ($)")

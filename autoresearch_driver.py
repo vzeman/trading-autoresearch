@@ -476,7 +476,7 @@ def write_iteration_md(
         md.extend(seed_lines)
         md.append("```")
         md.append("")
-    md.append("## Equity curve (full eval window, ~73 days)")
+    md.append(f"## Equity curve (full eval window, {EVAL_DAYS} calendar days)")
     md.append("")
     md.append(f"![weighted equity]({weighted_full})")
     md.append("")
@@ -499,7 +499,10 @@ def write_iteration_md(
     md.append("")
     md.append(
         "Each chart rebases the winning strategy and SP500 to $50,000 at the start "
-        "of the trailing window, ending at the latest available bar."
+        "of the trailing window, ending at the latest available bar. If an older "
+        "iteration was evaluated on fewer days than the requested trailing window, "
+        "the chart title states the actual available coverage instead of implying "
+        "a full six-month simulation."
     )
     md.append("")
     for suffix, label in [

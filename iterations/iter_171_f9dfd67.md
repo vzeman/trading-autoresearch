@@ -74,6 +74,12 @@ Each chart rebases the winning strategy and SP500 to $50,000 at the start of the
 
 ### Trailing 6 months
 
+Historical note: this iteration was originally generated before the evaluator
+was switched to a 180-calendar-day eval window, so this archived chart contains
+only the available ~3 months of equity history. Current and future reports use
+the 180-day eval window for a real trailing six-month simulation, or label the
+chart with the actual available coverage.
+
 ![winning strategy trailing 6 months](../docs/winning_6mo_f9dfd67.png)
 
 ## Trader profile comparison
