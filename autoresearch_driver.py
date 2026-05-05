@@ -729,15 +729,25 @@ def main() -> None:
     # original SHA so evaluator names its chart files with the experiment commit
     # (matches the iter md links written by write_iteration_md).
     env["EXPERIMENT_COMMIT"] = commit
+    refresh_proc = None
     if os.environ.get("REFRESH_DATA", "0") == "1":
-        print("[driver] REFRESH_DATA=1 — refreshing data cache once before evaluator", flush=True)
         refresh_cmd = [str(REPO / ".venv" / "bin" / "python"), str(REPO / "refresh_data.py"), "--force"]
-        refresh_proc = subprocess.run(refresh_cmd, cwd=REPO, text=True, capture_output=True, env=env)
-        RUN_LOG.write_text(
-            f"$ {' '.join(refresh_cmd)}\n\n--STDOUT--\n{refresh_proc.stdout}\n\n--STDERR--\n{refresh_proc.stderr}\n"
-        )
-        if refresh_proc.returncode != 0:
-            print(f"[driver] data refresh exited {refresh_proc.returncode}; continuing with available cache", flush=True)
+        if os.environ.get("REFRESH_DATA_ASYNC", "1") == "1":
+            print("[driver] REFRESH_DATA=1 — refreshing data cache in parallel", flush=True)
+            refresh_log = (REPO / "refresh_data.log").open("w")
+            refresh_log.write(f"$ {' '.join(refresh_cmd)}\n\n")
+            refresh_log.flush()
+            refresh_proc = subprocess.Popen(
+                refresh_cmd, cwd=REPO, text=True, stdout=refresh_log, stderr=subprocess.STDOUT, env=env,
+            )
+        else:
+            print("[driver] REFRESH_DATA=1 — refreshing data cache once before evaluator", flush=True)
+            completed_refresh = subprocess.run(refresh_cmd, cwd=REPO, text=True, capture_output=True, env=env)
+            RUN_LOG.write_text(
+                f"$ {' '.join(refresh_cmd)}\n\n--STDOUT--\n{completed_refresh.stdout}\n\n--STDERR--\n{completed_refresh.stderr}\n"
+            )
+            if completed_refresh.returncode != 0:
+                print(f"[driver] data refresh exited {completed_refresh.returncode}; continuing with available cache", flush=True)
     # EVAL_WORKERS env var → call evaluator.run(N).
     # N_SEEDS_OVERRIDE env var → monkey-patch prepare.N_SEEDS AND evaluator.N_SEEDS
     # before the run starts. evaluator does `from prepare import N_SEEDS` which
@@ -763,6 +773,8 @@ def main() -> None:
     )
     elapsed = time.time() - t0
     RUN_LOG.write_text(proc.stdout + "\n--STDERR--\n" + proc.stderr)
+    if refresh_proc is not None and refresh_proc.poll() is None:
+        print(f"[driver] data refresh still running in background pid={refresh_proc.pid}", flush=True)
 
     if proc.returncode != 0:
         print(f"STATUS=crash exit={proc.returncode} elapsed={elapsed:.0f}s", flush=True)
