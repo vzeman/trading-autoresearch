@@ -16,15 +16,12 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 171 — f9dfd67
+_Last iteration: **2026-05-05 03:28 UTC** · `f9dfd67` · 🟢 KEEP — new best_  
+📄 **[Full iteration report → iterations/iter_171_f9dfd67.md](iterations/iter_171_f9dfd67.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-05 03:22 UTC** · `f9dfd67` · status: **RUNNING**_
+### Latest iteration: iter 171 — f9dfd67
 
-**exp171: top2 double 4h rank weight**
-
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
-
-### Current best (`bb73b19`)
+🟢 KEEP — new best · exp171: top2 double 4h rank weight
 
 | metric | value |
 |---|---|
@@ -34,7 +31,21 @@ Final metrics will appear here when the iteration completes (typical wall clock:
 | Net PnL | **$+3959.48** (+7.919%) |
 | Max drawdown | -1.89% |
 | Trades | 1 |
-| Saved at | 2026-05-05 03:14:55 |
+| Wall time | 363.5s |
+
+![iteration equity](docs/weighted_f9dfd67.png)
+
+### Current best (`f9dfd67`)
+
+| metric | value |
+|---|---|
+| Sharpe (median) | **+3.214** |
+| Sharpe CI low (5%) | +0.905 |
+| % time above SPY | 60.220% |
+| Net PnL | **$+3959.48** (+7.919%) |
+| Max drawdown | -1.89% |
+| Trades | 1 |
+| Saved at | 2026-05-05 03:28:51 |
 
 ![weighted equity, current best](docs/weighted_latest.png)
 
@@ -228,8 +239,8 @@ MIT — copy, fork, modify, anything.
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-05-05 01:14 UTC_  
-_Total experiments: **58**  ·  kept: **36**  ·  latest commit: `bb73b19`_
+_Last updated: 2026-05-05 01:28 UTC_  
+_Total experiments: **60**  ·  kept: **37**  ·  latest commit: `f9dfd67`_
 
 ### Weighted strategy — full eval window (~73 days)
 
@@ -257,7 +268,7 @@ _Total experiments: **58**  ·  kept: **36**  ·  latest commit: `bb73b19`_
 | Max drawdown | -1.89% |
 | Trades | 1 |
 | % time above SPY | 60% |
-| Wall time | 364.4s |
+| Wall time | 363.5s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
