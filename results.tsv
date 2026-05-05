@@ -179,3 +179,4 @@ e182351	0.6524	-1.3263	-4.11	492.60	3	discard	exp184: 180d top4 canonical	29.705
 1f2fa6a	1.4204	-0.6761	-1.89	889.40	3	discard	exp187: calendar session features fresh train	50.473
 9affd07	0.5648	-1.5578	-1.66	327.29	9	discard	exp188: calendar top10 cached canonical	36.319
 301a6bb	0.8658	-1.2017	-1.32	437.61	19	discard	exp189: calendar top20 cached canonical	34.870
+07ea1a6	0.0073	-2.0974	-1.87	-2.25	3	discard	exp190: calendar top4 double 4h cached	29.660
