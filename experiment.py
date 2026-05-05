@@ -116,6 +116,10 @@ ALL_FEATURES = [
     "tlt_logret_1",   # 20yr Treasury ETF — interest-rate signal
     "uup_logret_1",   # USD-index ETF (DXY proxy) — currency macro
     "spy_logret_1",   # SPY return as a market factor (for SPY itself this == log_return_1)
+    # exp191: explicit market-regime trend context. Intraday windows are bars;
+    # multi-day windows use regular-session bars (390 bars/trading day).
+    "spy_logret_60", "spy_logret_240", "spy_logret_390",
+    "spy_logret_2730", "spy_logret_5460", "spy_logret_10920", "spy_logret_16380",
     # exp82: REVERTED exp79's universe-context features — they regressed sharpe
     # +1.549 → +0.055. Probably scale-mismatch (pct_above_ma60 in [0,1] vs others
     # ~1e-4). Re-add later with proper z-score normalization. The featurize() stub
@@ -133,7 +137,7 @@ def _ema(x: np.ndarray, span: int) -> np.ndarray:
 def fetch_context(force: bool = False) -> dict[str, pd.DataFrame]:
     """Fetch & cache the context symbols' bars; return {sym: log_return_series}.
 
-    Each value is a DataFrame with columns ['timestamp', 'logret'] — sorted by ts.
+    Each value is a DataFrame with columns ['timestamp', 'logret_1', ...] — sorted by ts.
     Used by featurize() via merge_asof to forward-fill onto universe bars.
     """
     out: dict[str, pd.DataFrame] = {}
@@ -145,9 +149,16 @@ def fetch_context(force: bool = False) -> dict[str, pd.DataFrame]:
             continue
         df = bars[["timestamp", "close"]].sort_values("timestamp").reset_index(drop=True)
         c = df["close"].to_numpy(np.float64)
-        lr = np.zeros_like(c)
-        lr[1:] = np.log(c[1:] / np.maximum(c[:-1], 1e-12))
-        out[sym] = pd.DataFrame({"timestamp": df["timestamp"], "logret": lr.astype(np.float32)})
+        def lret(k: int) -> np.ndarray:
+            lr = np.zeros_like(c)
+            lr[k:] = np.log(c[k:] / np.maximum(c[:-k], 1e-12))
+            return lr.astype(np.float32)
+
+        payload = {"timestamp": df["timestamp"], "logret_1": lret(1)}
+        if sym == "SPY":
+            for k in (60, 240, 390, 2730, 5460, 10920, 16380):
+                payload[f"logret_{k}"] = lret(k)
+        out[sym] = pd.DataFrame(payload)
         print(f"[context] {sym}: {len(out[sym]):,} bars cached", flush=True)
     return out
 
@@ -178,10 +189,19 @@ def _write_data_freshness(seed: int, bars_by_sym: dict[str, pd.DataFrame]) -> No
         print(f"[data-freshness] seed {seed} failed: {e}", flush=True)
 
 
-_CONTEXT_KEY_TO_FEATURE = {
-    "TLT":  "tlt_logret_1",
-    "UUP":  "uup_logret_1",
-    "SPY":  "spy_logret_1",
+_CONTEXT_KEY_TO_FEATURES = {
+    "TLT": [("logret_1", "tlt_logret_1")],
+    "UUP": [("logret_1", "uup_logret_1")],
+    "SPY": [
+        ("logret_1", "spy_logret_1"),
+        ("logret_60", "spy_logret_60"),
+        ("logret_240", "spy_logret_240"),
+        ("logret_390", "spy_logret_390"),
+        ("logret_2730", "spy_logret_2730"),
+        ("logret_5460", "spy_logret_5460"),
+        ("logret_10920", "spy_logret_10920"),
+        ("logret_16380", "spy_logret_16380"),
+    ],
 }
 
 
@@ -299,15 +319,20 @@ def featurize(bars: pd.DataFrame, context: dict[str, pd.DataFrame] | None = None
 
     # ---- Context features: backward merge_asof (causal) ----
     feat = feat.sort_values("timestamp").reset_index(drop=True)
-    for ctx_sym, feat_name in _CONTEXT_KEY_TO_FEATURE.items():
+    for ctx_sym, ctx_features in _CONTEXT_KEY_TO_FEATURES.items():
         if context is not None and ctx_sym in context:
             ctx_df = context[ctx_sym].sort_values("timestamp").reset_index(drop=True)
             merged = pd.merge_asof(
                 feat[["timestamp"]], ctx_df, on="timestamp", direction="backward",
             )
-            feat[feat_name] = merged["logret"].fillna(0.0).astype(np.float32).to_numpy()
+            for ctx_col, feat_name in ctx_features:
+                if ctx_col in merged:
+                    feat[feat_name] = merged[ctx_col].fillna(0.0).astype(np.float32).to_numpy()
+                else:
+                    feat[feat_name] = np.zeros(len(feat), dtype=np.float32)
         else:
-            feat[feat_name] = np.zeros(len(feat), dtype=np.float32)
+            for _ctx_col, feat_name in ctx_features:
+                feat[feat_name] = np.zeros(len(feat), dtype=np.float32)
     # exp79: stub-init the universe-context columns; populated by add_universe_context()
     # after all symbols have been featurized. Keeps featurize() signature unchanged.
     feat["univ_mean_logret_1"] = np.zeros(len(feat), dtype=np.float32)
@@ -987,7 +1012,7 @@ PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at on
 # MAX_POS_FRACTION_OF_FREE_CASH of free cash.
 # ============================================================================
 MAX_POS_FRACTION_OF_FREE_CASH = 0.50  # exp47: SWAP + cap 0.50. exp46 (SWAP+0.65) gave best sharpe yet (+1.42) but DD -10.85% over floor on seed 1 only. Drop cap from 0.65 to 0.50 to bring worst-seed DD comfortably under -10%.
-MIN_CASH_RESERVE_PCT = 0.8265625      # exp190: calendar features; top4 with double 4h rank weight
+MIN_CASH_RESERVE_PCT = 0.8265625      # exp191: calendar + explicit SPY trend features; restore top4 equal-rank canonical
 MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
 KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effect — cap saturates)
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
@@ -2044,16 +2069,16 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp190: canonical top4 calendar-feature strategy with double 4h rank
-    # weight. Earlier 90d sweeps found extra 4h weight stronger than extra 1d.
+    # exp191: restore exp187's best calendar-feature top4 equal 4h+1d rank
+    # while adding explicit SPY market-trend context features.
     canonical_broker = weighted
     try:
-        topn_broker = simulate_passive_topn(model, eval_feat, device, top_n=4, name="top4_dbl4h",
-                                            ranking_horizons=(3, 3, 4),
+        topn_broker = simulate_passive_topn(model, eval_feat, device, top_n=4, name="top4",
+                                            ranking_horizons=(3, 4),
                                             precomputed_preds=pred_cache)
         if topn_broker.equity_curve and len(topn_broker.equity_curve) > 5:
             canonical_broker = topn_broker
-            print(f"[experiment] canonical = top4_dbl4h_picker (final equity ${topn_broker.equity_curve[-1][1]:,.2f})", flush=True)
+            print(f"[experiment] canonical = top4_picker (final equity ${topn_broker.equity_curve[-1][1]:,.2f})", flush=True)
     except Exception as e:
         print(f"[experiment] top4 canonical failed ({e}); falling back to weighted", flush=True)
     return (
