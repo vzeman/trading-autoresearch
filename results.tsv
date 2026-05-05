@@ -166,3 +166,4 @@ bb73b19	3.2144	0.9047	-1.89	3959.48	1	keep	exp169: top2 exclude SPY candidate	60
 d06d5c6	0.8527	-1.8445	-1.90	327.76	1	discard	exp170: top2 exclude broad ETF candidates	47.705
 f9dfd67	3.2144	0.9047	-1.89	3959.48	1	keep	exp171: top2 double 4h rank weight	60.220
 e7b37b9	0.5957	-1.6510	-2.26	248.48	1	discard	exp172: top2 double 1d rank weight	49.898
+5c717b9	0.7696	-1.5447	-1.88	272.50	1	discard	exp173: fresh pretrain best top2 strategy	41.715
