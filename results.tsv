@@ -185,3 +185,4 @@ b4ba841	-0.3733	-2.5802	-2.47	-305.93	3	discard	exp191: SPY trend context fresh 
 dbb6c2d	0.6172	-1.2279	-20.17	2485.78	3	discard	exp193: full-budget score allocation cached	0.310
 ba16a06	0.9386	-1.7702	-9.79	3321.83	1	discard	exp194: canonical SPY 4h timing cached	0.238
 b947168	0.0000	0.0000	0.00	0.00	0	discard	exp195: transcript-inspired setup checker cached	25.509
+abdb4ca	0.0000	0.0000	0.00	0.00	0	discard	exp196: relaxed setup checker cached	25.509
