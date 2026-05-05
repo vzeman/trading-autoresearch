@@ -155,3 +155,4 @@ e6675b8	3.2134	0.9018	-1.98	4136.32	1	discard	exp157: top2 with 81.875pct reserv
 82a4415	3.2144	0.9047	-1.89	3959.48	1	keep	exp159: top2 with 82.65625pct reserve	60.220
 e99ebf0	3.2148	0.9058	-1.86	3888.71	1	discard	exp160: top2 with 82.96875pct reserve	60.187
 751a63e	3.2146	0.9052	-1.88	3924.10	1	discard	exp161: top2 with 82.8125pct reserve	60.253
+528f9ec	3.2144	0.9047	-1.89	3959.48	1	keep	exp162: top2 add 2d rank horizon	60.220

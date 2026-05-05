@@ -16,15 +16,12 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 162 — 528f9ec
+_Last iteration: **2026-05-05 02:25 UTC** · `528f9ec` · 🟢 KEEP — new best_  
+📄 **[Full iteration report → iterations/iter_162_528f9ec.md](iterations/iter_162_528f9ec.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-05 02:19 UTC** · `528f9ec` · status: **RUNNING**_
+### Latest iteration: iter 162 — 528f9ec
 
-**exp162: top2 add 2d rank horizon**
-
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
-
-### Current best (`82a4415`)
+🟢 KEEP — new best · exp162: top2 add 2d rank horizon
 
 | metric | value |
 |---|---|
@@ -34,7 +31,21 @@ Final metrics will appear here when the iteration completes (typical wall clock:
 | Net PnL | **$+3959.48** (+7.919%) |
 | Max drawdown | -1.89% |
 | Trades | 1 |
-| Saved at | 2026-05-05 02:04:56 |
+| Wall time | 363.2s |
+
+![iteration equity](docs/weighted_528f9ec.png)
+
+### Current best (`528f9ec`)
+
+| metric | value |
+|---|---|
+| Sharpe (median) | **+3.214** |
+| Sharpe CI low (5%) | +0.905 |
+| % time above SPY | 60.220% |
+| Net PnL | **$+3959.48** (+7.919%) |
+| Max drawdown | -1.89% |
+| Trades | 1 |
+| Saved at | 2026-05-05 02:25:44 |
 
 ![weighted equity, current best](docs/weighted_latest.png)
 
@@ -228,8 +239,8 @@ MIT — copy, fork, modify, anything.
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-05-05 00:04 UTC_  
-_Total experiments: **48**  ·  kept: **33**  ·  latest commit: `82a4415`_
+_Last updated: 2026-05-05 00:25 UTC_  
+_Total experiments: **51**  ·  kept: **34**  ·  latest commit: `528f9ec`_
 
 ### Weighted strategy — full eval window (~73 days)
 
@@ -257,7 +268,7 @@ _Total experiments: **48**  ·  kept: **33**  ·  latest commit: `82a4415`_
 | Max drawdown | -1.89% |
 | Trades | 1 |
 | % time above SPY | 60% |
-| Wall time | 363.8s |
+| Wall time | 363.2s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
@@ -272,6 +283,6 @@ _Total experiments: **48**  ·  kept: **33**  ·  latest commit: `82a4415`_
 | 2 | `ab6f02d` | +3.23 | +0.95 | -0.55 | $+1,147.57 | 1 | exp151: top2 with 95pct reserve |
 | 3 | `b4df7c6` | +3.22 | +0.93 | -1.10 | $+2,290.62 | 1 | exp150: top2 with 90pct reserve |
 | 4 | `514a197` | +3.22 | +0.91 | -1.64 | $+3,428.15 | 1 | exp149: top2 with 85pct reserve |
-| 5 | `d5b40ef` | +3.21 | +0.90 | -1.91 | $+3,994.86 | 1 | exp153: SPY-alpha objective with top2 82.5pct reserve |
+| 5 | `82a4415` | +3.21 | +0.90 | -1.89 | $+3,959.48 | 1 | exp159: top2 with 82.65625pct reserve |
 
 <!-- RESULTS_END -->
