@@ -1729,6 +1729,68 @@ def simulate_buyhold_spy(features: dict[str, pd.DataFrame]) -> WeightedBroker:
     return broker
 
 
+def simulate_spy_timing(
+    model: PatchTransformer,
+    features: dict[str, pd.DataFrame],
+    device: str,
+    *,
+    horizon_idx: int,
+    decision_cooldown_bars: int,
+    buy_threshold: float = 0.0,
+    sell_threshold: float = 0.0,
+    name: str = "spy_timing",
+    precomputed_preds: dict | None = None,
+) -> WeightedBroker:
+    """Trade only SPY: buy / sell / hold from the model's own SPY forecast.
+
+    The strategy checks the forecast after each configured time segment
+    (`decision_cooldown_bars`). It invests available cash into SPY when the
+    forecast Sharpe is positive, exits when it turns non-positive, and otherwise
+    holds the current state. This gives us direct SP500-index timing results for
+    each horizon segment.
+    """
+    broker = WeightedBroker(STARTING_CASH_USD, min_reserve_frac=0.0)
+    if "SPY" not in features or not getattr(model, "horizons_minutes", None):
+        return broker
+    f = features["SPY"]
+    cols = USE_FEATURES
+    feat_arr = f[cols].to_numpy(np.float32)
+    close_arr = f["close"].to_numpy(np.float32)
+    volume_arr = f["volume"].to_numpy(np.float32) if "volume" in f.columns else np.zeros(len(f), dtype=np.float32)
+    timestamps = f["timestamp"].tolist()
+    C = model.context_len
+    last_decision_i = -10**9
+    for i_now, ts in enumerate(timestamps):
+        price = float(close_arr[i_now])
+        if i_now >= C - 1 and (i_now - last_decision_i) >= decision_cooldown_bars:
+            if precomputed_preds is not None:
+                kept, mh_mean_np, mh_log_std_np = _lookup_mh([("SPY", i_now)], precomputed_preds, C)
+                if kept and horizon_idx < mh_mean_np.shape[1]:
+                    score = float(mh_mean_np[0, horizon_idx] / (np.exp(mh_log_std_np[0, horizon_idx]) + 1e-12))
+                else:
+                    score = 0.0
+            else:
+                with torch.no_grad():
+                    model.eval()
+                    xb = torch.from_numpy(feat_arr[i_now - C + 1 : i_now + 1][None, ...]).to(device)
+                    mh_mean, mh_log_std = model.forward_multi_horizon(xb)
+                    score = float((mh_mean[0, horizon_idx] / (torch.exp(mh_log_std[0, horizon_idx]) + 1e-12)).detach().cpu())
+                model.train()
+            bar_dv = float(volume_arr[i_now]) * price
+            is_holding = broker.positions.get("SPY", 0.0) > 1e-9
+            if (not is_holding) and score > buy_threshold:
+                target_usd = max(0.0, broker.free_cash() - FEE_PER_TRADE_USD - 1.0)
+                broker.buy_usd("SPY", price, ts, target_usd, bar_dollar_volume=bar_dv)
+                last_decision_i = i_now
+            elif is_holding and score <= sell_threshold:
+                broker.sell_all("SPY", price, ts, bar_dollar_volume=bar_dv)
+                last_decision_i = i_now
+            else:
+                last_decision_i = i_now
+        broker.mark_to_market(ts, {"SPY": price})
+    return broker
+
+
 # Profile presets. horizon_idx into HORIZONS_MINUTES = [5,60,120,240,390,780,1170,1560,1950,5460,11700]
 # 7th field (exp80) = cooldown_bars_per_sym — minimum bars between trades of the same symbol.
 PROFILE_PRESETS = [
@@ -1743,6 +1805,14 @@ PROFILE_PRESETS = [
     ("monthly_capped", 10, 10**9,    0.0, 0.0, 0.0, 30 * 390),    # 1 trade/sym/month, 30d horizon
 ]
 PASSIVE_TOPN_VARIANTS = [(1,), (3,), (4,), (5,), (10,), (20,)]   # exp89: add top4 between unstable top3 and stable top5
+SPY_TIMING_PRESETS = [
+    # (name, horizon_idx, decision_cooldown_bars)
+    ("spy_timing_1h", 1, 60),
+    ("spy_timing_4h", 3, 240),
+    ("spy_timing_1d", 4, 390),
+    ("spy_timing_1w", 8, 5 * 390),
+    ("spy_timing_1mo", 10, 30 * 390),
+]
 
 
 def run_profile_suite(model, eval_feat, device, seed, precomputed_preds=None):
@@ -1799,6 +1869,27 @@ def run_profile_suite(model, eval_feat, device, seed, precomputed_preds=None):
                       f"pnl=${profile_results[f'top{n}_picker']['pnl']:+,.2f}", flush=True)
             except Exception as e:
                 print(f"[prof-top{n}] failed: {e}", flush=True)
+        for pname, hidx, cooldown_bars in SPY_TIMING_PRESETS:
+            try:
+                pb = simulate_spy_timing(
+                    model, eval_feat, device,
+                    horizon_idx=hidx, decision_cooldown_bars=cooldown_bars,
+                    name=pname, precomputed_preds=precomputed_preds,
+                )
+                end_eq = float(pb.equity_curve[-1][1]) if pb.equity_curve else 0.0
+                start_eq = float(pb.equity_curve[0][1]) if pb.equity_curve else float(STARTING_CASH_USD)
+                profile_results[pname] = {
+                    "sharpe": float(_sr(pb.equity_curve)),
+                    "pnl": end_eq - start_eq,
+                    "pnl_pct": (end_eq - start_eq) / start_eq * 100 if start_eq else 0.0,
+                    "trades": int(pb.n_trades), "dd_pct": float(_dd(pb.equity_curve)),
+                    "ending_equity": end_eq, "horizon_minutes": HORIZONS_MINUTES[hidx],
+                    "decision_cooldown_bars": int(cooldown_bars),
+                }
+                print(f"[prof-{pname}] sh={profile_results[pname]['sharpe']:+.3f} "
+                      f"pnl=${profile_results[pname]['pnl']:+,.2f} trades={profile_results[pname]['trades']}", flush=True)
+            except Exception as e:
+                print(f"[prof-{pname}] failed: {e}", flush=True)
         try:
             spy = simulate_buyhold_spy(eval_feat)
             end_eq = float(spy.equity_curve[-1][1]) if spy.equity_curve else 0.0
@@ -1855,6 +1946,14 @@ def run_profile_suite(model, eval_feat, device, seed, precomputed_preds=None):
                 pb = simulate_passive_topn(model, eval_feat, device, top_n=n, name=f"top{n}",
                                            precomputed_preds=precomputed_preds)
                 _dump_curve(f"top{n}_picker", pb)
+            except Exception:
+                pass
+        for pname, hidx, cooldown_bars in SPY_TIMING_PRESETS:
+            try:
+                pb = simulate_spy_timing(model, eval_feat, device,
+                                         horizon_idx=hidx, decision_cooldown_bars=cooldown_bars,
+                                         name=pname, precomputed_preds=precomputed_preds)
+                _dump_curve(pname, pb)
             except Exception:
                 pass
         try:
