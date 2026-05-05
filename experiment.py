@@ -1012,7 +1012,7 @@ PICKER_MAX_CONCURRENT = 5          # max number of distinct positions held at on
 # MAX_POS_FRACTION_OF_FREE_CASH of free cash.
 # ============================================================================
 MAX_POS_FRACTION_OF_FREE_CASH = 0.50  # exp47: SWAP + cap 0.50. exp46 (SWAP+0.65) gave best sharpe yet (+1.42) but DD -10.85% over floor on seed 1 only. Drop cap from 0.65 to 0.50 to bring worst-seed DD comfortably under -10%.
-MIN_CASH_RESERVE_PCT = 0.8265625      # exp191: calendar + explicit SPY trend features; restore top4 equal-rank canonical
+MIN_CASH_RESERVE_PCT = 0.8265625      # exp192: baseline reserve kept for weighted/profile sims; canonical uses no-reserve score allocation
 MAX_NEW_TRADES_PER_TIMESTEP = 5       # diversify timing
 KELLY_SCALE = 0.5                     # half-Kelly (exp33: doubling had no effect — cap saturates)
 WEIGHTED_SELL_SHARPE = 0.0            # close any held position whose 1h predicted Sharpe drops below this
@@ -1705,6 +1705,117 @@ def simulate_passive_topn(
     return broker
 
 
+def simulate_passive_score_alloc_topn(
+    model: PatchTransformer,
+    features: dict[str, pd.DataFrame],
+    device: str,
+    *,
+    top_n: int = 4,
+    ranking_horizons: tuple = (3, 4),
+    name: str = "score_alloc",
+    precomputed_preds: dict | None = None,
+    rank_vs_spy: bool = False,
+) -> WeightedBroker:
+    """Pick top-N once, allocate nearly all cash by model score, hold to end.
+
+    This removes the canonical strategy's large cash reserve and equal-position
+    budget. The model's cross-sectional scores determine transaction budgets;
+    only unavoidable cash headroom for fixed fees is retained.
+    """
+    broker = WeightedBroker(STARTING_CASH_USD, min_reserve_frac=0.0)
+    cols = USE_FEATURES
+    feat_arrays = {s: f[cols].to_numpy(np.float32) for s, f in features.items()}
+    close_arrays = {s: f["close"].to_numpy(np.float32) for s, f in features.items()}
+    volume_arrays = {
+        s: (f["volume"].to_numpy(np.float32) if "volume" in f.columns
+            else np.zeros(len(f), dtype=np.float32))
+        for s, f in features.items()
+    }
+    events_by_ts: dict[pd.Timestamp, list[tuple[str, int]]] = {}
+    for sym, f in features.items():
+        for i, ts in enumerate(f["timestamp"]):
+            events_by_ts.setdefault(ts, []).append((sym, i))
+    sorted_ts = sorted(events_by_ts.keys())
+    C = model.context_len
+    last_idx_by_sym: dict[str, int] = {s: -1 for s in features}
+    picked = False
+    for ts in sorted_ts:
+        events_here = events_by_ts[ts]
+        for sym, i_now in events_here:
+            last_idx_by_sym[sym] = i_now
+        if not picked:
+            ready = [(sym, i_now) for sym, i_now in events_here if i_now >= C - 1 and sym != "SPY"]
+            if len(ready) >= max(top_n, len(features) // 4):
+                if precomputed_preds is not None and model.horizons_minutes:
+                    kept, mh_mean_np, mh_log_std_np = _lookup_mh(ready, precomputed_preds, C)
+                    if not kept:
+                        scores = []
+                        ready = []
+                    else:
+                        ready = kept
+                        scores_np = np.zeros(mh_mean_np.shape[0], dtype=np.float32)
+                        spy_sharpe = np.zeros(mh_mean_np.shape[1], dtype=np.float32)
+                        if rank_vs_spy:
+                            for row_idx, (sym, _i_now) in enumerate(ready):
+                                if sym == "SPY":
+                                    spy_sharpe = mh_mean_np[row_idx] / (np.exp(mh_log_std_np[row_idx]) + 1e-12)
+                                    break
+                        for hi in ranking_horizons:
+                            if hi >= mh_mean_np.shape[1]:
+                                continue
+                            mu = mh_mean_np[:, hi]
+                            sd = np.exp(mh_log_std_np[:, hi])
+                            scores_np += (mu / (sd + 1e-12)) - spy_sharpe[hi]
+                        scores = scores_np.tolist()
+                else:
+                    batch_X = [feat_arrays[sym][i_now - C + 1 : i_now + 1] for sym, i_now in ready]
+                    with torch.no_grad():
+                        model.eval()
+                        xb = torch.from_numpy(np.stack(batch_X)).to(device)
+                        if model.horizons_minutes:
+                            mh_mean, mh_log_std = model.forward_multi_horizon(xb)
+                            scores_t = None
+                            spy_sharpe = None
+                            if rank_vs_spy:
+                                for row_idx, (sym, _i_now) in enumerate(ready):
+                                    if sym == "SPY":
+                                        spy_sharpe = mh_mean[row_idx] / (torch.exp(mh_log_std[row_idx]) + 1e-12)
+                                        break
+                            for hi in ranking_horizons:
+                                if hi >= mh_mean.size(1):
+                                    continue
+                                mu = mh_mean[:, hi]
+                                sd = torch.exp(mh_log_std[:, hi])
+                                s = mu / (sd + 1e-12)
+                                if spy_sharpe is not None:
+                                    s = s - spy_sharpe[hi]
+                                scores_t = s if scores_t is None else scores_t + s
+                            scores = scores_t.cpu().tolist() if scores_t is not None else [0.0] * len(ready)
+                        else:
+                            scores = [0.0] * len(ready)
+                    model.train()
+                ranked = sorted(zip(ready, scores), key=lambda r: -r[1])
+                top = ranked[:top_n]
+                if top:
+                    raw_scores = np.array([score for _meta, score in top], dtype=np.float64)
+                    raw_scores = raw_scores - np.max(raw_scores)
+                    weights = np.exp(raw_scores)
+                    weights = weights / max(float(weights.sum()), 1e-12)
+                    total_budget = max(0.0, broker.free_cash() - FEE_PER_TRADE_USD * len(top) - 1.0)
+                    for ((sym, i_now), score), weight in zip(top, weights):
+                        usd_budget = float(total_budget * weight)
+                        if usd_budget <= 0:
+                            continue
+                        price = float(close_arrays[sym][i_now])
+                        bar_dv = float(volume_arrays[sym][i_now]) * price
+                        broker.buy_usd(sym, price, ts, usd_budget, bar_dollar_volume=bar_dv)
+                picked = True
+        prices = {s: float(close_arrays[s][last_idx_by_sym[s]])
+                  for s in features if last_idx_by_sym[s] >= 0}
+        broker.mark_to_market(ts, prices)
+    return broker
+
+
 def simulate_buyhold_spy(features: dict[str, pd.DataFrame]) -> WeightedBroker:
     """Passive baseline: invest all (less reserve) into SPY at first bar, hold."""
     broker = WeightedBroker(STARTING_CASH_USD, min_reserve_frac=MIN_CASH_RESERVE_PCT)
@@ -2168,16 +2279,16 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp191: restore exp187's best calendar-feature top4 equal 4h+1d rank
-    # while adding explicit SPY market-trend context features.
+    # exp192: full-budget score allocation. Removes the topN strategy's
+    # 82.65625% reserve and equal-position budget; model scores choose budgets.
     canonical_broker = weighted
     try:
-        topn_broker = simulate_passive_topn(model, eval_feat, device, top_n=4, name="top4",
-                                            ranking_horizons=(3, 4),
-                                            precomputed_preds=pred_cache)
+        topn_broker = simulate_passive_score_alloc_topn(model, eval_feat, device, top_n=4, name="top4_score_alloc",
+                                                        ranking_horizons=(3, 4),
+                                                        precomputed_preds=pred_cache)
         if topn_broker.equity_curve and len(topn_broker.equity_curve) > 5:
             canonical_broker = topn_broker
-            print(f"[experiment] canonical = top4_picker (final equity ${topn_broker.equity_curve[-1][1]:,.2f})", flush=True)
+            print(f"[experiment] canonical = top4_score_alloc_picker (final equity ${topn_broker.equity_curve[-1][1]:,.2f})", flush=True)
     except Exception as e:
         print(f"[experiment] top4 canonical failed ({e}); falling back to weighted", flush=True)
     return (
