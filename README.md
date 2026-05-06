@@ -16,24 +16,13 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-05 23:35 UTC** · `abdb4ca` · 🔴 DISCARD_  
-📄 **[Full iteration report → iterations/iter_196_abdb4ca.md](iterations/iter_196_abdb4ca.md)** · 📁 [all iterations](iterations/)
+### 🟡 LIVE — iter 197 — 9a0a152
 
-### Latest iteration: iter 196 — abdb4ca
+_Started **2026-05-06 07:21 UTC** · `9a0a152` · status: **RUNNING**_
 
-🔴 DISCARD · exp196: relaxed setup checker cached
+**exp197: setup checker daily scan cached**
 
-| metric | value |
-|---|---|
-| Sharpe (median) | **+0.000** |
-| Sharpe CI low (5%) | +0.000 |
-| % time above SPY | 25.509% |
-| Net PnL | **$+0.00** (+0.000%) |
-| Max drawdown | +0.00% |
-| Trades | 0 |
-| Wall time | 726.5s |
-
-![iteration equity](docs/weighted_abdb4ca.png)
+Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
 
 ### Current best (`f9dfd67`)
 
