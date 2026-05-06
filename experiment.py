@@ -2391,17 +2391,21 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp196: relaxed Claude/TradingView-style setup checker. Requires market
-    # filter plus at least 4 of 6 deterministic conditions to avoid 0-trade runs.
+    # exp198: promote the score-weighted top10 allocator to canonical. exp197's
+    # setup checker produced trades but did not improve risk-adjusted returns;
+    # the SPY-trend feature runs showed top10 diagnostics with better dispersion
+    # than the concentrated setup/checker variants.
     canonical_broker = weighted
     try:
-        setup_broker = simulate_setup_checker_topn(model, eval_feat, device, top_n=4,
-                                                   precomputed_preds=pred_cache)
-        if setup_broker.equity_curve and len(setup_broker.equity_curve) > 5:
-            canonical_broker = setup_broker
-            print(f"[experiment] canonical = setup_checker_top4 (final equity ${setup_broker.equity_curve[-1][1]:,.2f})", flush=True)
+        alloc_broker = simulate_passive_score_alloc_topn(
+            model, eval_feat, device, top_n=10, ranking_horizons=(3, 4),
+            name="score_alloc_top10", precomputed_preds=pred_cache,
+        )
+        if alloc_broker.equity_curve and len(alloc_broker.equity_curve) > 5:
+            canonical_broker = alloc_broker
+            print(f"[experiment] canonical = score_alloc_top10 (final equity ${alloc_broker.equity_curve[-1][1]:,.2f})", flush=True)
     except Exception as e:
-        print(f"[experiment] setup_checker_top4 canonical failed ({e}); falling back to weighted", flush=True)
+        print(f"[experiment] score_alloc_top10 canonical failed ({e}); falling back to weighted", flush=True)
     return (
         canonical_broker.equity_curve, canonical_broker.n_trades,
         canonical_broker.total_fees, 0.0,
