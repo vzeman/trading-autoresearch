@@ -190,3 +190,4 @@ abdb4ca	0.0000	0.0000	0.00	0.00	0	discard	exp196: relaxed setup checker cached	2
 cc08afe	0.5696	-1.4714	-10.32	1535.23	8	discard	exp198: score weighted top10 canonical cached	68.433
 2871575	0.5696	-1.4714	-10.32	1535.23	8	discard	exp199: capped score weighted top10 cached	68.433
 0707001	0.7023	-1.1710	-9.11	1838.18	10	discard	exp200: derisked score weighted top10 cached	69.374
+6dd5ccd	0.2194	-1.6172	-17.01	726.03	3	discard	exp201: derisked score weighted top5 cached	1.225
