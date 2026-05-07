@@ -121,9 +121,7 @@ HTML = """<!doctype html>
               <div class="pill"><span class="muted">1d forecast</span><b>${fmtPct(item.forecast_1d_pct)}</b></div>
               <div class="pill"><span class="muted">1w forecast</span><b>${fmtPct(item.forecast_1w_pct)}</b></div>
               <div class="pill"><span class="muted">1mo forecast</span><b>${fmtPct(item.forecast_1mo_pct)}</b></div>
-              <div class="pill"><span class="muted">1y forecast</span><b>n/a</b></div>
             </div>
-            <div class="muted">1-year forecast is not shown because the current transformer was trained only up to ~1 month.</div>
             <div class="muted">12-month change: ${fmtPct(item.change_12m_pct)}</div>
             ${sparkline(item.chart)}
           </section>
@@ -225,7 +223,6 @@ def build_recommendations(top_n: int, refresh_data: bool, seed_ids: tuple[int, .
                 "forecast_1d_pct": float(np.median(seed_forecasts["forecast_1d_pct"])),
                 "forecast_1w_pct": float(np.median(seed_forecasts["forecast_1w_pct"])),
                 "forecast_1mo_pct": float(np.median(seed_forecasts["forecast_1mo_pct"])),
-                "forecast_1y_pct": None,
                 "last_close": float(closes.iloc[-1]),
                 "last_timestamp": str(bars["timestamp"].iloc[-1]),
                 "change_12m_pct": float(change_12m),
@@ -238,7 +235,6 @@ def build_recommendations(top_n: int, refresh_data: bool, seed_ids: tuple[int, .
                 "forecast_1d_pct": 0.0,
                 "forecast_1w_pct": 0.0,
                 "forecast_1mo_pct": 0.0,
-                "forecast_1y_pct": None,
                 "last_close": 0.0,
                 "last_timestamp": f"error: {exc}",
                 "change_12m_pct": 0.0,
@@ -250,7 +246,7 @@ def build_recommendations(top_n: int, refresh_data: bool, seed_ids: tuple[int, .
     return {
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S %Z"),
         "refresh_data": refresh_data,
-        "strategy": "exp200-style score allocator: 4h + 1d median forecast score across compatible latest seed checkpoints; display forecasts: 1d, 1w, ~1mo; 1y unavailable",
+        "strategy": "exp200-style score allocator: 4h + 1d median forecast score across compatible latest seed checkpoints; display forecasts: 1d, 1w, ~1mo",
         "recommendations": ranked,
     }
 
