@@ -1716,6 +1716,7 @@ def simulate_passive_score_alloc_topn(
     precomputed_preds: dict | None = None,
     rank_vs_spy: bool = False,
     max_weight: float | None = None,
+    budget_fraction: float = 1.0,
 ) -> WeightedBroker:
     """Pick top-N once, allocate nearly all cash by model score, hold to end.
 
@@ -1805,7 +1806,8 @@ def simulate_passive_score_alloc_topn(
                     if max_weight is not None and max_weight > 0:
                         weights = np.minimum(weights, float(max_weight))
                         weights = weights / max(float(weights.sum()), 1e-12)
-                    total_budget = max(0.0, broker.free_cash() - FEE_PER_TRADE_USD * len(top) - 1.0)
+                    deployable_cash = max(0.0, broker.free_cash() * float(budget_fraction))
+                    total_budget = max(0.0, deployable_cash - FEE_PER_TRADE_USD * len(top) - 1.0)
                     for ((sym, i_now), score), weight in zip(top, weights):
                         usd_budget = float(total_budget * weight)
                         if usd_budget <= 0:
@@ -2395,14 +2397,15 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp199: cap score-weighted top10 at 20% per name. exp198 improved
-    # over-SPY time and PnL, but one concentrated seed breached the -10% DD gate.
+    # exp200: explicit 80% capital deployment. exp198/199 improved over-SPY
+    # time, but max DD sat just below the -10% gate; de-risk the same signal
+    # without changing ranking so we can isolate sizing from signal quality.
     canonical_broker = weighted
     try:
         alloc_broker = simulate_passive_score_alloc_topn(
             model, eval_feat, device, top_n=10, ranking_horizons=(3, 4),
-            name="score_alloc_top10_cap20", precomputed_preds=pred_cache,
-            max_weight=0.20,
+            name="score_alloc_top10_80pct", precomputed_preds=pred_cache,
+            max_weight=0.20, budget_fraction=0.80,
         )
         if alloc_broker.equity_curve and len(alloc_broker.equity_curve) > 5:
             canonical_broker = alloc_broker
