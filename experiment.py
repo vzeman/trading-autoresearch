@@ -2397,14 +2397,15 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp204: blend exp200/203 exposure at 70%. exp203 improved DD materially
-    # but gave up too much PnL/over-SPY time; test the middle sizing point.
+    # exp205: lower exposure to 50%. Recent top10 sizing variants improve
+    # over-SPY time but have negative CI; test whether smaller exposure raises
+    # robustness enough to pass the gate.
     canonical_broker = weighted
     try:
         alloc_broker = simulate_passive_score_alloc_topn(
             model, eval_feat, device, top_n=10, ranking_horizons=(3, 4),
-            name="score_alloc_top10_70pct", precomputed_preds=pred_cache,
-            max_weight=0.20, budget_fraction=0.70,
+            name="score_alloc_top10_50pct", precomputed_preds=pred_cache,
+            max_weight=0.20, budget_fraction=0.50,
         )
         if alloc_broker.equity_curve and len(alloc_broker.equity_curve) > 5:
             canonical_broker = alloc_broker
