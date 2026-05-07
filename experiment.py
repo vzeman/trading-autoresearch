@@ -2397,21 +2397,21 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp205: lower exposure to 50%. Recent top10 sizing variants improve
-    # over-SPY time but have negative CI; test whether smaller exposure raises
-    # robustness enough to pass the gate.
+    # exp206: canonical SPY timing on 1-day horizon. Recent stock top10 sizing
+    # experiments improved drawdown but not CI; SPY timing diagnostics repeatedly
+    # showed positive PnL with simple index exposure and fewer moving parts.
     canonical_broker = weighted
     try:
-        alloc_broker = simulate_passive_score_alloc_topn(
-            model, eval_feat, device, top_n=10, ranking_horizons=(3, 4),
-            name="score_alloc_top10_50pct", precomputed_preds=pred_cache,
-            max_weight=0.20, budget_fraction=0.50,
+        spy_broker = simulate_spy_timing(
+            model, eval_feat, device, horizon_idx=4,
+            decision_cooldown_bars=390, name="spy_timing_1d",
+            precomputed_preds=pred_cache,
         )
-        if alloc_broker.equity_curve and len(alloc_broker.equity_curve) > 5:
-            canonical_broker = alloc_broker
-            print(f"[experiment] canonical = score_alloc_top10 (final equity ${alloc_broker.equity_curve[-1][1]:,.2f})", flush=True)
+        if spy_broker.equity_curve and len(spy_broker.equity_curve) > 5:
+            canonical_broker = spy_broker
+            print(f"[experiment] canonical = spy_timing_1d (final equity ${spy_broker.equity_curve[-1][1]:,.2f})", flush=True)
     except Exception as e:
-        print(f"[experiment] score_alloc_top10 canonical failed ({e}); falling back to weighted", flush=True)
+        print(f"[experiment] spy_timing_1d canonical failed ({e}); falling back to weighted", flush=True)
     return (
         canonical_broker.equity_curve, canonical_broker.n_trades,
         canonical_broker.total_fees, 0.0,
