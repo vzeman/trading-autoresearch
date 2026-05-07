@@ -193,3 +193,4 @@ cc08afe	0.5696	-1.4714	-10.32	1535.23	8	discard	exp198: score weighted top10 can
 6dd5ccd	0.2194	-1.6172	-17.01	726.03	3	discard	exp201: derisked score weighted top5 cached	1.225
 cb33fa2	0.7023	-1.1710	-9.11	1838.18	10	discard	exp202: alpha over SPY score top10 cached	69.374
 91c972f	0.7138	-1.1460	-6.93	1421.73	10	discard	exp203: lower exposure score top10 cached	61.044
+7ce2a37	0.7052	-1.1584	-8.03	1626.82	10	discard	exp204: mid exposure score top10 cached	64.236
