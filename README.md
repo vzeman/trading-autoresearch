@@ -16,13 +16,24 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 200 — 0707001
+_Last iteration: **2026-05-07 03:35 UTC** · `0707001` · 🔴 DISCARD_  
+📄 **[Full iteration report → iterations/iter_200_0707001.md](iterations/iter_200_0707001.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-07 03:23 UTC** · `0707001` · status: **RUNNING**_
+### Latest iteration: iter 200 — 0707001
 
-**exp200: derisked score weighted top10 cached**
+🔴 DISCARD · exp200: derisked score weighted top10 cached
 
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
+| metric | value |
+|---|---|
+| Sharpe (median) | **+0.702** |
+| Sharpe CI low (5%) | -1.171 |
+| % time above SPY | 69.374% |
+| Net PnL | **$+1838.18** (+3.676%) |
+| Max drawdown | -9.11% |
+| Trades | 10 |
+| Wall time | 718.4s |
+
+![iteration equity](docs/weighted_0707001.png)
 
 ### Current best (`f9dfd67`)
 
