@@ -2397,14 +2397,14 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp200: explicit 80% capital deployment. exp198/199 improved over-SPY
-    # time, but max DD sat just below the -10% gate; de-risk the same signal
-    # without changing ranking so we can isolate sizing from signal quality.
+    # exp201: concentrate the de-risked score allocator to top5. Diagnostics
+    # showed top5 had stronger median Sharpe than top10 while keeping the same
+    # 80% capital deployment and 20% per-name cap.
     canonical_broker = weighted
     try:
         alloc_broker = simulate_passive_score_alloc_topn(
-            model, eval_feat, device, top_n=10, ranking_horizons=(3, 4),
-            name="score_alloc_top10_80pct", precomputed_preds=pred_cache,
+            model, eval_feat, device, top_n=5, ranking_horizons=(3, 4),
+            name="score_alloc_top5_80pct", precomputed_preds=pred_cache,
             max_weight=0.20, budget_fraction=0.80,
         )
         if alloc_broker.equity_curve and len(alloc_broker.equity_curve) > 5:
