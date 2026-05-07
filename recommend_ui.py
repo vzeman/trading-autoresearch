@@ -34,6 +34,11 @@ from prepare import UNIVERSE, fetch_bars
 DEFAULT_PORT = int(os.environ.get("RECOMMEND_UI_PORT", "3007"))
 DEFAULT_SEEDS = (0, 1, 2)
 DEFAULT_HORIZON_IDXS = (3, 4)
+DISPLAY_HORIZONS = {
+    "forecast_1d_pct": 4,
+    "forecast_1w_pct": 8,
+    "forecast_1mo_pct": 10,
+}
 DEFAULT_REFRESH = os.environ.get("RECOMMEND_REFRESH_DATA", "0") == "1"
 
 
@@ -69,8 +74,8 @@ HTML = """<!doctype html>
 <body>
   <header>
     <div>
-      <h1>Top 5 Buy Candidates</h1>
-      <div class="muted">Exp200-style signal: median seed forecast score over 4h + 1d. Auto-refresh: 5 minutes.</div>
+      <h1>Top 10 Buy Candidates</h1>
+      <div class="muted">Exp200-style signal: median seed forecast score over 4h + 1d. Forecasts shown for trained horizons only. Auto-refresh: 5 minutes.</div>
     </div>
     <button id="reload">Reload now</button>
   </header>
@@ -100,7 +105,7 @@ HTML = """<!doctype html>
       btn.disabled = true;
       document.getElementById('status').textContent = 'Computing latest recommendations…';
       try {
-        const res = await fetch('/api/recommendations?top=5');
+        const res = await fetch('/api/recommendations?top=10');
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || res.statusText);
         document.getElementById('status').innerHTML =
@@ -113,9 +118,12 @@ HTML = """<!doctype html>
             <div class="muted">Last bar: ${item.last_timestamp} · Last close: $${item.last_close.toFixed(2)}</div>
             <div class="score">
               <div class="pill"><span class="muted">Score</span><b>${fmtNum(item.score)}</b></div>
-              <div class="pill"><span class="muted">4h forecast</span><b>${fmtPct(item.forecast_4h_pct)}</b></div>
               <div class="pill"><span class="muted">1d forecast</span><b>${fmtPct(item.forecast_1d_pct)}</b></div>
+              <div class="pill"><span class="muted">1w forecast</span><b>${fmtPct(item.forecast_1w_pct)}</b></div>
+              <div class="pill"><span class="muted">1mo forecast</span><b>${fmtPct(item.forecast_1mo_pct)}</b></div>
+              <div class="pill"><span class="muted">1y forecast</span><b>n/a</b></div>
             </div>
+            <div class="muted">1-year forecast is not shown because the current transformer was trained only up to ~1 month.</div>
             <div class="muted">12-month change: ${fmtPct(item.change_12m_pct)}</div>
             ${sparkline(item.chart)}
           </section>
@@ -194,16 +202,15 @@ def build_recommendations(top_n: int, refresh_data: bool, seed_ids: tuple[int, .
             window = feat[USE_FEATURES].to_numpy(np.float32)[-context_len:]
             xb = torch.from_numpy(window[None, :, :]).to(device)
             seed_scores = []
-            seed_4h = []
-            seed_1d = []
+            seed_forecasts: dict[str, list[float]] = {name: [] for name in DISPLAY_HORIZONS}
             with torch.no_grad():
                 for model in models:
                     mean, log_std = model.forward_multi_horizon(xb)
                     sharpe = mean / (torch.exp(log_std) + 1e-12)
                     score = float(sharpe[0, DEFAULT_HORIZON_IDXS[0]] + sharpe[0, DEFAULT_HORIZON_IDXS[1]])
                     seed_scores.append(score)
-                    seed_4h.append(float(torch.expm1(mean[0, DEFAULT_HORIZON_IDXS[0]]) * 100.0))
-                    seed_1d.append(float(torch.expm1(mean[0, DEFAULT_HORIZON_IDXS[1]]) * 100.0))
+                    for name, horizon_idx in DISPLAY_HORIZONS.items():
+                        seed_forecasts[name].append(float(torch.expm1(mean[0, horizon_idx]) * 100.0))
             closes = bars["close"].astype(float)
             change_12m = 0.0
             if len(closes) > 1:
@@ -215,8 +222,10 @@ def build_recommendations(top_n: int, refresh_data: bool, seed_ids: tuple[int, .
             rows.append({
                 "symbol": symbol,
                 "score": float(np.median(seed_scores)),
-                "forecast_4h_pct": float(np.median(seed_4h)),
-                "forecast_1d_pct": float(np.median(seed_1d)),
+                "forecast_1d_pct": float(np.median(seed_forecasts["forecast_1d_pct"])),
+                "forecast_1w_pct": float(np.median(seed_forecasts["forecast_1w_pct"])),
+                "forecast_1mo_pct": float(np.median(seed_forecasts["forecast_1mo_pct"])),
+                "forecast_1y_pct": None,
                 "last_close": float(closes.iloc[-1]),
                 "last_timestamp": str(bars["timestamp"].iloc[-1]),
                 "change_12m_pct": float(change_12m),
@@ -226,8 +235,10 @@ def build_recommendations(top_n: int, refresh_data: bool, seed_ids: tuple[int, .
             rows.append({
                 "symbol": symbol,
                 "score": -1e9,
-                "forecast_4h_pct": 0.0,
                 "forecast_1d_pct": 0.0,
+                "forecast_1w_pct": 0.0,
+                "forecast_1mo_pct": 0.0,
+                "forecast_1y_pct": None,
                 "last_close": 0.0,
                 "last_timestamp": f"error: {exc}",
                 "change_12m_pct": 0.0,
@@ -239,7 +250,7 @@ def build_recommendations(top_n: int, refresh_data: bool, seed_ids: tuple[int, .
     return {
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S %Z"),
         "refresh_data": refresh_data,
-        "strategy": "exp200-style score allocator: 4h + 1d median forecast score across compatible latest seed checkpoints",
+        "strategy": "exp200-style score allocator: 4h + 1d median forecast score across compatible latest seed checkpoints; display forecasts: 1d, 1w, ~1mo; 1y unavailable",
         "recommendations": ranked,
     }
 
@@ -252,7 +263,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/recommendations":
             query = parse_qs(parsed.query)
-            top_n = max(1, min(20, int(query.get("top", ["5"])[0])))
+            top_n = max(1, min(20, int(query.get("top", ["10"])[0])))
             refresh = query.get("refresh", ["1" if DEFAULT_REFRESH else "0"])[0] in {"1", "true", "yes"}
             try:
                 payload = build_recommendations(top_n=top_n, refresh_data=refresh, seed_ids=DEFAULT_SEEDS)
