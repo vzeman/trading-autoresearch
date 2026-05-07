@@ -2397,15 +2397,15 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp202: restore top10 diversification and rank by forecast alpha vs SPY.
-    # exp200 had the best recent over-SPY time, while exp201 showed top5
-    # concentration is fragile; use the SPY baseline directly in selection.
+    # exp203: de-risk exp200 further to 60% capital deployment. exp200/202 had
+    # strong over-SPY time but negative CI; test whether smaller exposure improves
+    # robustness while preserving the same diversified top10 signal.
     canonical_broker = weighted
     try:
         alloc_broker = simulate_passive_score_alloc_topn(
             model, eval_feat, device, top_n=10, ranking_horizons=(3, 4),
-            name="score_alloc_top10_alpha_spy", precomputed_preds=pred_cache,
-            rank_vs_spy=True, max_weight=0.20, budget_fraction=0.80,
+            name="score_alloc_top10_60pct", precomputed_preds=pred_cache,
+            max_weight=0.20, budget_fraction=0.60,
         )
         if alloc_broker.equity_curve and len(alloc_broker.equity_curve) > 5:
             canonical_broker = alloc_broker
