@@ -1717,6 +1717,7 @@ def simulate_passive_score_alloc_topn(
     rank_vs_spy: bool = False,
     max_weight: float | None = None,
     budget_fraction: float = 1.0,
+    require_spy_trend: bool = False,
 ) -> WeightedBroker:
     """Pick top-N once, allocate nearly all cash by model score, hold to end.
 
@@ -1748,6 +1749,20 @@ def simulate_passive_score_alloc_topn(
         if not picked:
             ready = [(sym, i_now) for sym, i_now in events_here if i_now >= C - 1 and sym != "SPY"]
             if len(ready) >= max(top_n, len(features) // 4):
+                if require_spy_trend and "SPY" in last_idx_by_sym:
+                    spy_i = last_idx_by_sym.get("SPY", -1)
+                    if spy_i >= 0:
+                        spy_row = features["SPY"].iloc[spy_i]
+                        market_ok = (
+                            float(spy_row.get("spy_logret_390", 0.0)) > 0.0 and
+                            float(spy_row.get("spy_logret_2730", 0.0)) > -0.02
+                        )
+                        if not market_ok:
+                            picked = True
+                            prices = {s: float(close_arrays[s][last_idx_by_sym[s]])
+                                      for s in features if last_idx_by_sym[s] >= 0}
+                            broker.mark_to_market(ts, prices)
+                            continue
                 if precomputed_preds is not None and model.horizons_minutes:
                     kept, mh_mean_np, mh_log_std_np = _lookup_mh(ready, precomputed_preds, C)
                     if not kept:
@@ -2397,21 +2412,21 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp206: canonical SPY timing on 1-day horizon. Recent stock top10 sizing
-    # experiments improved drawdown but not CI; SPY timing diagnostics repeatedly
-    # showed positive PnL with simple index exposure and fewer moving parts.
+    # exp207: top10 stock allocation gated by SPY trend. The best recent
+    # stock allocator beats SPY often but has negative CI; add a broad-market
+    # regime filter before deploying capital.
     canonical_broker = weighted
     try:
-        spy_broker = simulate_spy_timing(
-            model, eval_feat, device, horizon_idx=4,
-            decision_cooldown_bars=390, name="spy_timing_1d",
-            precomputed_preds=pred_cache,
+        alloc_broker = simulate_passive_score_alloc_topn(
+            model, eval_feat, device, top_n=10, ranking_horizons=(3, 4),
+            name="score_alloc_top10_spytrend", precomputed_preds=pred_cache,
+            max_weight=0.20, budget_fraction=0.80, require_spy_trend=True,
         )
-        if spy_broker.equity_curve and len(spy_broker.equity_curve) > 5:
-            canonical_broker = spy_broker
-            print(f"[experiment] canonical = spy_timing_1d (final equity ${spy_broker.equity_curve[-1][1]:,.2f})", flush=True)
+        if alloc_broker.equity_curve and len(alloc_broker.equity_curve) > 5:
+            canonical_broker = alloc_broker
+            print(f"[experiment] canonical = score_alloc_top10_spytrend (final equity ${alloc_broker.equity_curve[-1][1]:,.2f})", flush=True)
     except Exception as e:
-        print(f"[experiment] spy_timing_1d canonical failed ({e}); falling back to weighted", flush=True)
+        print(f"[experiment] score_alloc_top10_spytrend canonical failed ({e}); falling back to weighted", flush=True)
     return (
         canonical_broker.equity_curve, canonical_broker.n_trades,
         canonical_broker.total_fees, 0.0,
