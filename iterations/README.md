@@ -4,6 +4,7 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
+| 🔴 | [iter 208 — d532e36](iter_208_d532e36.md) | exp208b: top100 cross-symbol hard JEPA top20 canonical | **+0.496** | **$+312.91** (+0.626%) |
 | 🔴 | [iter 207 — bd7e814](iter_207_bd7e814.md) | exp207: top100 LeWorld JEPA, canonical score top10 SPY-trend; top20 diagnostic b | **-0.830** | **$-3008.23** (-6.016%) |
 | 🔴 | [iter 206 — cb9f0cf](iter_206_cb9f0cf.md) | exp206: SPY one day timing canonical cached | **+0.939** | **$+3321.83** (+6.644%) |
 | 🔴 | [iter 205 — d181342](iter_205_d181342.md) | exp205: half exposure score top10 cached | **+0.727** | **$+1215.24** (+2.430%) |

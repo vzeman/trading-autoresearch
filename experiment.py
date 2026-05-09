@@ -446,9 +446,13 @@ MARKET_JEPA_MAX_STEPS = int(os.environ.get("MARKET_JEPA_MAX_STEPS", "0"))  # 0 =
 MARKET_JEPA_LOG_EVERY = int(os.environ.get("MARKET_JEPA_LOG_EVERY", "100"))
 MARKET_JEPA_SIGREG_COEF = float(os.environ.get("MARKET_JEPA_SIGREG_COEF", "0.05"))
 MARKET_JEPA_MODE = os.environ.get("MARKET_JEPA_MODE", "leworld").lower()  # leworld|ema
+MARKET_JEPA_TARGET_MODE = os.environ.get("MARKET_JEPA_TARGET_MODE", "temporal").lower()  # temporal|cross_symbol|mixed
 USE_TOP500_UNIVERSE = os.environ.get("USE_TOP500_UNIVERSE", "0") == "1"
 TRAIN_SYMBOL_LIMIT = int(os.environ.get("TRAIN_SYMBOL_LIMIT", "0"))  # 0 = all available
 EVAL_SYMBOL_LIMIT = int(os.environ.get("EVAL_SYMBOL_LIMIT", "0"))    # 0 = all train symbols
+CANONICAL_STRATEGY = os.environ.get("CANONICAL_STRATEGY", "score_alloc_top10_spytrend").lower()
+CANONICAL_TOP_N = int(os.environ.get("CANONICAL_TOP_N", "20"))
+RUN_PROFILE_SUITE = os.environ.get("RUN_PROFILE_SUITE", "1") == "1"
 RL_PRETRAIN_EPOCHS = int(os.environ.get("RL_PRETRAIN_EPOCHS", "1"))  # offline RL pass(es) on TRAIN slice
 RL_LR = 2e-5     # exp7 KEPT setting (known stable, no rogue seeds)
 RL_COEF = 1.0
@@ -710,6 +714,7 @@ class MarketJEPADataset:
         cols = USE_FEATURES
         self.n_features = len(cols)
         self.feat_arrs: list[np.ndarray] = []
+        self.valid_counts: list[int] = []
         sym_ids: list[int] = []
         starts: list[int] = []
         required = context_len + target_gap + target_len
@@ -720,6 +725,7 @@ class MarketJEPADataset:
                 continue
             local = len(self.feat_arrs)
             self.feat_arrs.append(arr)
+            self.valid_counts.append(n)
             sym_ids.extend([local] * n)
             starts.extend(range(n))
         self.sym_idx = np.asarray(sym_ids, dtype=np.int32)
@@ -743,6 +749,40 @@ class MarketJEPADataset:
             arr = self.feat_arrs[s]
             X_context[k] = arr[i : i + C]
             X_target[k] = arr[target_start : target_start + T]
+        return X_context, X_target
+
+    def get_cross_symbol_batch(self, idxs: np.ndarray, mixed: bool = False) -> tuple[np.ndarray, np.ndarray]:
+        """Return context windows with target windows from other symbols.
+
+        This makes the JEPA task closer to a masked market image: infer a hidden
+        peer symbol's future state from the visible symbol's context. With
+        mixed=True, half the batch keeps the temporal same-symbol target so the
+        model does not forget local dynamics completely.
+        """
+        B = idxs.shape[0]
+        C = self.context_len
+        T = self.target_len
+        F = self.n_features
+        X_context = np.empty((B, C, F), np.float32)
+        X_target = np.empty((B, T, F), np.float32)
+        n_syms = len(self.feat_arrs)
+        for k in range(B):
+            idx = idxs[k]
+            s = int(self.sym_idx[idx])
+            i = int(self.start[idx])
+            ctx_arr = self.feat_arrs[s]
+            X_context[k] = ctx_arr[i : i + C]
+            use_same = mixed and (k % 2 == 0 or n_syms < 2)
+            if use_same:
+                t_sym = s
+            else:
+                offset = 1 + int(np.random.randint(max(1, n_syms - 1)))
+                t_sym = (s + offset) % n_syms
+            tgt_arr = self.feat_arrs[t_sym]
+            max_start = max(0, self.valid_counts[t_sym] - 1)
+            j = min(i, max_start)
+            target_start = j + C + self.target_gap
+            X_target[k] = tgt_arr[target_start : target_start + T]
         return X_context, X_target
 
 
@@ -807,6 +847,7 @@ def market_jepa_pretrain(model: PatchTransformer, train_features: dict[str, pd.D
         return
 
     mode = MARKET_JEPA_MODE if MARKET_JEPA_MODE in {"leworld", "ema"} else "leworld"
+    target_mode = MARKET_JEPA_TARGET_MODE if MARKET_JEPA_TARGET_MODE in {"temporal", "cross_symbol", "mixed"} else "temporal"
     target_encoder = None
     if mode == "ema":
         target_encoder = copy.deepcopy(model).to(device)
@@ -819,7 +860,7 @@ def market_jepa_pretrain(model: PatchTransformer, train_features: dict[str, pd.D
         f"[market-jepa] windows={n:,} context={model.context_len} "
         f"target={target_len} gap={MARKET_JEPA_TARGET_GAP} epochs={MARKET_JEPA_EPOCHS} "
         f"max_steps={MARKET_JEPA_MAX_STEPS or 'full'} mode={mode} "
-        f"sigreg={MARKET_JEPA_SIGREG_COEF:g}",
+        f"target_mode={target_mode} sigreg={MARKET_JEPA_SIGREG_COEF:g}",
         flush=True,
     )
     model.train()
@@ -835,7 +876,12 @@ def market_jepa_pretrain(model: PatchTransformer, train_features: dict[str, pd.D
             batch_idxs = perm[i : i + batch_size]
             if len(batch_idxs) == 0:
                 continue
-            X_context_np, X_target_np = ds.get_batch(batch_idxs)
+            if target_mode == "temporal":
+                X_context_np, X_target_np = ds.get_batch(batch_idxs)
+            else:
+                X_context_np, X_target_np = ds.get_cross_symbol_batch(
+                    batch_idxs, mixed=(target_mode == "mixed"),
+                )
             xb = torch.from_numpy(X_context_np).to(device)
             xt = torch.from_numpy(X_target_np).to(device)
             opt.zero_grad(set_to_none=True)
@@ -2602,10 +2648,13 @@ def train_and_eval(seed: int = 0) -> tuple:
     # Each simulator becomes pure dict lookup + numpy — no per-bar GPU launch.
     pred_cache = precompute_predictions(model, eval_feat, device)
 
-    # Phase 5: WEIGHTED dynamic-sizing strategy (the only one that works).
+    # Phase 5: WEIGHTED dynamic-sizing strategy.
     weighted = simulate_weighted(model, eval_feat, device, precomputed_preds=pred_cache)
-    # Multi-trader-profile + passive-topn + SPY comparison suite
-    run_profile_suite(model, eval_feat, device, seed, precomputed_preds=pred_cache)
+    # Multi-trader-profile + passive-topn + SPY comparison suite.
+    if RUN_PROFILE_SUITE:
+        run_profile_suite(model, eval_feat, device, seed, precomputed_preds=pred_cache)
+    else:
+        print("[prof-suite] skipped via RUN_PROFILE_SUITE=0", flush=True)
 
     # Save trained weights for this seed. Agent loop promotes last_*.pt → best_*.pt
     # whenever sharpe_ci_low improves on the prior best.
@@ -2630,6 +2679,9 @@ def train_and_eval(seed: int = 0) -> tuple:
             "train_symbol_limit": TRAIN_SYMBOL_LIMIT,
             "eval_symbol_limit": EVAL_SYMBOL_LIMIT,
             "pretrain_max_steps": PRETRAIN_MAX_STEPS,
+            "market_jepa_target_mode": MARKET_JEPA_TARGET_MODE,
+            "canonical_strategy": CANONICAL_STRATEGY,
+            "canonical_top_n": CANONICAL_TOP_N,
         }, ckpt_path)
         print(f"[checkpoint] saved {ckpt_path}", flush=True)
     except Exception as e:
@@ -2698,21 +2750,46 @@ def train_and_eval(seed: int = 0) -> tuple:
     except Exception as e:
         print(f"[holdout-dump] seed {seed} failed: {e}", flush=True)
 
-    # exp207: top10 stock allocation gated by SPY trend. The best recent
-    # stock allocator beats SPY often but has negative CI; add a broad-market
-    # regime filter before deploying capital.
     canonical_broker = weighted
     try:
-        alloc_broker = simulate_passive_score_alloc_topn(
-            model, eval_feat, device, top_n=10, ranking_horizons=(3, 4),
-            name="score_alloc_top10_spytrend", precomputed_preds=pred_cache,
-            max_weight=0.20, budget_fraction=0.80, require_spy_trend=True,
-        )
-        if alloc_broker.equity_curve and len(alloc_broker.equity_curve) > 5:
-            canonical_broker = alloc_broker
-            print(f"[experiment] canonical = score_alloc_top10_spytrend (final equity ${alloc_broker.equity_curve[-1][1]:,.2f})", flush=True)
+        if CANONICAL_STRATEGY == "topn":
+            topn_broker = simulate_passive_topn(
+                model, eval_feat, device, top_n=CANONICAL_TOP_N,
+                ranking_horizons=(3, 4), name=f"top{CANONICAL_TOP_N}",
+                precomputed_preds=pred_cache,
+            )
+            if topn_broker.equity_curve and len(topn_broker.equity_curve) > 5:
+                canonical_broker = topn_broker
+                print(
+                    f"[experiment] canonical = top{CANONICAL_TOP_N}_picker "
+                    f"(final equity ${topn_broker.equity_curve[-1][1]:,.2f})",
+                    flush=True,
+                )
+        elif CANONICAL_STRATEGY == "score_alloc_topn":
+            alloc_broker = simulate_passive_score_alloc_topn(
+                model, eval_feat, device, top_n=CANONICAL_TOP_N, ranking_horizons=(3, 4),
+                name=f"score_alloc_top{CANONICAL_TOP_N}", precomputed_preds=pred_cache,
+                max_weight=0.20, budget_fraction=0.80, require_spy_trend=False,
+            )
+            if alloc_broker.equity_curve and len(alloc_broker.equity_curve) > 5:
+                canonical_broker = alloc_broker
+                print(
+                    f"[experiment] canonical = score_alloc_top{CANONICAL_TOP_N} "
+                    f"(final equity ${alloc_broker.equity_curve[-1][1]:,.2f})",
+                    flush=True,
+                )
+        else:
+            # exp207: top10 stock allocation gated by SPY trend.
+            alloc_broker = simulate_passive_score_alloc_topn(
+                model, eval_feat, device, top_n=10, ranking_horizons=(3, 4),
+                name="score_alloc_top10_spytrend", precomputed_preds=pred_cache,
+                max_weight=0.20, budget_fraction=0.80, require_spy_trend=True,
+            )
+            if alloc_broker.equity_curve and len(alloc_broker.equity_curve) > 5:
+                canonical_broker = alloc_broker
+                print(f"[experiment] canonical = score_alloc_top10_spytrend (final equity ${alloc_broker.equity_curve[-1][1]:,.2f})", flush=True)
     except Exception as e:
-        print(f"[experiment] score_alloc_top10_spytrend canonical failed ({e}); falling back to weighted", flush=True)
+        print(f"[experiment] canonical {CANONICAL_STRATEGY} failed ({e}); falling back to weighted", flush=True)
     return (
         canonical_broker.equity_curve, canonical_broker.n_trades,
         canonical_broker.total_fees, 0.0,

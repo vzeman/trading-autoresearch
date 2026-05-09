@@ -4,9 +4,9 @@ Karpathy-style [autoresearch](https://github.com/karpathy/autoresearch) harness,
 
 ## What it does
 
-- Trains a PatchTST-style transformer on 1-minute OHLCV bars for 20 liquid US tickers.
+- Trains a PatchTST-style transformer on 1-minute OHLCV bars for liquid US tickers; recent JEPA runs use the first 100 cached S&P 500 names.
 - Predicts cumulative log-returns at 1m / 1h / 1d / 1w horizons.
-- Judges a **single canonical strategy** (`top4_picker`): pick the four strongest cross-sectional names from the transformer's multi-horizon forecasts, then hold through the eval window.
+- Judges a **single canonical strategy** per run. The current JEPA branch can evaluate top-N pickers, score-allocation top-N policies, and SPY-trend gated allocation.
 - Evaluates over the most recent **90 calendar days** (held-out).
 - An LLM agent (Claude in `program.md`) iterates on the model + policy overnight, gated by a Sharpe lower-CI metric and a hard -15% drawdown floor.
 
@@ -16,34 +16,34 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-09 10:06 UTC** · `bd7e814` · 🔴 DISCARD_
-📄 **[Full iteration report → iterations/iter_207_bd7e814.md](iterations/iter_207_bd7e814.md)** · 📁 [all iterations](iterations/)
+_Last iteration: **2026-05-09 11:48 UTC** · `d532e36` · 🔴 DISCARD_
+📄 **[Full iteration report → iterations/iter_208_d532e36.md](iterations/iter_208_d532e36.md)** · 📁 [all iterations](iterations/)
 
-### Latest iteration: iter 207 — bd7e814
+### Latest iteration: iter 208 — d532e36
 
-🔴 DISCARD · exp207: top100 LeWorld JEPA, canonical score top10 SPY-trend; top20 diagnostic beat SPY
+🔴 DISCARD · exp208b: top100 cross-symbol hard JEPA top20 canonical
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **-0.830** |
-| Sharpe CI low (5%) | -2.594 |
-| % time above SPY | 1.825% |
-| Net PnL | **$-3008.23** (-6.016%) |
-| Max drawdown | -19.00% |
-| Trades | 9 |
-| Wall time | 4322.8s |
+| Sharpe (median) | **+0.496** |
+| Sharpe CI low (5%) | -1.777 |
+| % time above SPY | 26.817% |
+| Net PnL | **$+312.91** (+0.626%) |
+| Max drawdown | -2.64% |
+| Trades | 19 |
+| Wall time | 1112.7s |
 
 ### SPY Benchmark
 
 | strategy | Sharpe | PnL | Max DD |
 |---|---:|---:|---:|
-| Canonical score_alloc_top10_spytrend | -0.830 | $-3,008.23 | -19.00% |
+| Cross-symbol hard-JEPA top20 canonical | +0.496 | $+312.91 | -2.64% |
 | SPY buy-and-hold benchmark | +1.008 | $+3,581.80 | -9.79% |
-| Diagnostic top20 picker | +0.934 / +0.744 / +1.060 by seed | +$610.63 / +$504.27 / +$644.86 | about -2.1% to -2.4% |
+| Cached top20 after temporal JEPA | +0.603 median | +$391.01 median | -2.62% |
 
-The judged canonical strategy lost to SPY, but the broad top20 diagnostic was positive on all three seeds. JEPA continuation then added 2,000 LeWorld steps per seed to `checkpoints/last_seed0.pt` through `last_seed2.pt`.
+Cross-symbol hard JEPA made all three top20 canonical seeds profitable, including the previously weak seed, but the median result still lost to SPY on Sharpe and PnL. The next best JEPA target is likely `mixed`: preserve same-symbol temporal dynamics in half the batch and force cross-symbol inference in the other half.
 
-![iteration equity](docs/weighted_bd7e814.png)
+![iteration equity](docs/weighted_d532e36.png)
 
 ### Current best (`f9dfd67`)
 
@@ -67,17 +67,23 @@ The judged canonical strategy lost to SPY, but the broad top20 diagnostic was po
 
 <!-- LATEST_ITER_END -->
 
-## The canonical strategy: top4 picker
+## The canonical strategy
 
-`train_and_eval()` still runs `simulate_weighted` and the full profile suite for diagnostics, but the canonical metric returned to `evaluator.py` is currently `top4_picker` when it succeeds. The top-N family became the judged strategy in exp69 because the passive variants beat SPY more reliably than the churn-heavy intraday profiles; exp89 moved the gate from top5 to top4.
+`train_and_eval()` still runs `simulate_weighted` and, unless disabled, the full profile suite for diagnostics. The canonical metric returned to `evaluator.py` is selected by environment:
+
+- `CANONICAL_STRATEGY=topn` returns the passive `top{CANONICAL_TOP_N}` picker.
+- `CANONICAL_STRATEGY=score_alloc_topn` returns the score-allocation top-N policy.
+- The default remains `score_alloc_top10_spytrend` for the recent SPY-trend gated allocation branch.
+
+The older top4 picker remains a useful historical baseline, but the current JEPA experiments promote the broad top20 picker because the top100 S&P diagnostic signal was much more stable than the narrower top10 allocation.
 
 For each eval run:
 
 1. **Train** the PatchTST-style transformer on the train slice with supervised multi-horizon forecasting plus ranking loss and one RL encoder-warming pass.
 2. **Precompute** all eval-slice multi-horizon predictions once per seed.
 3. **Rank** symbols by predicted Sharpe over the 4-hour and 1-day horizons (`ranking_horizons=(3, 4)`).
-4. **Buy** the top four names through the same `WeightedBroker` sizing and friction model used by the profile suite.
-5. **Return** the top4 equity curve as the canonical result; fall back to `simulate_weighted` only if top4 simulation fails.
+4. **Buy** the selected top-N basket or score-weighted basket through the same `WeightedBroker` sizing and friction model used by the profile suite.
+5. **Return** the selected canonical equity curve; fall back to `simulate_weighted` only if the selected canonical simulation fails.
 
 `simulate_weighted` remains useful as a diagnostic strategy: Kelly-sized longs, sell below zero 1-hour Sharpe, and optional swaps into stronger unheld candidates. It is not the current gate metric.
 
@@ -249,36 +255,36 @@ MIT — copy, fork, modify, anything.
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-05-09 10:06 UTC_
-_Total experiments: **92**  ·  kept: **38**  ·  latest commit: `bd7e814`_
+_Last updated: 2026-05-09 11:48 UTC_
+_Total experiments: **94**  ·  kept: **38**  ·  latest commit: `d532e36`_
 
-### Weighted strategy — full eval window (~73 days)
+### Canonical top20 picker — full eval window (~73 days)
 
-![weighted equity](docs/weighted_latest.png)
+![canonical equity](docs/weighted_latest.png)
 
-### Weighted strategy — first month of eval
+### Canonical top20 picker — first month of eval
 
-![weighted 1m](docs/weighted_1m_latest.png)
+![canonical 1m](docs/weighted_1m_latest.png)
 
 ### Strategy vs SPY benchmark
 
 | Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees | % time > SPY |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | -0.830 | $-3,008.23 | -6.016% | -19.00% | 9 | $9.00 | **2%** 🏆 |
-| **SP500 (SPY) buy-and-hold** — passive benchmark | **+1.008** 🏆 | **$+3,581.80** 🏆 | +7.164% | **-9.79%** 🏆 | 1 | **$1.00** 🏆 | 0% |
+| Canonical top20 picker after cross-symbol hard JEPA | +0.496 | $+312.91 | +0.626% | **-2.64%** 🏆 | 19 | $19.00 | **27%** 🏆 |
+| **SP500 (SPY) buy-and-hold** — passive benchmark | **+1.008** 🏆 | **$+3,581.80** 🏆 | +7.164% | -9.79% | 1 | **$1.00** 🏆 | 0% |
 
 **Best by Sharpe:** **SP500 (SPY) buy-and-hold** — passive benchmark
 
-### Detailed metrics — weighted strategy
+### Detailed metrics — canonical top20 picker
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **-0.830** |
-| Net PnL | $-3,008.23 (-6.016%) |
-| Max drawdown | -19.00% |
-| Trades | 9 |
-| % time above SPY | 2% |
-| Wall time | 4322.8s |
+| Sharpe (median over seeds) | **+0.496** |
+| Net PnL | $+312.91 (+0.626%) |
+| Max drawdown | -2.64% |
+| Trades | 19 |
+| % time above SPY | 27% |
+| Wall time | 1112.7s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments
