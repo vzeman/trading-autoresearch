@@ -19,6 +19,7 @@ CONTRACT (do not break):
   - All features must be CAUSAL (only depend on bars at or before time t).
 """
 from __future__ import annotations
+import copy
 import math
 import os
 import time
@@ -433,6 +434,21 @@ RANK_LOSS_COEF = 1.0             # weight of ranking loss vs Gaussian NLL
 TRAIN_LOOKBACK_DAYS = 365       # exp41: subset train slice to last N days. Hypothesis: model trained on full 6yr is too conservative for recent regime → exp40 = 0 trades. Recent-only data should produce more confident predictions.
 PRETRAIN_BATCH = 128
 PRETRAIN_LR = 3e-4
+PRETRAIN_MAX_STEPS = int(os.environ.get("PRETRAIN_MAX_STEPS", "0"))  # 0 = full epoch
+USE_MARKET_JEPA = os.environ.get("USE_MARKET_JEPA", "1") == "1"
+MARKET_JEPA_EPOCHS = int(os.environ.get("MARKET_JEPA_EPOCHS", "1"))
+MARKET_JEPA_BATCH = int(os.environ.get("MARKET_JEPA_BATCH", str(PRETRAIN_BATCH)))
+MARKET_JEPA_LR = float(os.environ.get("MARKET_JEPA_LR", "2e-4"))
+MARKET_JEPA_TARGET_GAP = int(os.environ.get("MARKET_JEPA_TARGET_GAP", str(PRED_HORIZON)))
+MARKET_JEPA_TARGET_PATCHES = int(os.environ.get("MARKET_JEPA_TARGET_PATCHES", str(CONTEXT_PATCHES)))
+MARKET_JEPA_EMA_DECAY = float(os.environ.get("MARKET_JEPA_EMA_DECAY", "0.996"))
+MARKET_JEPA_MAX_STEPS = int(os.environ.get("MARKET_JEPA_MAX_STEPS", "0"))  # 0 = full epoch
+MARKET_JEPA_LOG_EVERY = int(os.environ.get("MARKET_JEPA_LOG_EVERY", "100"))
+MARKET_JEPA_SIGREG_COEF = float(os.environ.get("MARKET_JEPA_SIGREG_COEF", "0.05"))
+MARKET_JEPA_MODE = os.environ.get("MARKET_JEPA_MODE", "leworld").lower()  # leworld|ema
+USE_TOP500_UNIVERSE = os.environ.get("USE_TOP500_UNIVERSE", "0") == "1"
+TRAIN_SYMBOL_LIMIT = int(os.environ.get("TRAIN_SYMBOL_LIMIT", "0"))  # 0 = all available
+EVAL_SYMBOL_LIMIT = int(os.environ.get("EVAL_SYMBOL_LIMIT", "0"))    # 0 = all train symbols
 RL_PRETRAIN_EPOCHS = int(os.environ.get("RL_PRETRAIN_EPOCHS", "1"))  # offline RL pass(es) on TRAIN slice
 RL_LR = 2e-5     # exp7 KEPT setting (known stable, no rogue seeds)
 RL_COEF = 1.0
@@ -528,6 +544,12 @@ class PatchTransformer(nn.Module):
         self.head = nn.Sequential(
             nn.Linear(d_model, d_ff), nn.GELU(), nn.Linear(d_ff, pred_horizon * 2),
         )
+        self.jepa_predictor = nn.Sequential(
+            nn.Linear(d_model, d_ff),
+            nn.GELU(),
+            nn.LayerNorm(d_ff),
+            nn.Linear(d_ff, d_model),
+        )
         # exp28: separate multi-horizon head — predicts cumulative log-return
         # Gaussian at each horizon (1m, 1h, 1d, 1w). Independent of pred_horizon
         # (which still trains per-step).
@@ -574,6 +596,10 @@ class PatchTransformer(nn.Module):
         mean = out[..., 0]
         log_std = out[..., 1].clamp(self.MIN_LOG_STD, self.MAX_LOG_STD)
         return mean, log_std
+
+    def forward_jepa(self, x: torch.Tensor) -> torch.Tensor:
+        """Predict the latent embedding of a masked/future market window."""
+        return self.jepa_predictor(self.encode(x))
 
     @staticmethod
     def gaussian_nll(mean, log_std, target) -> torch.Tensor:
@@ -661,6 +687,207 @@ class WindowDataset:
 
 
 # ============================================================================
+# MARKET JEPA PRETRAIN — predict future latent market windows, not raw returns
+# ============================================================================
+
+class MarketJEPADataset:
+    """Lazy self-supervised windows for a temporal JEPA objective.
+
+    Per window index `(sym_idx, i)`:
+      - context = feature[i : i + C]
+      - target  = feature[i + C + gap : i + C + gap + T]
+
+    The target window is encoded by an EMA copy of the model and stop-grad'ed.
+    The online encoder sees only the context window and learns to predict the
+    target embedding. No eval rows enter this dataset.
+    """
+
+    def __init__(self, features: dict[str, pd.DataFrame], context_len: int,
+                 target_len: int, target_gap: int) -> None:
+        self.context_len = context_len
+        self.target_len = target_len
+        self.target_gap = target_gap
+        cols = USE_FEATURES
+        self.n_features = len(cols)
+        self.feat_arrs: list[np.ndarray] = []
+        sym_ids: list[int] = []
+        starts: list[int] = []
+        required = context_len + target_gap + target_len
+        for _sym, feat in features.items():
+            arr = feat[cols].to_numpy(np.float32)
+            n = len(feat) - required
+            if n <= 0:
+                continue
+            local = len(self.feat_arrs)
+            self.feat_arrs.append(arr)
+            sym_ids.extend([local] * n)
+            starts.extend(range(n))
+        self.sym_idx = np.asarray(sym_ids, dtype=np.int32)
+        self.start = np.asarray(starts, dtype=np.int64)
+
+    def __len__(self) -> int:
+        return int(self.start.shape[0])
+
+    def get_batch(self, idxs: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        B = idxs.shape[0]
+        C = self.context_len
+        T = self.target_len
+        F = self.n_features
+        X_context = np.empty((B, C, F), np.float32)
+        X_target = np.empty((B, T, F), np.float32)
+        for k in range(B):
+            idx = idxs[k]
+            s = int(self.sym_idx[idx])
+            i = int(self.start[idx])
+            target_start = i + C + self.target_gap
+            arr = self.feat_arrs[s]
+            X_context[k] = arr[i : i + C]
+            X_target[k] = arr[target_start : target_start + T]
+        return X_context, X_target
+
+
+def _jepa_encoder_parameters(model: PatchTransformer) -> list[nn.Parameter]:
+    params: list[nn.Parameter] = []
+    for module in (model.patch_proj, model.body, model.norm, model.jepa_predictor):
+        params.extend(p for p in module.parameters() if p.requires_grad)
+    return params
+
+
+def _ema_update_target_encoder(target: PatchTransformer, online: PatchTransformer,
+                               decay: float) -> None:
+    with torch.no_grad():
+        for t_param, o_param in zip(target.parameters(), online.parameters()):
+            t_param.data.mul_(decay).add_(o_param.data, alpha=1.0 - decay)
+        for t_buf, o_buf in zip(target.buffers(), online.buffers()):
+            t_buf.copy_(o_buf)
+
+
+def _gaussian_latent_regularizer(z: torch.Tensor) -> torch.Tensor:
+    """LeWorldModel-inspired anti-collapse regularizer for latent market states."""
+    if z.size(0) < 2:
+        return torch.zeros((), device=z.device)
+    z = z.float()
+    z = z - z.mean(dim=0, keepdim=True)
+    std = torch.sqrt(z.var(dim=0, unbiased=False) + 1e-4)
+    var_loss = torch.mean((std - 1.0) ** 2)
+    cov = (z.T @ z) / max(z.size(0) - 1, 1)
+    eye = torch.eye(cov.size(0), device=z.device, dtype=cov.dtype)
+    cov_loss = ((cov * (1.0 - eye)) ** 2).sum() / max(cov.size(0), 1)
+    return var_loss + cov_loss
+
+
+def market_jepa_pretrain(model: PatchTransformer, train_features: dict[str, pd.DataFrame],
+                         device: str) -> None:
+    """Self-supervised JEPA phase.
+
+    This is the "missing part of the trading image" pretraining pass:
+    the online encoder receives the current market window and predicts the
+    embedding of a future hidden window produced by an EMA target encoder.
+    Supervised return/ranking training still follows, so this phase shapes the
+    representation rather than directly choosing trades.
+    """
+    if not USE_MARKET_JEPA or MARKET_JEPA_EPOCHS <= 0:
+        return
+    target_patches = max(1, MARKET_JEPA_TARGET_PATCHES)
+    target_len = target_patches * model.patch_len
+    max_target_patches = model.context_patches + 16
+    if target_patches > max_target_patches:
+        target_patches = max_target_patches
+        target_len = target_patches * model.patch_len
+        print(f"[market-jepa] clamped target patches to {target_patches}", flush=True)
+    ds = MarketJEPADataset(
+        train_features,
+        context_len=model.context_len,
+        target_len=target_len,
+        target_gap=max(0, MARKET_JEPA_TARGET_GAP),
+    )
+    n = len(ds)
+    if n == 0:
+        print("[market-jepa] skipped: no valid train windows", flush=True)
+        return
+
+    mode = MARKET_JEPA_MODE if MARKET_JEPA_MODE in {"leworld", "ema"} else "leworld"
+    target_encoder = None
+    if mode == "ema":
+        target_encoder = copy.deepcopy(model).to(device)
+        target_encoder.eval()
+        for p in target_encoder.parameters():
+            p.requires_grad_(False)
+
+    opt = torch.optim.AdamW(_jepa_encoder_parameters(model), lr=MARKET_JEPA_LR, weight_decay=1e-4)
+    print(
+        f"[market-jepa] windows={n:,} context={model.context_len} "
+        f"target={target_len} gap={MARKET_JEPA_TARGET_GAP} epochs={MARKET_JEPA_EPOCHS} "
+        f"max_steps={MARKET_JEPA_MAX_STEPS or 'full'} mode={mode} "
+        f"sigreg={MARKET_JEPA_SIGREG_COEF:g}",
+        flush=True,
+    )
+    model.train()
+    batch_size = max(1, MARKET_JEPA_BATCH)
+    log_every = max(1, MARKET_JEPA_LOG_EVERY)
+    for ep in range(MARKET_JEPA_EPOCHS):
+        perm = np.random.permutation(n)
+        losses: list[float] = []
+        pred_losses: list[float] = []
+        reg_losses: list[float] = []
+        step_count = 0
+        for i in range(0, n, batch_size):
+            batch_idxs = perm[i : i + batch_size]
+            if len(batch_idxs) == 0:
+                continue
+            X_context_np, X_target_np = ds.get_batch(batch_idxs)
+            xb = torch.from_numpy(X_context_np).to(device)
+            xt = torch.from_numpy(X_target_np).to(device)
+            opt.zero_grad(set_to_none=True)
+            context_h = model.encode(xb)
+            pred_h = model.jepa_predictor(context_h)
+            if mode == "ema":
+                assert target_encoder is not None
+                with torch.no_grad():
+                    target_h = target_encoder.encode(xt)
+                    target_h = nn.functional.normalize(target_h, dim=-1)
+                pred_h = nn.functional.normalize(pred_h, dim=-1)
+                pred_loss = 2.0 - 2.0 * (pred_h * target_h).sum(dim=-1).mean()
+            else:
+                target_h = model.encode(xt)
+                pred_loss = nn.functional.mse_loss(pred_h, target_h)
+            reg_source = torch.cat([context_h, target_h], dim=0)
+            if mode == "ema":
+                reg_source = torch.cat([
+                    nn.functional.normalize(context_h, dim=-1),
+                    target_h,
+                ], dim=0)
+            reg_loss = _gaussian_latent_regularizer(reg_source)
+            loss = pred_loss + MARKET_JEPA_SIGREG_COEF * reg_loss
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(_jepa_encoder_parameters(model), GRAD_CLIP)
+            opt.step()
+            if target_encoder is not None:
+                _ema_update_target_encoder(target_encoder, model, MARKET_JEPA_EMA_DECAY)
+            losses.append(float(loss.item()))
+            pred_losses.append(float(pred_loss.item()))
+            reg_losses.append(float(reg_loss.item()))
+            step_count += 1
+            if step_count % log_every == 0:
+                print(
+                    f"[market-jepa] epoch {ep+1}/{MARKET_JEPA_EPOCHS} step={step_count} "
+                    f"loss={np.mean(losses[-log_every:]):.4f} "
+                    f"pred={np.mean(pred_losses[-log_every:]):.4f} "
+                    f"sigreg={np.mean(reg_losses[-log_every:]):.4f}",
+                    flush=True,
+                )
+            if MARKET_JEPA_MAX_STEPS > 0 and step_count >= MARKET_JEPA_MAX_STEPS:
+                break
+        if losses:
+            print(
+                f"[market-jepa] epoch {ep+1}/{MARKET_JEPA_EPOCHS} "
+                f"loss={np.mean(losses):.4f} pred={np.mean(pred_losses):.4f} "
+                f"sigreg={np.mean(reg_losses):.4f} steps={step_count}",
+                flush=True,
+            )
+
+
+# ============================================================================
 # SUPERVISED PRETRAIN
 # ============================================================================
 
@@ -695,6 +922,7 @@ def supervised_pretrain(model: PatchTransformer, train_features: dict[str, pd.Da
         perm = np.random.permutation(n)
         losses, losses_mh, losses_rank = [], [], []
         batch_idx_print = 0
+        step_count = 0
         for i in range(0, n - SGD_BATCH, PRETRAIN_BATCH):
             batch_idxs = perm[i : i + PRETRAIN_BATCH]
             X_np, y_np, y_mh_np = ds.get_batch(batch_idxs)
@@ -762,6 +990,7 @@ def supervised_pretrain(model: PatchTransformer, train_features: dict[str, pd.Da
             torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
             opt.step()
             losses.append(loss.item())
+            step_count += 1
             # exp80: live JSONL log every TRAIN_LOG_EVERY batches so charts can be
             # built mid-pretrain (durable on disk, not subprocess stdout).
             batch_idx_print += 1
@@ -782,10 +1011,13 @@ def supervised_pretrain(model: PatchTransformer, train_features: dict[str, pd.Da
                         _fh.write(_json.dumps(row) + "\n")
                 except Exception:
                     pass
+            if PRETRAIN_MAX_STEPS > 0 and step_count >= PRETRAIN_MAX_STEPS:
+                break
         if losses:
             extra = f"  mh_nll={np.mean(losses_mh):.4f}" if losses_mh else ""
             extra += f"  rank={np.mean(losses_rank):.4f}" if losses_rank else ""
-            print(f"[pretrain] epoch {ep+1}/{PRETRAIN_EPOCHS}  nll={np.mean(losses):.4f}{extra}", flush=True)
+            cap = f"  steps={step_count}" if PRETRAIN_MAX_STEPS > 0 else ""
+            print(f"[pretrain] epoch {ep+1}/{PRETRAIN_EPOCHS}  nll={np.mean(losses):.4f}{extra}{cap}", flush=True)
 
 
 # ============================================================================
@@ -2238,6 +2470,24 @@ def train_and_eval(seed: int = 0) -> tuple:
                 extended_added += 1
             except Exception as e:
                 print(f"[extended] {sym}: skipped ({e})", flush=True)
+    top500_symbols: list[str] = []
+    top500_added = 0
+    if USE_TOP500_UNIVERSE:
+        try:
+            from top500_universe import load_top500_symbols
+            top500_symbols = load_top500_symbols()
+            print(f"[top500] loaded {len(top500_symbols)} current S&P 500 symbols", flush=True)
+        except Exception as e:
+            print(f"[top500] load failed ({e}); using cached/base symbols only", flush=True)
+        for sym in top500_symbols:
+            if sym in bars_by_sym:
+                continue
+            if REFRESH_DATA or _cache_path(sym).exists():
+                try:
+                    bars_by_sym[sym] = fetch_bars(sym, force=REFRESH_DATA)
+                    top500_added += 1
+                except Exception as e:
+                    print(f"[top500] {sym}: skipped ({e})", flush=True)
     last_ts_by_sym = {
         sym: pd.to_datetime(bars["timestamp"], utc=True).max()
         for sym, bars in bars_by_sym.items()
@@ -2255,9 +2505,23 @@ def train_and_eval(seed: int = 0) -> tuple:
                     flush=True,
                 )
                 bars_by_sym.pop(sym, None)
-    print(f"[experiment] universe size: {len(bars_by_sym)} ({extended_added} extended added beyond UNIVERSE)", flush=True)
+    print(
+        f"[experiment] universe size: {len(bars_by_sym)} "
+        f"({extended_added} extended, {top500_added} top500 added beyond UNIVERSE)",
+        flush=True,
+    )
     _write_data_freshness(seed, bars_by_sym)
-    training_universe = list(bars_by_sym.keys())
+    if USE_TOP500_UNIVERSE and top500_symbols:
+        training_universe = [s for s in top500_symbols if s in bars_by_sym]
+        training_universe.extend([s for s in bars_by_sym if s not in set(training_universe)])
+    else:
+        training_universe = list(bars_by_sym.keys())
+    if TRAIN_SYMBOL_LIMIT > 0:
+        training_universe = training_universe[:TRAIN_SYMBOL_LIMIT]
+        print(f"[experiment] TRAIN_SYMBOL_LIMIT={TRAIN_SYMBOL_LIMIT} -> {len(training_universe)} symbols", flush=True)
+    eval_universe = set(training_universe[:EVAL_SYMBOL_LIMIT]) if EVAL_SYMBOL_LIMIT > 0 else set(training_universe)
+    if EVAL_SYMBOL_LIMIT > 0:
+        print(f"[experiment] EVAL_SYMBOL_LIMIT={EVAL_SYMBOL_LIMIT} -> {len(eval_universe)} symbols", flush=True)
 
     context = fetch_context(force=REFRESH_DATA)   # cached after first call
     train_feat: dict[str, pd.DataFrame] = {}
@@ -2275,7 +2539,7 @@ def train_and_eval(seed: int = 0) -> tuple:
         # featurize each slice independently — strict no-leakage
         if len(tr_bars) > 200:
             train_feat[sym] = featurize(tr_bars, context=context)
-        if len(ev_bars) > 50:
+        if sym in eval_universe and len(ev_bars) > 50:
             eval_feat[sym] = featurize(ev_bars, context=context)
 
     # exp79: populate universe-aggregate context features (per-timestep
@@ -2300,15 +2564,26 @@ def train_and_eval(seed: int = 0) -> tuple:
         print(f"[experiment] USE_CACHED_PRETRAIN — loading {cached_ckpt}, SKIPPING pretrain", flush=True)
         try:
             ck = torch.load(cached_ckpt, map_location=device)
-            model.load_state_dict(ck["state_dict"])
+            missing, unexpected = model.load_state_dict(ck["state_dict"], strict=False)
+            unexpected = list(unexpected)
+            non_jepa_missing = [k for k in missing if not k.startswith("jepa_predictor.")]
+            if unexpected or non_jepa_missing:
+                raise RuntimeError(f"state mismatch missing={non_jepa_missing} unexpected={unexpected}")
+            if missing:
+                print(f"[experiment] cached pretrain lacks JEPA predictor params; initialized fresh", flush=True)
             print(f"[experiment] cached pretrain loaded", flush=True)
         except Exception as e:
             print(f"[experiment] cache load failed ({e}); falling back to full pretrain", flush=True)
+            market_jepa_pretrain(model, train_feat, device)
             supervised_pretrain(model, train_feat, device)
             for ep in range(RL_PRETRAIN_EPOCHS):
                 print(f"[rl_pretrain] epoch {ep+1}/{RL_PRETRAIN_EPOCHS} (encoder-warming)", flush=True)
                 _ = simulate(model, train_feat, device, learn=True)
     else:
+        # Phase 0: MarketJEPA self-supervised pretrain. Predict the latent
+        # representation of a hidden future window before any return labels.
+        market_jepa_pretrain(model, train_feat, device)
+
         # Phase 1: supervised forecast-head pretrain (trains multi-horizon head).
         supervised_pretrain(model, train_feat, device)
 
@@ -2344,6 +2619,17 @@ def train_and_eval(seed: int = 0) -> tuple:
             "dropout": DROPOUT, "pred_horizon": PRED_HORIZON,
             "horizons_minutes": HORIZONS_MINUTES,
             "use_features": USE_FEATURES,
+            "use_market_jepa": USE_MARKET_JEPA,
+            "market_jepa_epochs": MARKET_JEPA_EPOCHS,
+            "market_jepa_target_gap": MARKET_JEPA_TARGET_GAP,
+            "market_jepa_target_patches": MARKET_JEPA_TARGET_PATCHES,
+            "market_jepa_max_steps": MARKET_JEPA_MAX_STEPS,
+            "market_jepa_sigreg_coef": MARKET_JEPA_SIGREG_COEF,
+            "market_jepa_mode": MARKET_JEPA_MODE,
+            "use_top500_universe": USE_TOP500_UNIVERSE,
+            "train_symbol_limit": TRAIN_SYMBOL_LIMIT,
+            "eval_symbol_limit": EVAL_SYMBOL_LIMIT,
+            "pretrain_max_steps": PRETRAIN_MAX_STEPS,
         }, ckpt_path)
         print(f"[checkpoint] saved {ckpt_path}", flush=True)
     except Exception as e:
@@ -2439,12 +2725,7 @@ if __name__ == "__main__":
     t0 = time.time()
     result = train_and_eval(seed=0)
     eq, nt, fees, slip, trades = result[:5]
-    p_eq, p_nt, p_fees, p_trades = result[5:9]
-    w_eq, w_nt, w_fees, w_trades = result[9:13]
-    print(f"\n[primary]  bars={len(eq)}  trades={nt}  fees=${fees:.2f}  slippage=${slip:.2f}")
-    if eq: print(f"[primary]  equity start=${eq[0][1]:,.2f}  end=${eq[-1][1]:,.2f}")
-    print(f"[picker]   bars={len(p_eq)}  trades={p_nt}  fees=${p_fees:.2f}")
-    if p_eq: print(f"[picker]   equity start=${p_eq[0][1]:,.2f}  end=${p_eq[-1][1]:,.2f}")
-    print(f"[weighted] bars={len(w_eq)}  trades={w_nt}  fees=${w_fees:.2f}")
-    if w_eq: print(f"[weighted] equity start=${w_eq[0][1]:,.2f}  end=${w_eq[-1][1]:,.2f}")
+    print(f"\n[canonical] bars={len(eq)}  trades={nt}  fees=${fees:.2f}  slippage=${slip:.2f}")
+    if eq:
+        print(f"[canonical] equity start=${eq[0][1]:,.2f}  end=${eq[-1][1]:,.2f}")
     print(f"[experiment] total wall: {time.time()-t0:.1f}s")

@@ -16,13 +16,34 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-### 🟡 LIVE — iter 207 — de7dc50
+_Last iteration: **2026-05-09 10:06 UTC** · `bd7e814` · 🔴 DISCARD_
+📄 **[Full iteration report → iterations/iter_207_bd7e814.md](iterations/iter_207_bd7e814.md)** · 📁 [all iterations](iterations/)
 
-_Started **2026-05-08 10:03 UTC** · `de7dc50` · status: **RUNNING**_
+### Latest iteration: iter 207 — bd7e814
 
-**exp207: SPY trend gated score top10 cached**
+🔴 DISCARD · exp207: top100 LeWorld JEPA, canonical score top10 SPY-trend; top20 diagnostic beat SPY
 
-Final metrics will appear here when the iteration completes (typical wall clock: 2–6 min cached pretrain, 2–3 h fresh pretrain).
+| metric | value |
+|---|---|
+| Sharpe (median) | **-0.830** |
+| Sharpe CI low (5%) | -2.594 |
+| % time above SPY | 1.825% |
+| Net PnL | **$-3008.23** (-6.016%) |
+| Max drawdown | -19.00% |
+| Trades | 9 |
+| Wall time | 4322.8s |
+
+### SPY Benchmark
+
+| strategy | Sharpe | PnL | Max DD |
+|---|---:|---:|---:|
+| Canonical score_alloc_top10_spytrend | -0.830 | $-3,008.23 | -19.00% |
+| SPY buy-and-hold benchmark | +1.008 | $+3,581.80 | -9.79% |
+| Diagnostic top20 picker | +0.934 / +0.744 / +1.060 by seed | +$610.63 / +$504.27 / +$644.86 | about -2.1% to -2.4% |
+
+The judged canonical strategy lost to SPY, but the broad top20 diagnostic was positive on all three seeds. JEPA continuation then added 2,000 LeWorld steps per seed to `checkpoints/last_seed0.pt` through `last_seed2.pt`.
+
+![iteration equity](docs/weighted_bd7e814.png)
 
 ### Current best (`f9dfd67`)
 
@@ -228,8 +249,8 @@ MIT — copy, fork, modify, anything.
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-05-05 01:28 UTC_  
-_Total experiments: **60**  ·  kept: **37**  ·  latest commit: `f9dfd67`_
+_Last updated: 2026-05-09 10:06 UTC_
+_Total experiments: **92**  ·  kept: **38**  ·  latest commit: `bd7e814`_
 
 ### Weighted strategy — full eval window (~73 days)
 
@@ -243,21 +264,21 @@ _Total experiments: **60**  ·  kept: **37**  ·  latest commit: `f9dfd67`_
 
 | Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees | % time > SPY |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | **+3.214** 🏆 | **$+3,959.48** 🏆 | +7.919% | **-1.89%** 🏆 | 1 | **$1.00** 🏆 | **60%** 🏆 |
-| **SP500 (SPY) buy-and-hold** — passive benchmark | +1.011 | $+2,017.61 | +4.035% | -9.73% | 1 | $1.00 | 0% |
+| Weighted (Kelly-sized, max 20% free cash, ≤5/step) | -0.830 | $-3,008.23 | -6.016% | -19.00% | 9 | $9.00 | **2%** 🏆 |
+| **SP500 (SPY) buy-and-hold** — passive benchmark | **+1.008** 🏆 | **$+3,581.80** 🏆 | +7.164% | **-9.79%** 🏆 | 1 | **$1.00** 🏆 | 0% |
 
-**Best by Sharpe:** Weighted (Kelly-sized, max 20% free cash, ≤5/step)
+**Best by Sharpe:** **SP500 (SPY) buy-and-hold** — passive benchmark
 
 ### Detailed metrics — weighted strategy
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+3.214** |
-| Net PnL | $+3,959.48 (+7.919%) |
-| Max drawdown | -1.89% |
-| Trades | 1 |
-| % time above SPY | 60% |
-| Wall time | 363.5s |
+| Sharpe (median over seeds) | **-0.830** |
+| Net PnL | $-3,008.23 (-6.016%) |
+| Max drawdown | -19.00% |
+| Trades | 9 |
+| % time above SPY | 2% |
+| Wall time | 4322.8s |
 | Seeds completed | 3 |
 
 ### Progress over all experiments

@@ -4,6 +4,38 @@ Every autoresearch iteration writes a full report here. Most recent first.
 
 | status | iter | description | sharpe | PnL |
 |---|---|---|---:|---:|
+| 🔴 | [iter 207 — bd7e814](iter_207_bd7e814.md) | exp207: top100 LeWorld JEPA, canonical score top10 SPY-trend; top20 diagnostic b | **-0.830** | **$-3008.23** (-6.016%) |
+| 🔴 | [iter 206 — cb9f0cf](iter_206_cb9f0cf.md) | exp206: SPY one day timing canonical cached | **+0.939** | **$+3321.83** (+6.644%) |
+| 🔴 | [iter 205 — d181342](iter_205_d181342.md) | exp205: half exposure score top10 cached | **+0.727** | **$+1215.24** (+2.430%) |
+| 🔴 | [iter 204 — 7ce2a37](iter_204_7ce2a37.md) | exp204: mid exposure score top10 cached | **+0.705** | **$+1626.82** (+3.254%) |
+| 🔴 | [iter 203 — 91c972f](iter_203_91c972f.md) | exp203: lower exposure score top10 cached | **+0.714** | **$+1421.73** (+2.843%) |
+| 🔴 | [iter 202 — cb33fa2](iter_202_cb33fa2.md) | exp202: alpha over SPY score top10 cached | **+0.702** | **$+1838.18** (+3.676%) |
+| 🔴 | [iter 201 — 6dd5ccd](iter_201_6dd5ccd.md) | exp201: derisked score weighted top5 cached | **+0.219** | **$+726.03** (+1.452%) |
+| 🔴 | [iter 200 — 0707001](iter_200_0707001.md) | exp200: derisked score weighted top10 cached | **+0.702** | **$+1838.18** (+3.676%) |
+| 🔴 | [iter 199 — 2871575](iter_199_2871575.md) | exp199: capped score weighted top10 cached | **+0.570** | **$+1535.23** (+3.070%) |
+| 🔴 | [iter 198 — cc08afe](iter_198_cc08afe.md) | exp198: score weighted top10 canonical cached | **+0.570** | **$+1535.23** (+3.070%) |
+| 🔴 | [iter 197 — 9a0a152](iter_197_9a0a152.md) | exp197: setup checker daily scan cached | **+0.000** | **$+0.00** (+0.000%) |
+| 🔴 | [iter 196 — abdb4ca](iter_196_abdb4ca.md) | exp196: relaxed setup checker cached | **+0.000** | **$+0.00** (+0.000%) |
+| 🔴 | [iter 195 — b947168](iter_195_b947168.md) | exp195: transcript-inspired setup checker cached | **+0.000** | **$+0.00** (+0.000%) |
+| 🔴 | [iter 194 — ba16a06](iter_194_ba16a06.md) | exp194: canonical SPY 4h timing cached | **+0.939** | **$+3321.83** (+6.644%) |
+| 🔴 | [iter 193 — dbb6c2d](iter_193_dbb6c2d.md) | exp193: full-budget score allocation cached | **+0.617** | **$+2485.78** (+4.972%) |
+| 🔴 | [iter 192 — 1680fdc](iter_192_1680fdc.md) | exp192: SPY-only timing profile evaluation | **+0.928** | **$+435.04** (+0.870%) |
+| 🔴 | [iter 191 — b4ba841](iter_191_b4ba841.md) | exp191: SPY trend context fresh train | **-0.373** | **$-305.93** (-0.612%) |
+| 🔴 | [iter 190 — 07ea1a6](iter_190_07ea1a6.md) | exp190: calendar top4 double 4h cached | **+0.007** | **$-2.25** (-0.004%) |
+| 🔴 | [iter 189 — 301a6bb](iter_189_301a6bb.md) | exp189: calendar top20 cached canonical | **+0.866** | **$+437.61** (+0.875%) |
+| 🔴 | [iter 188 — 9affd07](iter_188_9affd07.md) | exp188: calendar top10 cached canonical | **+0.565** | **$+327.29** (+0.655%) |
+| 🔴 | [iter 187 — 1f2fa6a](iter_187_1f2fa6a.md) | exp187: calendar session features fresh train | **+1.420** | **$+889.40** (+1.779%) |
+| 🔴 | [iter 186 — 3b12c45](iter_186_3b12c45.md) | exp186: fresh 2 epoch pretrain with async refresh | **+0.009** | **$-3.02** (-0.006%) |
+| 🔴 | [iter 184 — e182351](iter_184_e182351.md) | exp184: 180d top4 canonical | **+0.652** | **$+492.60** (+0.985%) |
+| 🔴 | [iter 183 — e94b381](iter_183_e94b381.md) | exp183: 180d filter stale symbols | **+0.430** | **$+263.20** (+0.526%) |
+| 🔴 | [iter 182 — 1090c3b](iter_182_1090c3b.md) | exp182: 180d top10 diversification | **+0.015** | **$+2.98** (+0.006%) |
+| 🔴 | [iter 181 — 432b68c](iter_181_432b68c.md) | exp181: 180d top2 long horizon blend | **-0.646** | **$-767.31** (-1.535%) |
+| 🔴 | [iter 180 — 087771d](iter_180_087771d.md) | exp180: 180d top2 with 65pct reserve | **+0.369** | **$+496.48** (+0.993%) |
+| 🔴 | [iter 179 — 24fba6f](iter_179_24fba6f.md) | exp179: 180d top1 concentration | **+0.370** | **$+492.66** (+0.985%) |
+| 🔴 | [iter 178 — 9554160](iter_178_9554160.md) | exp178: 180d top3 diversification | **-0.337** | **$-323.18** (-0.646%) |
+| 🔴 | [iter 176 — 33c1540](iter_176_33c1540.md) | exp176: 180d validation on refreshed data | **+0.383** | **$+263.20** (+0.526%) |
+| 🔴 | [iter 173 — 5c717b9](iter_173_5c717b9.md) | exp173: fresh pretrain best top2 strategy | **+0.770** | **$+272.50** (+0.545%) |
+| 🔴 | [iter 172 — e7b37b9](iter_172_e7b37b9.md) | exp172: top2 double 1d rank weight | **+0.596** | **$+248.48** (+0.497%) |
 | 🟢 | [iter 171 — f9dfd67](iter_171_f9dfd67.md) | exp171: top2 double 4h rank weight | **+3.214** | **$+3959.48** (+7.919%) |
 | 🔴 | [iter 170 — d06d5c6](iter_170_d06d5c6.md) | exp170: top2 exclude broad ETF candidates | **+0.853** | **$+327.76** (+0.656%) |
 | 🟢 | [iter 169 — bb73b19](iter_169_bb73b19.md) | exp169: top2 exclude SPY candidate | **+3.214** | **$+3959.48** (+7.919%) |

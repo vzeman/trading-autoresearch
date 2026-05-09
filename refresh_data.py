@@ -6,6 +6,7 @@ import time
 
 from prepare import UNIVERSE, fetch_bars
 from experiment import CONTEXT_SYMBOLS, EXTENDED_UNIVERSE, HOLDOUT_UNIVERSE
+from top500_universe import load_top500_symbols
 
 
 def main() -> None:
@@ -14,19 +15,32 @@ def main() -> None:
     parser.add_argument("--no-extended", action="store_true", help="skip extended training universe")
     parser.add_argument("--no-context", action="store_true", help="skip context symbols")
     parser.add_argument("--no-holdout", action="store_true", help="skip holdout symbols")
+    parser.add_argument("--top500", action="store_true", help="include current S&P 500 constituents")
+    parser.add_argument("--top500-only", action="store_true", help="fetch only current S&P 500 constituents")
+    parser.add_argument("--limit", type=int, default=0, help="optional symbol limit after de-duplication")
+    parser.add_argument("--start-at", type=int, default=1, help="1-based index to resume symbol refresh")
     args = parser.parse_args()
 
     symbols: list[str] = []
-    symbols.extend(UNIVERSE)
-    if not args.no_context:
-        symbols.extend(CONTEXT_SYMBOLS)
-    if not args.no_extended:
-        symbols.extend(EXTENDED_UNIVERSE)
-    if not args.no_holdout:
-        symbols.extend(HOLDOUT_UNIVERSE)
+    if args.top500 or args.top500_only:
+        top500 = load_top500_symbols()
+        print(f"[refresh] loaded {len(top500)} current S&P 500 symbols", flush=True)
+        symbols.extend(top500)
+    if not args.top500_only:
+        symbols.extend(UNIVERSE)
+        if not args.no_context:
+            symbols.extend(CONTEXT_SYMBOLS)
+        if not args.no_extended:
+            symbols.extend(EXTENDED_UNIVERSE)
+        if not args.no_holdout:
+            symbols.extend(HOLDOUT_UNIVERSE)
 
     seen = set()
     unique_symbols = [s for s in symbols if not (s in seen or seen.add(s))]
+    if args.start_at > 1:
+        unique_symbols = unique_symbols[args.start_at - 1:]
+    if args.limit > 0:
+        unique_symbols = unique_symbols[:args.limit]
     started = time.time()
     ok = 0
     failed = 0
