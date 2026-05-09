@@ -66,7 +66,7 @@ The harder JEPA target helped the weak seed recover from slightly negative to po
 
 Cross-symbol masking is useful as a robustness test: it removed the flat/negative seed, which means it likely improves representation stability. It is not yet the best training recipe because the easier temporal-continuation top20 run had a better median Sharpe and PnL.
 
-Next best experiment: try `MARKET_JEPA_TARGET_MODE=mixed` so half the JEPA batches preserve same-symbol temporal dynamics and half force cross-symbol inference, then evaluate the same top20 canonical policy.
+Next best experiment: do **one** longer base-training run, not another seed validation. Use `MARKET_JEPA_TARGET_MODE=mixed` so half the JEPA batches preserve same-symbol temporal dynamics and half force cross-symbol inference, increase both JEPA and supervised/ranking budgets to roughly 10,000 steps, and evaluate the same top20 canonical policy. Only run 3 seeds after the single long run shows a real improvement.
 
 ## Equity Curve
 

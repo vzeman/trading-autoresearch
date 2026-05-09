@@ -101,6 +101,17 @@ Current tuned defaults:
 | `TRAIN_LOOKBACK_DAYS` | `365` | exp41: subsetting train to recent year produced confident predictions; full 6 years made the model too uncertain to trade at all |
 | `PRETRAIN_EPOCHS` | `1` | one epoch on 365 days suffices; 2 doubled wall-time without improvement |
 
+## Next Training Plan
+
+Before the next session, read `program.md` first. The planned move after iter 208 is **not** another 3-seed validation. The working hypothesis is that base model quality is too low, so the next run should be one longer exploratory training pass:
+
+- `MARKET_JEPA_TARGET_MODE=mixed`
+- around `MARKET_JEPA_MAX_STEPS=10000`
+- around `PRETRAIN_MAX_STEPS=10000`
+- `CANONICAL_STRATEGY=topn`
+- `CANONICAL_TOP_N=20`
+- one seed only, then decide whether it deserves a 3-seed robustness run.
+
 ## Reading the charts
 
 `docs/weighted_latest.png`:

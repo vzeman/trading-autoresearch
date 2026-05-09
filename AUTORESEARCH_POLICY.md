@@ -43,6 +43,11 @@ Before every experiment, decide and document the primary lever:
 
 Training loss is diagnostic, not the target.
 
+- **Current exception after iter 208:** the next run should deliberately test a
+  longer base-training budget before additional seed validation. Use one seed
+  first with `MARKET_JEPA_TARGET_MODE=mixed`, about `MARKET_JEPA_MAX_STEPS=10000`,
+  and about `PRETRAIN_MAX_STEPS=10000`, then judge whether the base forecaster
+  quality improved enough to deserve a 3-seed run.
 - If `nll_running_mean` drops but Sharpe CI-low, drawdown, or SPY-outperformance worsens, treat it as overfit.
 - If a fresh train improves evaluation, keep the checkpoint and consider a local epoch sweep around it.
 - If fresh training repeatedly fails but cached strategy sweeps improve, prioritize portfolio-management research.
@@ -66,4 +71,3 @@ After an iteration completes:
 1. Push code/report/results to GitHub.
 2. Decide the next highest-value lever: more training, strategy optimization, feature/model change, or data refresh.
 3. Start the next iteration immediately unless manually interrupted.
-
