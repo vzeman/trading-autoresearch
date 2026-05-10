@@ -58,6 +58,8 @@ class TrainConfig:
     seed: int
     device: str
     limit_rows: int
+    min_horizon_bars: int
+    max_horizon_bars: int
     symbol_dropout: float
     rank_loss_coef: float
     patience: int
@@ -312,6 +314,12 @@ def train(config: TrainConfig) -> dict:
     device = pick_device(config.device)
     started = time.time()
     df = load_frame(Path(config.data), config.limit_rows, seed=config.seed)
+    if config.min_horizon_bars > 0:
+        df = df[df["horizon_bars"] >= config.min_horizon_bars].reset_index(drop=True)
+    if config.max_horizon_bars > 0:
+        df = df[df["horizon_bars"] <= config.max_horizon_bars].reset_index(drop=True)
+    if df.empty:
+        raise RuntimeError("no rows left after horizon filtering")
     mats = make_matrices(df, config.val_fraction, config.val_gap_days)
     train_ds = tensor_dataset(mats, mats["train_mask"])
     val_ds = tensor_dataset(mats, mats["val_mask"])
@@ -414,6 +422,8 @@ def train(config: TrainConfig) -> dict:
     metrics = {
         "checkpoint": str(output),
         "rows": int(len(df)),
+        "min_horizon_bars": int(config.min_horizon_bars),
+        "max_horizon_bars": int(config.max_horizon_bars),
         "train_rows": int(len(train_ds)),
         "val_rows": int(len(val_ds)),
         "device": device,
@@ -445,6 +455,8 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default=os.environ.get("WORLD_MODEL_DEVICE", "auto"))
     parser.add_argument("--limit-rows", type=int, default=0)
+    parser.add_argument("--min-horizon-bars", type=int, default=0)
+    parser.add_argument("--max-horizon-bars", type=int, default=0)
     parser.add_argument("--symbol-dropout", type=float, default=0.10)
     parser.add_argument("--rank-loss-coef", type=float, default=0.50)
     parser.add_argument("--patience", type=int, default=2)

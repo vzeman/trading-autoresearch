@@ -222,12 +222,20 @@ def main() -> None:
     parser.add_argument("--limit-rows", type=int, default=0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--score-all", action="store_true", help="score every loaded row instead of taking the final validation fraction")
+    parser.add_argument("--min-horizon-bars", type=int, default=0)
+    parser.add_argument("--max-horizon-bars", type=int, default=0)
     parser.add_argument("--device", default=os.environ.get("WORLD_MODEL_DEVICE", "auto"))
     args = parser.parse_args()
 
     device = pick_device(args.device)
     ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     df = load_frame(Path(args.data), args.limit_rows, seed=args.seed)
+    if args.min_horizon_bars > 0:
+        df = df[df["horizon_bars"] >= args.min_horizon_bars].reset_index(drop=True)
+    if args.max_horizon_bars > 0:
+        df = df[df["horizon_bars"] <= args.max_horizon_bars].reset_index(drop=True)
+    if df.empty:
+        raise RuntimeError("no rows left after horizon filtering")
     time_col = "decision_timestamp" if "decision_timestamp" in df.columns else "timestamp"
     if args.score_all:
         val_df = df.reset_index(drop=True)
@@ -240,6 +248,8 @@ def main() -> None:
     result["rows_scored"] = int(len(scored))
     result["groups"] = int(scored.groupby([time_col, "horizon_bars"]).ngroups)
     result["time_col"] = time_col
+    result["min_horizon_bars"] = int(args.min_horizon_bars)
+    result["max_horizon_bars"] = int(args.max_horizon_bars)
     result["device"] = device
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     Path(args.output).write_text(json.dumps(result, indent=2, default=str))

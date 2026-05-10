@@ -306,6 +306,71 @@ should focus on walk-forward training/evaluation, regime-balanced sampling,
 horizon-specific planners, and an abstention/calibration objective that is
 validated only on untouched periods.
 
+## Short-Horizon Follow-Up
+
+The first fix was to train a dedicated short-horizon model using only horizons
+up to one trading day (`horizon_bars <= 390`). This directly targets the failure
+mode from the full-horizon model, which was overconfident on long-horizon buys.
+
+Training command:
+
+```bash
+.venv/bin/python train_world_model.py \
+  --data data/world_model/cached193_shared500_full_counterfactual \
+  --limit-rows 8000000 \
+  --max-horizon-bars 390 \
+  --epochs 12 \
+  --batch-size 32768 \
+  --hidden-dim 384 \
+  --n-layers 4 \
+  --dropout 0.30 \
+  --lr 1e-4 \
+  --weight-decay 1e-3 \
+  --symbol-dropout 0.20 \
+  --rank-loss-coef 0.75 \
+  --patience 4 \
+  --val-gap-days 14 \
+  --output checkpoints/world_model/world_model_full500_short_8m_actionkey.pt
+```
+
+Training result:
+
+- rows after horizon filtering: 4,358,466
+- train rows: 3,440,256
+- validation rows: 864,278
+- best epoch: 8
+- validation profit accuracy: 59.5%
+- validation beat-SPY accuracy: 55.8%
+
+Untouched eval command:
+
+```bash
+.venv/bin/python evaluate_world_model.py \
+  --data data/world_model/cached193_eval_shared250_full_counterfactual \
+  --checkpoint checkpoints/world_model/world_model_full500_short_8m_actionkey.pt \
+  --batch-size 32768 \
+  --score-all \
+  --max-horizon-bars 390 \
+  --output checkpoints/world_model/world_model_full500_short_8m_actionkey_eval_split_all.json
+```
+
+Untouched eval result:
+
+| selector | groups | mean return | mean PnL | profit rate | beat-SPY rate | mean alpha vs SPY |
+|---|---:|---:|---:|---:|---:|---:|
+| short-horizon planner | 1,500 | +0.000859 | $+42.96 | 49.5% | 51.0% | +0.000924 |
+| q80 threshold planner | 300 | +0.003518 | $+175.91 | 56.3% | 55.0% | +0.003536 |
+| q95 threshold planner | 75 | +0.008193 | $+409.66 | 65.3% | 61.3% | +0.007588 |
+| buy-only planner | 1,500 | +0.001023 | $+51.13 | 51.1% | 51.3% | +0.001134 |
+| random candidate | 1,500 | -0.000030 | $-1.49 | 40.1% | 46.1% | -0.000400 |
+| oracle candidate | 1,500 | +0.067838 | $+3,391.89 | 99.6% | 99.6% | +0.067580 |
+
+Interpretation: the short-horizon model does generalize better than the
+full-horizon model, but the edge is still small. It is a useful direction, not a
+finished trading model. The next step should split intraday, one-day, and
+multi-day horizons into separate planners and train the abstention threshold on
+walk-forward validation only.
+
 ## First Trained Model
 
 The first baseline trainer is `train_world_model.py`. It trains a compact
