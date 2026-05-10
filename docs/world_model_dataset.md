@@ -192,3 +192,42 @@ Local training result:
 
 The trainer saves the best validation epoch, not the final epoch, because this
 first model overfits after epoch 2.
+
+## First Planner Evaluation
+
+The planner evaluator is `evaluate_world_model.py`. It loads the trained
+checkpoint, scores validation-set candidate actions, and chooses the best action
+per `(timestamp, horizon)` by a simple risk-adjusted score:
+
+```text
+pred_return
++ 0.20 * pred_alpha_vs_spy
++ 0.50 * pred_beat_spy_probability
++ 0.25 * pred_profit_probability
++ 0.50 * pred_max_drawdown
+- 0.10 * pred_path_vol
+```
+
+Evaluation command:
+
+```bash
+.venv/bin/python evaluate_world_model.py \
+  --data data/world_model/top100_train_counterfactual \
+  --checkpoint checkpoints/world_model/world_model_v1.pt \
+  --output checkpoints/world_model/world_model_v1_eval.json
+```
+
+Validation-set planner result:
+
+| selector | groups | mean return | mean PnL | profit rate | beat-SPY rate | mean alpha vs SPY |
+|---|---:|---:|---:|---:|---:|---:|
+| world-model planner | 19,565 | +0.000217 | $+10.87 | 51.3% | 41.3% | -0.001735 |
+| buy-only planner | 19,565 | +0.000167 | $+8.35 | 50.8% | 40.9% | -0.001773 |
+| random candidate | 19,565 | +0.000053 | $+2.64 | 34.5% | 40.6% | -0.001701 |
+| oracle candidate | 19,565 | +0.002609 | $+130.46 | 52.0% | 48.4% | -0.001384 |
+
+Interpretation: the first world model learns enough to beat random candidate
+selection on mean realized return, but it is not a tradable edge yet. It still
+loses to SPY most of the time, and even the oracle over this candidate set has
+only a 48.4% beat-SPY rate. The next dataset/model iteration should improve the
+candidate set and train directly for action ranking within each timestamp.

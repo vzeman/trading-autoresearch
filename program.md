@@ -49,6 +49,8 @@ baseline, not the destination.
 
 The first baseline trainer is `train_world_model.py`. It writes checkpoints
 under `checkpoints/world_model/`, which is intentionally gitignored.
+Use `evaluate_world_model.py` to score candidate actions and compare the planner
+against random, buy-only, hold-cash, and oracle candidate selection.
 
 ## Experimentation loop
 

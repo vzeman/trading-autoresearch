@@ -16,4 +16,11 @@ dependencies = [
 ]
 
 [tool.setuptools]
-py-modules = ["prepare", "experiment", "evaluator", "world_model_dataset", "train_world_model"]
+py-modules = [
+    "prepare",
+    "experiment",
+    "evaluator",
+    "world_model_dataset",
+    "train_world_model",
+    "evaluate_world_model",
+]
