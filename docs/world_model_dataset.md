@@ -250,6 +250,62 @@ the strategy needs walk-forward evaluation on untouched dates, and
 portfolio-level sizing across multiple simultaneous symbols is not implemented
 yet.
 
+## Untouched Eval Split Check
+
+After selecting the best validation checkpoint, an untouched eval dataset was
+built from `prepare.py`'s chronological eval split, which is the last 180
+calendar days of cached bars:
+
+```bash
+.venv/bin/python world_model_dataset.py \
+  --cached-all \
+  --symbol-limit 0 \
+  --samples-per-symbol 250 \
+  --actions-per-timestamp 12 \
+  --action-mode full \
+  --horizon-mode rich \
+  --shared-timestamps \
+  --shard-by-symbol \
+  --split eval \
+  --output data/world_model/cached193_eval_shared250_full_counterfactual
+```
+
+Local result:
+
+- rows: 4,351,908
+- scored groups: 2,750
+- rows scored: 4,351,908
+
+Evaluation command:
+
+```bash
+.venv/bin/python evaluate_world_model.py \
+  --data data/world_model/cached193_eval_shared250_full_counterfactual \
+  --checkpoint checkpoints/world_model/world_model_full500_8m_actionkey.pt \
+  --batch-size 32768 \
+  --score-all \
+  --output checkpoints/world_model/world_model_full500_8m_actionkey_eval_split_all.json
+```
+
+Untouched eval result:
+
+| selector | groups | mean return | mean PnL | profit rate | beat-SPY rate | mean alpha vs SPY |
+|---|---:|---:|---:|---:|---:|---:|
+| world-model planner | 2,750 | -0.032021 | $-1,601.04 | 47.7% | 47.0% | -0.038085 |
+| q50 threshold planner | 1,375 | -0.056262 | $-2,813.08 | 41.3% | 40.9% | -0.065537 |
+| buy-only planner | 2,750 | -0.029169 | $-1,458.46 | 48.0% | 47.3% | -0.035552 |
+| hold cash | 2,739 | 0.000000 | $0.00 | 0.0% | 49.3% | +0.001788 |
+| random candidate | 2,750 | +0.001161 | $+58.07 | 42.5% | 46.3% | +0.001054 |
+| oracle candidate | 2,750 | +0.302798 | $+15,139.90 | 99.7% | 99.7% | +0.302914 |
+
+Interpretation: the model is not tradable-ready. It overfits the training/held
+validation regime and becomes overconfident on long-horizon buys in the
+untouched eval regime. The oracle result shows the candidate set still contains
+large opportunity, but the current model does not rank it robustly. Next work
+should focus on walk-forward training/evaluation, regime-balanced sampling,
+horizon-specific planners, and an abstention/calibration objective that is
+validated only on untouched periods.
+
 ## First Trained Model
 
 The first baseline trainer is `train_world_model.py`. It trains a compact

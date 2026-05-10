@@ -221,6 +221,7 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=32768)
     parser.add_argument("--limit-rows", type=int, default=0)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--score-all", action="store_true", help="score every loaded row instead of taking the final validation fraction")
     parser.add_argument("--device", default=os.environ.get("WORLD_MODEL_DEVICE", "auto"))
     args = parser.parse_args()
 
@@ -228,9 +229,12 @@ def main() -> None:
     ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     df = load_frame(Path(args.data), args.limit_rows, seed=args.seed)
     time_col = "decision_timestamp" if "decision_timestamp" in df.columns else "timestamp"
-    timestamps = pd.to_datetime(df[time_col], utc=True)
-    cutoff = timestamps.quantile(0.80)
-    val_df = df[timestamps > cutoff].reset_index(drop=True)
+    if args.score_all:
+        val_df = df.reset_index(drop=True)
+    else:
+        timestamps = pd.to_datetime(df[time_col], utc=True)
+        cutoff = timestamps.quantile(0.80)
+        val_df = df[timestamps > cutoff].reset_index(drop=True)
     scored = predict(val_df, ckpt, device=device, batch_size=args.batch_size)
     result = evaluate_planner(scored)
     result["rows_scored"] = int(len(scored))
