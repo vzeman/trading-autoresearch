@@ -432,7 +432,7 @@ USE_RANK_LOSS = True             # add pairwise margin ranking loss within each 
 RANK_MARGIN = 0.05               # margin in pred-units for pairwise ranking
 RANK_LOSS_COEF = 1.0             # weight of ranking loss vs Gaussian NLL
 TRAIN_LOOKBACK_DAYS = 365       # exp41: subset train slice to last N days. Hypothesis: model trained on full 6yr is too conservative for recent regime → exp40 = 0 trades. Recent-only data should produce more confident predictions.
-PRETRAIN_BATCH = 128
+PRETRAIN_BATCH = int(os.environ.get("PRETRAIN_BATCH", "128"))
 PRETRAIN_LR = 3e-4
 PRETRAIN_MAX_STEPS = int(os.environ.get("PRETRAIN_MAX_STEPS", "0"))  # 0 = full epoch
 USE_MARKET_JEPA = os.environ.get("USE_MARKET_JEPA", "1") == "1"
@@ -885,26 +885,29 @@ def market_jepa_pretrain(model: PatchTransformer, train_features: dict[str, pd.D
             xb = torch.from_numpy(X_context_np).to(device)
             xt = torch.from_numpy(X_target_np).to(device)
             opt.zero_grad(set_to_none=True)
-            context_h = model.encode(xb)
-            pred_h = model.jepa_predictor(context_h)
-            if mode == "ema":
-                assert target_encoder is not None
-                with torch.no_grad():
-                    target_h = target_encoder.encode(xt)
-                    target_h = nn.functional.normalize(target_h, dim=-1)
-                pred_h = nn.functional.normalize(pred_h, dim=-1)
-                pred_loss = 2.0 - 2.0 * (pred_h * target_h).sum(dim=-1).mean()
-            else:
-                target_h = model.encode(xt)
-                pred_loss = nn.functional.mse_loss(pred_h, target_h)
-            reg_source = torch.cat([context_h, target_h], dim=0)
-            if mode == "ema":
-                reg_source = torch.cat([
-                    nn.functional.normalize(context_h, dim=-1),
-                    target_h,
-                ], dim=0)
-            reg_loss = _gaussian_latent_regularizer(reg_source)
-            loss = pred_loss + MARKET_JEPA_SIGREG_COEF * reg_loss
+            use_amp = USE_AMP_PRETRAIN and device == "mps"
+            amp_ctx = torch.autocast(device_type="mps", dtype=torch.bfloat16) if use_amp else _nullcontext()
+            with amp_ctx:
+                context_h = model.encode(xb)
+                pred_h = model.jepa_predictor(context_h)
+                if mode == "ema":
+                    assert target_encoder is not None
+                    with torch.no_grad():
+                        target_h = target_encoder.encode(xt)
+                        target_h = nn.functional.normalize(target_h, dim=-1)
+                    pred_h = nn.functional.normalize(pred_h, dim=-1)
+                    pred_loss = 2.0 - 2.0 * (pred_h * target_h).sum(dim=-1).mean()
+                else:
+                    target_h = model.encode(xt)
+                    pred_loss = nn.functional.mse_loss(pred_h, target_h)
+                reg_source = torch.cat([context_h, target_h], dim=0)
+                if mode == "ema":
+                    reg_source = torch.cat([
+                        nn.functional.normalize(context_h, dim=-1),
+                        target_h,
+                    ], dim=0)
+                reg_loss = _gaussian_latent_regularizer(reg_source)
+                loss = pred_loss + MARKET_JEPA_SIGREG_COEF * reg_loss
             loss.backward()
             torch.nn.utils.clip_grad_norm_(_jepa_encoder_parameters(model), GRAD_CLIP)
             opt.step()
