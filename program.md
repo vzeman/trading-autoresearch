@@ -20,59 +20,32 @@ robustly improve a portfolio's risk-adjusted return.
 4. **Verify `results.tsv` exists** with the header row. It does (committed).
 5. **Run the latest config once** to ensure the harness works end-to-end (~25min).
 
-## Next Manual Run Plan: Long Mixed-JEPA Base Training
+## Next Manual Run Plan: Portfolio World Model
 
-Before starting the next training session after iter 208, do **not** run a
-3-seed validation first. The current hypothesis is that base model quality is
-too low: JEPA variants are mostly reshaping a weak forecaster rather than
-creating a strong ranker. The next run should be a single serious base-model
-training experiment, then only expand to seed validation if the one-seed result
-and training curves justify it.
+Before starting the next research session, do **not** continue stretching the
+old return forecaster. The current direction is a separate action-conditioned
+portfolio world model:
 
-Run intent:
-
-1. Train on the first 100 cached S&P 500 symbols.
-2. Use a longer `mixed` LeWorld JEPA objective: half same-symbol temporal target,
-   half cross-symbol hidden-market target.
-3. Follow with longer supervised/ranking forecast training.
-4. Evaluate the top20 canonical picker.
-5. Record the result as exploratory; do not claim robustness until a later
-   3-seed validation.
-
-Suggested starting command:
-
-```bash
-USE_TOP500_UNIVERSE=1 \
-TRAIN_SYMBOL_LIMIT=100 \
-EVAL_SYMBOL_LIMIT=100 \
-USE_MARKET_JEPA=1 \
-MARKET_JEPA_MODE=leworld \
-MARKET_JEPA_TARGET_MODE=mixed \
-MARKET_JEPA_EPOCHS=1 \
-MARKET_JEPA_MAX_STEPS=10000 \
-MARKET_JEPA_BATCH=128 \
-PRETRAIN_EPOCHS=1 \
-PRETRAIN_MAX_STEPS=10000 \
-RL_PRETRAIN_EPOCHS=0 \
-CANONICAL_STRATEGY=topn \
-CANONICAL_TOP_N=20 \
-RUN_PROFILE_SUITE=0 \
-EVAL_WORKERS=1 \
-.venv/bin/python - <<'PY'
-import prepare
-prepare.N_SEEDS = 1
-import evaluator
-summary = evaluator.run(n_workers=1)
-print("LONG_MIXED_JEPA_SINGLE_SEED_SUMMARY")
-for k in ["sharpe", "sharpe_ci_low", "max_dd_pct", "pnl_usd", "trades", "primary_pct_over_spy", "elapsed_seconds"]:
-    print(f"{k}={summary.get(k)}")
-PY
+```text
+market state + portfolio state + action + horizon -> future portfolio outcome
 ```
 
-If that first long run still loses badly to SPY, the next move should not be
-more seed validation. Inspect forecast quality/ranking calibration and consider
-capacity or loss changes. If it improves materially, then run the same config
-over 3 seeds as the robustness check.
+Read `docs/world_model_dataset.md`, then build the first counterfactual dataset:
+
+```bash
+.venv/bin/python world_model_dataset.py \
+  --top500 \
+  --symbol-limit 100 \
+  --samples-per-symbol 1000 \
+  --actions-per-timestamp 8 \
+  --horizons 30,120,390,1170,1950 \
+  --shard-by-symbol \
+  --output data/world_model/top100_train_counterfactual
+```
+
+After that, train a new model on this dataset with action-conditioned latent
+prediction and outcome heads. Treat the old `experiment.py` forecaster as a
+baseline, not the destination.
 
 ## Experimentation loop
 

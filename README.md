@@ -103,14 +103,10 @@ Current tuned defaults:
 
 ## Next Training Plan
 
-Before the next session, read `program.md` first. The planned move after iter 208 is **not** another 3-seed validation. The working hypothesis is that base model quality is too low, so the next run should be one longer exploratory training pass:
-
-- `MARKET_JEPA_TARGET_MODE=mixed`
-- around `MARKET_JEPA_MAX_STEPS=10000`
-- around `PRETRAIN_MAX_STEPS=10000`
-- `CANONICAL_STRATEGY=topn`
-- `CANONICAL_TOP_N=20`
-- one seed only, then decide whether it deserves a 3-seed robustness run.
+The current direction is to stop stretching the old forecaster and build a
+separate action-conditioned portfolio world model. The first artifact is the
+counterfactual dataset builder in `world_model_dataset.py`; see
+`docs/world_model_dataset.md`.
 
 ## Reading the charts
 
