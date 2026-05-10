@@ -40,7 +40,8 @@ from experiment import USE_FEATURES, featurize, fetch_context
 OUTPUT_DIR = Path("data/world_model")
 CONTEXT_BARS = 390 * 20
 DEFAULT_HORIZONS = (30, 120, 390, 1170, 1950)
-DEFAULT_ACTIONS = (
+DEFAULT_HORIZONS_RICH = (15, 30, 60, 120, 240, 390, 780, 1170, 1950, 3900, 7800)
+DEFAULT_ACTIONS_BASIC = (
     ("hold", 0.00, 0.00),
     ("hold", 0.05, 0.05),
     ("hold", 0.10, 0.10),
@@ -53,6 +54,22 @@ DEFAULT_ACTIONS = (
     ("sell", 0.05, 0.00),
     ("sell", 0.10, 0.00),
     ("sell", 0.20, 0.00),
+)
+DEFAULT_ACTIONS_RICH = tuple(
+    (("hold", p, p) for p in (0.00, 0.02, 0.05, 0.10, 0.15, 0.20, 0.30))
+) + tuple(
+    ("buy" if target > current else "sell", current, target)
+    for current in (0.00, 0.02, 0.05, 0.10, 0.15, 0.20, 0.30)
+    for target in (0.00, 0.02, 0.05, 0.10, 0.15, 0.20, 0.30)
+    if target != current
+)
+DEFAULT_ACTIONS_FULL = tuple(
+    (("hold", p, p) for p in (0.00, 0.05, 0.10, 0.25, 0.50, 0.75, 1.00))
+) + tuple(
+    ("buy" if target > current else "sell", current, target)
+    for current in (0.00, 0.05, 0.10, 0.25, 0.50, 0.75, 1.00)
+    for target in (0.00, 0.05, 0.10, 0.25, 0.50, 0.75, 1.00)
+    if target != current
 )
 
 
@@ -69,6 +86,8 @@ class BuildConfig:
     split_name: str
     context_bars: int
     output: str
+    action_mode: str = "basic"
+    shared_timestamps: bool = False
     shard_by_symbol: bool = False
 
 
@@ -76,8 +95,10 @@ def _cache_path(symbol: str) -> Path:
     return CACHE_DIR / f"{symbol}_1m.parquet"
 
 
-def _load_symbols(use_top500: bool, limit: int, cached_only: bool) -> list[str]:
-    if use_top500:
+def _load_symbols(use_top500: bool, limit: int, cached_only: bool, cached_all: bool = False) -> list[str]:
+    if cached_all:
+        symbols = sorted(p.name.removesuffix("_1m.parquet") for p in CACHE_DIR.glob("*_1m.parquet"))
+    elif use_top500:
         from top500_universe import load_top500_symbols
 
         symbols = load_top500_symbols()
@@ -96,6 +117,14 @@ def _load_symbols(use_top500: bool, limit: int, cached_only: bool) -> list[str]:
         if limit > 0 and len(out) >= limit:
             break
     return out
+
+
+def _action_specs(action_mode: str) -> tuple[tuple[str, float, float], ...]:
+    if action_mode == "full":
+        return DEFAULT_ACTIONS_FULL
+    if action_mode == "rich":
+        return DEFAULT_ACTIONS_RICH
+    return DEFAULT_ACTIONS_BASIC
 
 
 def _safe_log_return(close: np.ndarray, start: int, end: int) -> float:
@@ -236,7 +265,7 @@ def _build_symbol_rows(
 ) -> tuple[pd.DataFrame, dict]:
     rows: list[dict] = []
     max_horizon = max(config.horizons)
-    action_specs = list(DEFAULT_ACTIONS)
+    action_specs = list(_action_specs(config.action_mode))
 
     try:
         bars = fetch_bars(sym, force=not config.cached_only)
@@ -303,6 +332,80 @@ def _build_symbol_rows(
     return pd.DataFrame(rows), stats
 
 
+def _build_symbol_rows_at_timestamps(
+    sym: str,
+    config: BuildConfig,
+    context: dict[str, pd.DataFrame],
+    spy_bars: pd.DataFrame | None,
+    decision_ts: pd.Series,
+    rng: np.random.Generator,
+) -> tuple[pd.DataFrame, dict]:
+    rows: list[dict] = []
+    max_horizon = max(config.horizons)
+    action_specs = list(_action_specs(config.action_mode))
+    try:
+        bars = fetch_bars(sym, force=not config.cached_only)
+    except Exception as exc:
+        return pd.DataFrame(), {"status": "failed", "error": str(exc)}
+    train_bars, eval_bars = split(bars)
+    source_bars = train_bars if config.split_name == "train" else eval_bars
+    if len(source_bars) < config.context_bars + max_horizon + 2:
+        return pd.DataFrame(), {"status": "skipped", "bars": int(len(source_bars))}
+
+    feat = featurize(source_bars, context=context).dropna().reset_index(drop=True)
+    if len(feat) < config.context_bars + max_horizon + 2:
+        return pd.DataFrame(), {"status": "skipped", "bars": int(len(feat))}
+    ts_arr = pd.to_datetime(feat["timestamp"], utc=True).astype("int64").to_numpy()
+    close = feat["close"].to_numpy(np.float32)
+    volume = source_bars.sort_values("timestamp")["volume"].to_numpy(np.float32)[-len(feat):]
+    spy_close = _align_spy_to_symbol(feat, spy_bars)
+    sampled = 0
+    for ts in decision_ts:
+        ts_ns = pd.Timestamp(ts).value
+        i = int(np.searchsorted(ts_arr, ts_ns, side="right") - 1)
+        if i < config.context_bars or i + max_horizon >= len(feat):
+            continue
+        sampled += 1
+        base = {
+            "symbol": sym,
+            "timestamp": feat["timestamp"].iloc[i],
+            "decision_timestamp": pd.Timestamp(ts),
+            "split": config.split_name,
+            "price": float(close[i]),
+        }
+        for name in USE_FEATURES:
+            base[f"feat_{name}"] = float(feat[name].iloc[i])
+        base.update(_rolling_state_features(close, volume, i))
+
+        sampled_actions = rng.choice(
+            len(action_specs),
+            size=min(config.actions_per_timestamp, len(action_specs)),
+            replace=False,
+        )
+        for action_idx in sampled_actions:
+            action, current_frac, target_frac = action_specs[int(action_idx)]
+            for horizon in config.horizons:
+                row = dict(base)
+                row.update(
+                    _outcome_for_action(
+                        close=close,
+                        spy_close=spy_close,
+                        i=i,
+                        horizon=int(horizon),
+                        action=action,
+                        current_frac=float(current_frac),
+                        target_frac=float(target_frac),
+                    )
+                )
+                rows.append(row)
+    return pd.DataFrame(rows), {
+        "status": "ok" if rows else "skipped",
+        "bars": int(len(feat)),
+        "timestamps_sampled": int(sampled),
+        "rows": int(len(rows)),
+    }
+
+
 def _metadata(config: BuildConfig, row_count: int, symbol_stats: dict[str, dict], df: pd.DataFrame | None = None) -> dict:
     if df is not None and not df.empty:
         feature_columns = [c for c in df.columns if c.startswith("feat_") or c.startswith("state_")]
@@ -330,7 +433,26 @@ def _metadata(config: BuildConfig, row_count: int, symbol_stats: dict[str, dict]
             "profit_label",
             "beat_spy_label",
         ],
+        "action_count": len(_action_specs(config.action_mode)),
     }
+
+
+def _sample_decision_timestamps(config: BuildConfig, context: dict[str, pd.DataFrame]) -> pd.Series:
+    anchor = "SPY" if _cache_path("SPY").exists() else config.symbols[0]
+    bars = fetch_bars(anchor, force=False)
+    train_bars, eval_bars = split(bars)
+    source_bars = train_bars if config.split_name == "train" else eval_bars
+    feat = featurize(source_bars, context=context).dropna().reset_index(drop=True)
+    max_horizon = max(config.horizons)
+    lo = config.context_bars
+    hi = len(feat) - max_horizon - 1
+    if hi <= lo:
+        raise RuntimeError("not enough anchor bars for shared timestamp sampling")
+    idxs = np.arange(lo, hi, dtype=np.int64)
+    rng = np.random.default_rng(config.seed)
+    n = min(config.samples_per_symbol, len(idxs))
+    picked = np.sort(rng.choice(idxs, size=n, replace=False))
+    return feat["timestamp"].iloc[picked].reset_index(drop=True)
 
 
 def build_dataset(config: BuildConfig) -> tuple[pd.DataFrame, dict]:
@@ -360,13 +482,19 @@ def build_dataset_sharded(config: BuildConfig, output_dir: Path) -> dict:
     rng = np.random.default_rng(config.seed)
     context = fetch_context(force=False)
     spy_bars = fetch_bars("SPY", force=False) if _cache_path("SPY").exists() else None
+    decision_ts = _sample_decision_timestamps(config, context) if config.shared_timestamps else None
+    if decision_ts is not None:
+        print(f"[world-dataset] shared decision timestamps={len(decision_ts):,}", flush=True)
     output_dir.mkdir(parents=True, exist_ok=True)
     symbol_stats: dict[str, dict] = {}
     rows_total = 0
     first_df: pd.DataFrame | None = None
 
     for sym in config.symbols:
-        df_sym, stats = _build_symbol_rows(sym, config, context, spy_bars, rng)
+        if decision_ts is not None:
+            df_sym, stats = _build_symbol_rows_at_timestamps(sym, config, context, spy_bars, decision_ts, rng)
+        else:
+            df_sym, stats = _build_symbol_rows(sym, config, context, spy_bars, rng)
         if not df_sym.empty:
             shard = output_dir / f"{sym}.parquet"
             df_sym.to_parquet(shard, index=False)
@@ -394,21 +522,26 @@ def main(argv: Iterable[str] | None = None) -> None:
     parser.add_argument("--output", default=str(OUTPUT_DIR / "train_counterfactual.parquet"))
     parser.add_argument("--metadata-output", default="")
     parser.add_argument("--top500", action="store_true", help="use current S&P 500 symbols")
+    parser.add_argument("--cached-all", action="store_true", help="use every cached *_1m.parquet symbol")
     parser.add_argument("--symbol-limit", type=int, default=25)
     parser.add_argument("--samples-per-symbol", type=int, default=500)
     parser.add_argument("--actions-per-timestamp", type=int, default=6)
     parser.add_argument("--horizons", default=",".join(str(x) for x in DEFAULT_HORIZONS))
+    parser.add_argument("--horizon-mode", choices=["basic", "rich"], default="basic")
+    parser.add_argument("--action-mode", choices=["basic", "rich", "full"], default="basic")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--split", choices=["train", "eval"], default="train")
     parser.add_argument("--context-bars", type=int, default=CONTEXT_BARS)
     parser.add_argument("--allow-download", action="store_true", help="fetch missing symbol bars instead of using cache only")
     parser.add_argument("--shard-by-symbol", action="store_true", help="write one parquet shard per symbol; recommended for large builds")
+    parser.add_argument("--shared-timestamps", action="store_true", help="sample shared decision timestamps so groups rank across symbols")
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     symbols = _load_symbols(
         use_top500=args.top500,
         limit=args.symbol_limit,
         cached_only=not args.allow_download,
+        cached_all=args.cached_all,
     )
     if not symbols:
         raise SystemExit("no symbols available; refresh cache or disable --top500")
@@ -418,7 +551,7 @@ def main(argv: Iterable[str] | None = None) -> None:
         symbols=symbols,
         samples_per_symbol=args.samples_per_symbol,
         seed=args.seed,
-        horizons=_parse_horizons(args.horizons),
+        horizons=list(DEFAULT_HORIZONS_RICH) if args.horizon_mode == "rich" else _parse_horizons(args.horizons),
         actions_per_timestamp=args.actions_per_timestamp,
         use_top500=args.top500,
         symbol_limit=args.symbol_limit,
@@ -426,6 +559,8 @@ def main(argv: Iterable[str] | None = None) -> None:
         split_name=args.split,
         context_bars=args.context_bars,
         output=str(output),
+        action_mode=args.action_mode,
+        shared_timestamps=args.shared_timestamps,
         shard_by_symbol=args.shard_by_symbol,
     )
     if args.shard_by_symbol:

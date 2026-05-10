@@ -35,6 +35,12 @@ TARGET_REGRESSION = [
     "future_alpha_vs_spy",
 ]
 TARGET_CLASSIFICATION = ["profit_label", "beat_spy_label"]
+TARGET_CLIPS = {
+    "portfolio_return": (-1.0, 3.0),
+    "max_drawdown": (-1.0, 0.0),
+    "path_vol": (0.0, 0.20),
+    "future_alpha_vs_spy": (-1.0, 3.0),
+}
 
 
 @dataclass(frozen=True)
@@ -48,9 +54,14 @@ class TrainConfig:
     n_layers: int
     dropout: float
     val_fraction: float
+    val_gap_days: float
     seed: int
     device: str
     limit_rows: int
+    symbol_dropout: float
+    rank_loss_coef: float
+    patience: int
+    min_delta: float
     output: str
 
 
@@ -67,7 +78,8 @@ class PortfolioWorldModel(nn.Module):
         super().__init__()
         sym_dim = min(32, max(8, int(math.ceil(math.sqrt(max(n_symbols, 1))) * 2)))
         action_dim = 8
-        self.symbol_emb = nn.Embedding(n_symbols, sym_dim)
+        self.unk_symbol_id = n_symbols
+        self.symbol_emb = nn.Embedding(n_symbols + 1, sym_dim)
         self.action_emb = nn.Embedding(n_actions, action_dim)
         input_dim = n_features + sym_dim + action_dim
         blocks: list[nn.Module] = []
@@ -83,11 +95,12 @@ class PortfolioWorldModel(nn.Module):
         self.trunk = nn.Sequential(*blocks)
         self.reg_head = nn.Linear(hidden_dim, len(TARGET_REGRESSION))
         self.cls_head = nn.Linear(hidden_dim, len(TARGET_CLASSIFICATION))
+        self.rank_head = nn.Linear(hidden_dim, 1)
 
-    def forward(self, x: torch.Tensor, symbol_id: torch.Tensor, action_id: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor, symbol_id: torch.Tensor, action_id: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         z = torch.cat([x, self.symbol_emb(symbol_id), self.action_emb(action_id)], dim=-1)
         h = self.trunk(z)
-        return self.reg_head(h), self.cls_head(h)
+        return self.reg_head(h), self.cls_head(h), self.rank_head(h).squeeze(-1)
 
 
 def pick_device(requested: str) -> str:
@@ -100,26 +113,46 @@ def pick_device(requested: str) -> str:
     return "cpu"
 
 
-def load_frame(path: Path, limit_rows: int = 0) -> pd.DataFrame:
+def action_keys(df: pd.DataFrame) -> pd.Series:
+    if {"action", "current_position_frac", "target_position_frac"}.issubset(df.columns):
+        current = df["current_position_frac"].astype(float).map(lambda x: f"{x:.2f}")
+        target = df["target_position_frac"].astype(float).map(lambda x: f"{x:.2f}")
+        return df["action"].astype(str) + "|" + current + "->" + target
+    return df["action"].astype(str)
+
+
+def load_frame(path: Path, limit_rows: int = 0, seed: int = 0) -> pd.DataFrame:
+    def sort_cols(frame: pd.DataFrame) -> list[str]:
+        cols = ["decision_timestamp" if "decision_timestamp" in frame.columns else "timestamp"]
+        if "symbol" in frame.columns:
+            cols.append("symbol")
+        return cols
+
     if path.is_dir():
         frames = []
-        remaining = limit_rows
-        for shard in sorted(path.glob("*.parquet")):
+        shards = sorted(path.glob("*.parquet"))
+        if limit_rows > 0 and shards:
+            per_shard = max(1, int(math.ceil(limit_rows / len(shards))))
+        else:
+            per_shard = 0
+        for shard_idx, shard in enumerate(shards):
             df = pd.read_parquet(shard)
             if limit_rows > 0:
-                if remaining <= 0:
-                    break
-                df = df.head(remaining)
-                remaining -= len(df)
+                n = min(per_shard, len(df))
+                if n < len(df):
+                    df = df.sample(n=n, random_state=seed + shard_idx).sort_values(sort_cols(df))
             frames.append(df)
         if not frames:
             raise RuntimeError(f"no parquet shards found under {path}")
-        return pd.concat(frames, ignore_index=True)
+        out = pd.concat(frames, ignore_index=True)
+        if limit_rows > 0 and len(out) > limit_rows:
+            out = out.sample(n=limit_rows, random_state=seed).sort_values(sort_cols(out))
+        return out.reset_index(drop=True)
     df = pd.read_parquet(path)
     return df.head(limit_rows) if limit_rows > 0 else df
 
 
-def make_matrices(df: pd.DataFrame, val_fraction: float) -> dict:
+def make_matrices(df: pd.DataFrame, val_fraction: float, val_gap_days: float) -> dict:
     feature_cols = [
         c for c in df.columns
         if c.startswith("feat_") or c.startswith("state_")
@@ -136,14 +169,17 @@ def make_matrices(df: pd.DataFrame, val_fraction: float) -> dict:
     feature_cols = [c for c in feature_cols if c in df.columns]
 
     symbols = sorted(df["symbol"].astype(str).unique().tolist())
-    actions = sorted(df["action"].astype(str).unique().tolist())
+    action_key = action_keys(df)
+    actions = sorted(action_key.unique().tolist())
     sym_to_id = {s: i for i, s in enumerate(symbols)}
     action_to_id = {a: i for i, a in enumerate(actions)}
 
-    timestamps = pd.to_datetime(df["timestamp"], utc=True)
+    time_col = "decision_timestamp" if "decision_timestamp" in df.columns else "timestamp"
+    timestamps = pd.to_datetime(df[time_col], utc=True)
     cutoff = timestamps.quantile(max(0.0, min(1.0, 1.0 - val_fraction)))
-    train_mask = (timestamps <= cutoff).to_numpy()
-    val_mask = ~train_mask
+    train_cutoff = cutoff - pd.Timedelta(days=max(0.0, val_gap_days))
+    train_mask = (timestamps <= train_cutoff).to_numpy()
+    val_mask = (timestamps > cutoff).to_numpy()
     if val_mask.sum() == 0:
         rng = np.random.default_rng(0)
         val_mask = rng.random(len(df)) < val_fraction
@@ -156,10 +192,22 @@ def make_matrices(df: pd.DataFrame, val_fraction: float) -> dict:
     if "price" in feature_cols:
         x[:, feature_cols.index("price")] = np.log1p(np.maximum(x[:, feature_cols.index("price")], 0.0))
 
-    y_reg = df[TARGET_REGRESSION].replace([np.inf, -np.inf], np.nan).fillna(0.0).to_numpy(np.float32)
+    y_reg_df = df[TARGET_REGRESSION].replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    for col, (lo, hi) in TARGET_CLIPS.items():
+        if col in y_reg_df.columns:
+            y_reg_df[col] = y_reg_df[col].clip(lo, hi)
+    y_reg = y_reg_df.to_numpy(np.float32)
     y_cls = df[TARGET_CLASSIFICATION].astype(np.float32).to_numpy(np.float32)
+    group_key = (
+        df[time_col].astype(str)
+        + "|"
+        + df["horizon_bars"].astype(str)
+    )
+    rank_pct = df.groupby(group_key)["portfolio_return"].rank(pct=True, method="average").to_numpy(np.float32)
+    y_rank = (rank_pct >= 0.75).astype(np.float32)
+    group_id = pd.factorize(group_key, sort=False)[0].astype(np.int64)
     symbol_id = df["symbol"].astype(str).map(sym_to_id).to_numpy(np.int64)
-    action_id = df["action"].astype(str).map(action_to_id).to_numpy(np.int64)
+    action_id = action_key.map(action_to_id).to_numpy(np.int64)
 
     x_mean = x[train_mask].mean(axis=0)
     x_std = x[train_mask].std(axis=0)
@@ -179,9 +227,12 @@ def make_matrices(df: pd.DataFrame, val_fraction: float) -> dict:
         "y_reg": y_reg_scaled,
         "y_reg_raw": y_reg,
         "y_cls": y_cls,
+        "y_rank": y_rank,
+        "group_id": group_id,
         "train_mask": train_mask,
         "val_mask": val_mask,
         "feature_cols": feature_cols,
+        "time_col": time_col,
         "symbols": symbols,
         "actions": actions,
         "x_mean": x_mean,
@@ -199,6 +250,8 @@ def tensor_dataset(mats: dict, mask: np.ndarray) -> TensorDataset:
         torch.from_numpy(mats["action_id"][idx]),
         torch.from_numpy(mats["y_reg"][idx]),
         torch.from_numpy(mats["y_cls"][idx]),
+        torch.from_numpy(mats["y_rank"][idx]),
+        torch.from_numpy(mats["group_id"][idx]),
         torch.from_numpy(mats["y_reg_raw"][idx]),
     )
 
@@ -211,25 +264,28 @@ def evaluate(
     y_std: np.ndarray,
 ) -> dict[str, float]:
     model.eval()
-    losses, mae_raw, bce_losses = [], [], []
+    losses, mae_raw, bce_losses, rank_losses = [], [], [], []
     correct_profit = correct_spy = total = 0
     mse = nn.MSELoss(reduction="mean")
     bce = nn.BCEWithLogitsLoss(reduction="mean")
     y_mean_t = torch.from_numpy(y_mean).to(device)
     y_std_t = torch.from_numpy(y_std).to(device)
     with torch.no_grad():
-        for xb, sid, aid, yreg, ycls, yraw in loader:
+        for xb, sid, aid, yreg, ycls, yrank, _gid, yraw in loader:
             xb = xb.to(device)
             sid = sid.to(device)
             aid = aid.to(device)
             yreg = yreg.to(device)
             ycls = ycls.to(device)
             yraw = yraw.to(device)
-            pred_reg, pred_cls = model(xb, sid, aid)
+            yrank = yrank.to(device)
+            pred_reg, pred_cls, pred_rank = model(xb, sid, aid)
             reg_loss = mse(pred_reg, yreg)
             cls_loss = bce(pred_cls, ycls)
-            losses.append(float((reg_loss + 0.5 * cls_loss).item()))
+            rank_loss = bce(pred_rank, yrank)
+            losses.append(float((reg_loss + 0.5 * cls_loss + rank_loss).item()))
             bce_losses.append(float(cls_loss.item()))
+            rank_losses.append(float(rank_loss.item()))
             pred_raw = pred_reg * y_std_t + y_mean_t
             mae_raw.append(torch.mean(torch.abs(pred_raw - yraw), dim=0).detach().cpu().numpy())
             probs = torch.sigmoid(pred_cls)
@@ -240,6 +296,7 @@ def evaluate(
     return {
         "loss": float(np.mean(losses)) if losses else 0.0,
         "bce": float(np.mean(bce_losses)) if bce_losses else 0.0,
+        "rank_bce": float(np.mean(rank_losses)) if rank_losses else 0.0,
         "mae_portfolio_return": float(mae[0]),
         "mae_max_drawdown": float(mae[1]),
         "mae_path_vol": float(mae[2]),
@@ -254,8 +311,8 @@ def train(config: TrainConfig) -> dict:
     np.random.seed(config.seed)
     device = pick_device(config.device)
     started = time.time()
-    df = load_frame(Path(config.data), config.limit_rows)
-    mats = make_matrices(df, config.val_fraction)
+    df = load_frame(Path(config.data), config.limit_rows, seed=config.seed)
+    mats = make_matrices(df, config.val_fraction, config.val_gap_days)
     train_ds = tensor_dataset(mats, mats["train_mask"])
     val_ds = tensor_dataset(mats, mats["val_mask"])
     pin_memory = device == "cuda"
@@ -282,18 +339,27 @@ def train(config: TrainConfig) -> dict:
     best_loss = float("inf")
     best_epoch = 0
     best_state: dict[str, torch.Tensor] | None = None
+    stale_epochs = 0
     for epoch in range(config.epochs):
         model.train()
         train_losses = []
-        for xb, sid, aid, yreg, ycls, _yraw in train_loader:
+        for xb, sid, aid, yreg, ycls, yrank, _gid, _yraw in train_loader:
             xb = xb.to(device)
             sid = sid.to(device)
             aid = aid.to(device)
             yreg = yreg.to(device)
             ycls = ycls.to(device)
+            yrank = yrank.to(device)
+            if config.symbol_dropout > 0:
+                mask = torch.rand_like(sid.float()) < config.symbol_dropout
+                sid = sid.masked_fill(mask, model.unk_symbol_id)
             opt.zero_grad(set_to_none=True)
-            pred_reg, pred_cls = model(xb, sid, aid)
-            loss = mse(pred_reg, yreg) + 0.5 * bce(pred_cls, ycls)
+            pred_reg, pred_cls, pred_rank = model(xb, sid, aid)
+            loss = (
+                mse(pred_reg, yreg)
+                + 0.5 * bce(pred_cls, ycls)
+                + config.rank_loss_coef * bce(pred_rank, yrank)
+            )
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
@@ -312,10 +378,16 @@ def train(config: TrainConfig) -> dict:
             f"profit_acc={row['profit_accuracy']:.3f} beat_spy_acc={row['beat_spy_accuracy']:.3f}",
             flush=True,
         )
-        if row["loss"] < best_loss:
+        if row["loss"] < best_loss - config.min_delta:
             best_loss = row["loss"]
             best_epoch = epoch + 1
             best_state = copy.deepcopy({k: v.detach().cpu() for k, v in model.state_dict().items()})
+            stale_epochs = 0
+        else:
+            stale_epochs += 1
+            if config.patience > 0 and stale_epochs >= config.patience:
+                print(f"[world-train] early stop after {epoch+1} epochs (best={best_epoch})", flush=True)
+                break
 
     output = Path(config.output)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -369,9 +441,14 @@ def main() -> None:
     parser.add_argument("--n-layers", type=int, default=4)
     parser.add_argument("--dropout", type=float, default=0.10)
     parser.add_argument("--val-fraction", type=float, default=0.20)
+    parser.add_argument("--val-gap-days", type=float, default=7.0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default=os.environ.get("WORLD_MODEL_DEVICE", "auto"))
     parser.add_argument("--limit-rows", type=int, default=0)
+    parser.add_argument("--symbol-dropout", type=float, default=0.10)
+    parser.add_argument("--rank-loss-coef", type=float, default=0.50)
+    parser.add_argument("--patience", type=int, default=2)
+    parser.add_argument("--min-delta", type=float, default=1e-4)
     parser.add_argument("--output", default=str(CHECKPOINT_DIR / "world_model_v1.pt"))
     args = parser.parse_args()
     train(TrainConfig(**vars(args)))

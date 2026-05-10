@@ -25,11 +25,20 @@ At timestamp t, for symbol S, if the portfolio currently has position p and
 we change it to target position q, what happens over horizon H?
 ```
 
-The action space in v1 is intentionally simple:
+The initial action space was intentionally simple:
 
 - `hold`: keep 0%, 5%, 10%, or 20% exposure.
 - `buy`: move from 0% or small exposure to 5%, 10%, or 20%.
 - `sell`: move from 5%, 10%, or 20% exposure to cash.
+
+Later iterations add two larger grids:
+
+- `rich`: 0%, 2%, 5%, 10%, 15%, 20%, and 30% target exposures.
+- `full`: 0%, 5%, 10%, 25%, 50%, 75%, and 100% target exposures.
+
+Use `--action-mode full` when the goal is to decide whether to deploy capital
+into one symbol and compare against SPY. The capped grids can find alpha, but
+they are structurally disadvantaged against a full-SPY benchmark.
 
 Fees and slippage use the same constants as the frozen simulator.
 
@@ -70,6 +79,16 @@ For each action and horizon, the builder computes realized outcomes:
 
 These targets let us train value, risk, and ranking heads. The eventual world
 model should predict a distribution of outcomes, not just one expected return.
+
+Training clips regression targets to robust ranges before normalization:
+
+- `portfolio_return`: -100% to +300%
+- `max_drawdown`: -100% to 0%
+- `path_vol`: 0% to 20%
+- `future_alpha_vs_spy`: -100% to +300%
+
+The same clips are applied to predictions during planner evaluation. This keeps
+bad adjusted-price artifacts from dominating the score.
 
 ## Example
 
@@ -149,6 +168,87 @@ Training losses:
 The first benchmark should be simple: each week, score candidate buy-and-hold
 actions for the next week and compare the selected basket against SPY and the
 old top20 picker.
+
+## Current World-Model Iteration
+
+The current pipeline is a separate action-conditioned world model, not the old
+forecaster. Important changes:
+
+- Sharded counterfactual datasets can use every cached symbol with `--cached-all`.
+- Shared decision timestamps are enabled with `--shared-timestamps`, so rank
+  labels and planner choices compare symbols/actions at the same market moment.
+- Rich horizons are enabled with `--horizon-mode rich`:
+  15, 30, 60, 120, 240, 390, 780, 1170, 1950, 3900, and 7800 bars.
+- The trainer uses symbol dropout, a rank top-quartile head, a validation gap,
+  early stopping, balanced shard sampling, and robust target clipping.
+- Action embeddings use full transition keys such as `buy|0.00->1.00`, not only
+  the coarse `buy`, `sell`, and `hold` labels.
+- The evaluator supports balanced sampled evaluation and cash thresholding.
+
+Datasets built locally:
+
+| dataset | rows | symbols | action mode | timestamps | size |
+|---|---:|---:|---|---:|---:|
+| `cached193_shared_rich_counterfactual` | 6,077,544 | 193 | `rich` | 250 | 338 MB |
+| `cached193_shared1000_rich_counterfactual` | 16,263,368 | 193 | `rich` | 1,000 | 979 MB |
+| `cached193_shared500_full_counterfactual` | 12,203,532 | 193 | `full` | 500 | 681 MB |
+
+Best current checkpoint:
+
+```text
+checkpoints/world_model/world_model_full500_8m_actionkey.pt
+```
+
+It was trained on a balanced 8M-row sample from the full-action dataset:
+
+```bash
+.venv/bin/python train_world_model.py \
+  --data data/world_model/cached193_shared500_full_counterfactual \
+  --limit-rows 8000000 \
+  --epochs 12 \
+  --batch-size 32768 \
+  --hidden-dim 384 \
+  --n-layers 4 \
+  --dropout 0.30 \
+  --lr 1e-4 \
+  --weight-decay 1e-3 \
+  --symbol-dropout 0.20 \
+  --rank-loss-coef 0.75 \
+  --patience 4 \
+  --val-gap-days 14 \
+  --output checkpoints/world_model/world_model_full500_8m_actionkey.pt
+```
+
+Best validation epoch:
+
+- epoch: 4
+- train rows: 6,306,663
+- validation rows: 1,584,536
+- validation groups: 1,177
+- action categories: 49 transition keys
+- profit-label accuracy: 58.3%
+- beat-SPY-label accuracy: 57.7%
+- device: Apple MPS
+
+Planner result:
+
+| selector | groups | mean return | mean PnL | profit rate | beat-SPY rate | mean alpha vs SPY |
+|---|---:|---:|---:|---:|---:|---:|
+| world-model planner | 1,177 | +0.018575 | $+928.77 | 56.0% | 53.4% | +0.017090 |
+| q50 threshold planner | 589 | +0.035727 | $+1,786.36 | 56.5% | 54.3% | +0.035373 |
+| q70 threshold planner | 353 | +0.052078 | $+2,603.92 | 56.9% | 55.5% | +0.056499 |
+| q95 threshold planner | 59 | +0.149285 | $+7,464.26 | 61.0% | 66.1% | +0.183409 |
+| buy-only planner | 1,177 | +0.019118 | $+955.89 | 55.0% | 52.9% | +0.016535 |
+| random candidate | 1,177 | +0.001563 | $+78.17 | 44.8% | 41.5% | -0.002412 |
+| oracle candidate | 1,177 | +0.155908 | $+7,795.42 | 100.0% | 99.7% | +0.149831 |
+
+Interpretation: this is the first iteration that beats random and beats SPY on
+the validation candidate groups. The q50/q70 threshold planners are the most
+interesting operating points so far. It is promising, but not yet
+"tradable-ready": the validation sample is still in-sample to model selection,
+the strategy needs walk-forward evaluation on untouched dates, and
+portfolio-level sizing across multiple simultaneous symbols is not implemented
+yet.
 
 ## First Trained Model
 
