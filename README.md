@@ -106,7 +106,8 @@ Current tuned defaults:
 The current direction is to stop stretching the old forecaster and build a
 separate action-conditioned portfolio world model. The first artifact is the
 counterfactual dataset builder in `world_model_dataset.py`; see
-`docs/world_model_dataset.md`.
+`docs/world_model_dataset.md`. The first baseline model is trained by
+`train_world_model.py` and predicts action-conditioned portfolio outcomes.
 
 ## Reading the charts
 

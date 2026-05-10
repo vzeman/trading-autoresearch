@@ -149,3 +149,46 @@ Training losses:
 The first benchmark should be simple: each week, score candidate buy-and-hold
 actions for the next week and compare the selected basket against SPY and the
 old top20 picker.
+
+## First Trained Model
+
+The first baseline trainer is `train_world_model.py`. It trains a compact
+tabular action-conditioned model:
+
+- symbol embedding
+- action embedding
+- normalized market/portfolio state features
+- MLP latent trunk
+- regression heads for return, drawdown, volatility, and alpha
+- classification heads for profit and beat-SPY labels
+
+Training command:
+
+```bash
+.venv/bin/python train_world_model.py \
+  --data data/world_model/top100_train_counterfactual \
+  --epochs 12 \
+  --batch-size 8192 \
+  --hidden-dim 256 \
+  --n-layers 4 \
+  --dropout 0.10 \
+  --output checkpoints/world_model/world_model_v1.pt
+```
+
+Local training result:
+
+- rows: 800,000
+- train rows: 640,000
+- validation rows: 160,000
+- device: Apple MPS
+- elapsed: 64.7 seconds
+- best epoch: 2
+- best validation loss: 1.0979
+- validation MAE portfolio return: 0.002119
+- validation MAE max drawdown: 0.001421
+- validation MAE future alpha vs SPY: 0.023300
+- profit-label accuracy: 67.1%
+- beat-SPY-label accuracy: 59.0%
+
+The trainer saves the best validation epoch, not the final epoch, because this
+first model overfits after epoch 2.
