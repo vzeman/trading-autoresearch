@@ -199,3 +199,4 @@ cb9f0cf	0.9386	-1.7702	-9.79	3321.83	1	discard	exp206: SPY one day timing canoni
 bd7e814	-0.8299	-2.5944	-19.00	-3008.23	9	discard	exp207: top100 LeWorld JEPA, canonical score top10 SPY-trend; top20 diagnostic beat SPY	1.825
 d532e36	0.6031	-1.7095	-2.62	391.01	19	discard	exp208a: top100 LeWorld JEPA cached top20 canonical after temporal continuation	25.620
 d532e36	0.4963	-1.7775	-2.64	312.91	19	discard	exp208b: top100 cross-symbol hard JEPA top20 canonical	26.817
+bf1bed0	0.8558	-1.4460	-2.15	548.02	19	discard	exp209: one-seed MPS long mixed JEPA top20 canonical	35.165

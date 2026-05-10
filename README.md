@@ -16,34 +16,34 @@ The autoresearch driver writes a fresh per-iteration report under [`iterations/`
 
 <!-- LATEST_ITER_START -->
 
-_Last iteration: **2026-05-09 11:48 UTC** · `d532e36` · 🔴 DISCARD_
-📄 **[Full iteration report → iterations/iter_208_d532e36.md](iterations/iter_208_d532e36.md)** · 📁 [all iterations](iterations/)
+_Last iteration: **2026-05-10 16:09 UTC** · `bf1bed0` · 🔴 DISCARD_
+📄 **[Full iteration report → iterations/iter_209_bf1bed0.md](iterations/iter_209_bf1bed0.md)** · 📁 [all iterations](iterations/)
 
-### Latest iteration: iter 208 — d532e36
+### Latest iteration: iter 209 — bf1bed0
 
-🔴 DISCARD · exp208b: top100 cross-symbol hard JEPA top20 canonical
+🔴 DISCARD · exp209: one-seed MPS long mixed JEPA top20 canonical
 
 | metric | value |
 |---|---|
-| Sharpe (median) | **+0.496** |
-| Sharpe CI low (5%) | -1.777 |
-| % time above SPY | 26.817% |
-| Net PnL | **$+312.91** (+0.626%) |
-| Max drawdown | -2.64% |
+| Sharpe (single seed) | **+0.856** |
+| Sharpe CI low (bootstrap) | -1.446 |
+| % time above SPY | 35.165% |
+| Net PnL | **$+548.02** (+1.096%) |
+| Max drawdown | -2.15% |
 | Trades | 19 |
-| Wall time | 1112.7s |
+| Wall time | 2957.6s |
 
 ### SPY Benchmark
 
 | strategy | Sharpe | PnL | Max DD |
 |---|---:|---:|---:|
-| Cross-symbol hard-JEPA top20 canonical | +0.496 | $+312.91 | -2.64% |
+| MPS long mixed-JEPA top20 canonical | +0.856 | $+548.02 | -2.15% |
 | SPY buy-and-hold benchmark | +1.008 | $+3,581.80 | -9.79% |
-| Cached top20 after temporal JEPA | +0.603 median | +$391.01 median | -2.62% |
+| Previous cross-symbol hard-JEPA top20 | +0.496 median | +$312.91 median | -2.64% |
 
-Cross-symbol hard JEPA made all three top20 canonical seeds profitable, including the previously weak seed, but the median result still lost to SPY on Sharpe and PnL. The next best JEPA target is likely `mixed`: preserve same-symbol temporal dynamics in half the batch and force cross-symbol inference in the other half.
+MPS made the longer base-training run practical. Five mixed-JEPA epochs plus five supervised/ranking epochs improved the exploratory single-seed result, but this is not a robustness claim yet and still lost to SPY on Sharpe and PnL.
 
-![iteration equity](docs/weighted_d532e36.png)
+![iteration equity](docs/weighted_bf1bed0.png)
 
 ### Current best (`f9dfd67`)
 
@@ -249,7 +249,7 @@ Validated: peak per-process RSS dropped from ~100 GB to **3.3 GB** at full scale
 
 ## Honest limitations
 
-1. **CPU-only** at this scale — MPS launches add overhead that the small per-step batches (≤20 symbols) can't amortize. Each iteration ~30 min on an M-series Mac.
+1. **Device-dependent speed** — tiny online/eval batches can still favor CPU, but the larger JEPA/supervised pretraining batches now work well on Apple MPS when `TRY_MPS=1` is enabled.
 2. **No live trading** — paper broker only. Wiring to a real broker is left to the reader.
 3. **1-minute bars are coarse** — extends to seconds with a paid feed.
 4. **Eval window is 90 days** — statistical power is finite; treat any single overnight result as exploratory.
@@ -266,8 +266,8 @@ MIT — copy, fork, modify, anything.
 
 <!-- RESULTS_START -->
 
-_Last updated: 2026-05-09 11:48 UTC_
-_Total experiments: **94**  ·  kept: **38**  ·  latest commit: `d532e36`_
+_Last updated: 2026-05-10 16:09 UTC_
+_Total experiments: **95**  ·  kept: **38**  ·  latest commit: `bf1bed0`_
 
 ### Canonical top20 picker — full eval window (~73 days)
 
@@ -281,7 +281,7 @@ _Total experiments: **94**  ·  kept: **38**  ·  latest commit: `d532e36`_
 
 | Strategy | Sharpe | Net PnL | PnL % | Max DD % | Trades | Fees | % time > SPY |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Canonical top20 picker after cross-symbol hard JEPA | +0.496 | $+312.91 | +0.626% | **-2.64%** 🏆 | 19 | $19.00 | **27%** 🏆 |
+| MPS long mixed-JEPA top20 canonical | +0.856 | $+548.02 | +1.096% | **-2.15%** 🏆 | 19 | $19.00 | **35%** 🏆 |
 | **SP500 (SPY) buy-and-hold** — passive benchmark | **+1.008** 🏆 | **$+3,581.80** 🏆 | +7.164% | -9.79% | 1 | **$1.00** 🏆 | 0% |
 
 **Best by Sharpe:** **SP500 (SPY) buy-and-hold** — passive benchmark
@@ -290,13 +290,13 @@ _Total experiments: **94**  ·  kept: **38**  ·  latest commit: `d532e36`_
 
 | metric | value |
 |---|---|
-| Sharpe (median over seeds) | **+0.496** |
-| Net PnL | $+312.91 (+0.626%) |
-| Max drawdown | -2.64% |
+| Sharpe (median over seeds) | **+0.856** |
+| Net PnL | $+548.02 (+1.096%) |
+| Max drawdown | -2.15% |
 | Trades | 19 |
-| % time above SPY | 27% |
-| Wall time | 1112.7s |
-| Seeds completed | 3 |
+| % time above SPY | 35% |
+| Wall time | 2957.6s |
+| Seeds completed | 1 |
 
 ### Progress over all experiments
 
