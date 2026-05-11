@@ -18,32 +18,59 @@ The builder lives in `world_model_dataset.py` and writes parquet files under
 
 ## Current Read-First Status
 
-As of 2026-05-11, the best local direction is still the plain intraday-120
-action-conditioned model, not the cross-sectional or narrower horizon
-specialists.
+As of 2026-05-11, the best local direction is the plain intraday-120
+action-conditioned world model plus a second-stage allocator/ranker. The
+cross-sectional and narrower horizon specialists are not champions.
 
-Current champion checkpoint:
+Current base world-model checkpoint:
 
 ```text
 checkpoints/world_model/world_model_full500_intraday120_8m_actionkey.pt
 ```
 
-Untouched eval result on `cached193_eval_shared250_full_counterfactual` with
+Best allocator checkpoints:
+
+```text
+checkpoints/world_model/allocator_intraday120_q80.pt
+checkpoints/world_model/allocator_intraday120_q90.pt
+```
+
+The allocator is trained by `train_allocator.py`. It scores candidate rows with
+the frozen world model, then learns a compact planner score from predicted
+outcomes plus action/portfolio metadata. It does not train on the untouched eval
+split.
+
+Untouched base world-model eval result on
+`cached193_eval_shared250_full_counterfactual` with
 `--max-horizon-bars 120`:
 
 | selector | groups | mean return | profit rate | beat-SPY rate | mean alpha vs SPY |
 |---|---:|---:|---:|---:|---:|
 | forced planner | 1000 | +0.001974 | 51.7% | 51.3% | +0.001630 |
-| planner q80 | 200 | +0.005555 | 60.5% | 58.5% | +0.004511 |
-| planner q85 | 150 | +0.006954 | 62.7% | 61.3% | +0.006069 |
+| fixed-score q80 | 200 | +0.005555 | 60.5% | 58.5% | +0.004511 |
+| fixed-score q85 | 150 | +0.006954 | 62.7% | 61.3% | +0.006069 |
 | buy-only | 1000 | +0.001977 | n/a | 52.2% | n/a |
 | random | 1000 | +0.000021 | n/a | 45.4% | n/a |
 
-Interpretation: this is a real improvement over random on an untouched split,
-but it is not deployment-ready. The q80/q85 slices are the most interesting
-signals so far. Do not claim the model can reliably beat SPY in live trading
-until it survives walk-forward evaluation, transaction-cost stress, liquidity
-filters, and a locked final test period.
+Allocator untouched eval results:
+
+| allocator | selector | groups | mean return | profit rate | beat-SPY rate | mean alpha vs SPY |
+|---|---|---:|---:|---:|---:|---:|
+| q80-label allocator | forced planner | 1000 | +0.001457 | 51.0% | 51.3% | +0.001440 |
+| q80-label allocator | q80 | 200 | +0.005947 | 63.0% | 59.5% | +0.006031 |
+| q80-label allocator | q90 | 100 | +0.009776 | 69.0% | 66.0% | +0.010586 |
+| q80-label allocator | q95 | 50 | +0.013363 | 76.0% | 72.0% | +0.013620 |
+| q90-label allocator | forced planner | 1000 | +0.000450 | 52.7% | 52.3% | +0.000506 |
+| q90-label allocator | q80 | 200 | +0.006515 | 63.0% | 61.5% | +0.006214 |
+| q90-label allocator | q90 | 100 | +0.009726 | 73.0% | 69.0% | +0.009925 |
+| q90-label allocator | q95 | 50 | +0.010786 | 72.0% | 68.0% | +0.010702 |
+
+Interpretation: this is the strongest result so far. The q80-label allocator
+has the best ultra-selective q95 return/beat-SPY slice; the q90-label allocator
+is stronger around q80/q90 and has better broad beat-SPY rates. This is still
+not deployment-ready. Do not claim the model can reliably beat SPY in live
+trading until it survives walk-forward evaluation, transaction-cost stress,
+liquidity filters, max-position/cash behavior, and a locked final test period.
 
 Recent follow-up iterations:
 
@@ -54,12 +81,13 @@ Recent follow-up iterations:
 | Score tuner | `tune_planner_score.py` on the intraday-120 model | fixed tuned planner +0.001190, beat-SPY 51.7%; worse than the original fixed planner and q80/q85 | keep as diagnostic, not champion |
 | Horizon specialist 30-60 | `world_model_full500_h30_60_8m_actionkey.pt` | forced planner +0.001527, beat-SPY 49.0%; q60 +0.003254, beat-SPY 49.5% | not champion |
 | Horizon specialist 15-30 | `world_model_full500_h15_30_8m_actionkey.pt` | forced planner +0.000047, beat-SPY 47.8%; q95 +0.004248, beat-SPY 68.0% over only 25 groups | not champion, maybe useful as a selective sub-signal |
+| Second-stage allocator | `allocator_intraday120_q80.pt`, `allocator_intraday120_q90.pt` | q80/q90/q95 threshold slices improved over the fixed planner | current best direction |
 
 Recommended next experiments:
 
 - Use walk-forward model selection before touching the final eval split again.
-- Train separate allocator/ranker heads for q80/q85 style selection instead of
-  relying on the fixed planner score.
+- Extend `train_allocator.py` with walk-forward folds and a locked threshold
+  chosen on validation only.
 - Add peer/market context more carefully: prune xsec features, add sector/peer
   ranks, and test them behind walk-forward validation.
 - Stress every candidate with fees, slippage, liquidity, max-position, and
