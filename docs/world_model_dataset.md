@@ -371,6 +371,52 @@ finished trading model. The next step should split intraday, one-day, and
 multi-day horizons into separate planners and train the abstention threshold on
 walk-forward validation only.
 
+## Short-Horizon Fine-Tune
+
+The short-horizon checkpoint was fine-tuned for 5 more low-learning-rate epochs:
+
+```bash
+.venv/bin/python train_world_model.py \
+  --data data/world_model/cached193_shared500_full_counterfactual \
+  --limit-rows 8000000 \
+  --max-horizon-bars 390 \
+  --epochs 5 \
+  --batch-size 32768 \
+  --hidden-dim 384 \
+  --n-layers 4 \
+  --dropout 0.30 \
+  --lr 3e-5 \
+  --weight-decay 1e-3 \
+  --symbol-dropout 0.20 \
+  --rank-loss-coef 0.75 \
+  --patience 3 \
+  --val-gap-days 14 \
+  --init-checkpoint checkpoints/world_model/world_model_full500_short_8m_actionkey.pt \
+  --output checkpoints/world_model/world_model_full500_short_8m_actionkey_ft5.pt
+```
+
+Fine-tune result:
+
+- best extra epoch: 2
+- best validation loss: 1.3701
+- validation profit accuracy: 59.6%
+- validation beat-SPY accuracy: 55.9%
+
+Untouched eval result:
+
+| selector | groups | mean return | mean PnL | profit rate | beat-SPY rate | mean alpha vs SPY |
+|---|---:|---:|---:|---:|---:|---:|
+| fine-tuned planner | 1,500 | +0.001050 | $+52.50 | 49.7% | 51.2% | +0.000905 |
+| q80 threshold planner | 300 | +0.003406 | $+170.28 | 53.7% | 52.0% | +0.003152 |
+| q95 threshold planner | 75 | +0.007071 | $+353.54 | 61.3% | 57.3% | +0.005581 |
+| buy-only planner | 1,500 | +0.001342 | $+67.10 | 51.3% | 51.3% | +0.001343 |
+| random candidate | 1,500 | -0.000030 | $-1.49 | 40.1% | 46.1% | -0.000400 |
+
+Interpretation: the fine-tune slightly improved the forced planner mean return
+but weakened the thresholded high-confidence slices compared with the previous
+short-horizon checkpoint. Keep `world_model_full500_short_8m_actionkey.pt` as
+the safer baseline for now.
+
 ## First Trained Model
 
 The first baseline trainer is `train_world_model.py`. It trains a compact

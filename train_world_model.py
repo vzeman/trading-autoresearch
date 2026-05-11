@@ -64,6 +64,7 @@ class TrainConfig:
     rank_loss_coef: float
     patience: int
     min_delta: float
+    init_checkpoint: str
     output: str
 
 
@@ -334,6 +335,18 @@ def train(config: TrainConfig) -> dict:
         n_layers=config.n_layers,
         dropout=config.dropout,
     ).to(device)
+    if config.init_checkpoint:
+        ckpt = torch.load(config.init_checkpoint, map_location="cpu", weights_only=False)
+        expected = {
+            "feature_cols": mats["feature_cols"],
+            "symbols": mats["symbols"],
+            "actions": mats["actions"],
+        }
+        for key, value in expected.items():
+            if list(ckpt.get(key, [])) != list(value):
+                raise RuntimeError(f"init checkpoint {key} does not match current training data")
+        model.load_state_dict(ckpt["state_dict"])
+        print(f"[world-train] initialized from {config.init_checkpoint}", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
     mse = nn.MSELoss(reduction="mean")
     bce = nn.BCEWithLogitsLoss(reduction="mean")
@@ -417,6 +430,7 @@ def train(config: TrainConfig) -> dict:
         "elapsed_seconds": time.time() - started,
         "best_val_loss": best_loss,
         "best_epoch": best_epoch,
+        "init_checkpoint": config.init_checkpoint,
     }
     torch.save(payload, output)
     metrics = {
@@ -461,6 +475,7 @@ def main() -> None:
     parser.add_argument("--rank-loss-coef", type=float, default=0.50)
     parser.add_argument("--patience", type=int, default=2)
     parser.add_argument("--min-delta", type=float, default=1e-4)
+    parser.add_argument("--init-checkpoint", default="")
     parser.add_argument("--output", default=str(CHECKPOINT_DIR / "world_model_v1.pt"))
     args = parser.parse_args()
     train(TrainConfig(**vars(args)))
