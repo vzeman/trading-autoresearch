@@ -45,6 +45,11 @@ It chooses a score threshold from calibration/past windows only, then applies
 that threshold to the next window. This is more realistic than choosing q80/q90
 after seeing the full final eval split.
 
+True walk-forward retraining is evaluated by `retrain_walk_forward_allocator.py`.
+For each fold it trains a fresh allocator on calibration plus earlier observed
+folds only, chooses a threshold from those past rows, then applies both the
+allocator and threshold to the next fold.
+
 Untouched base world-model eval result on
 `cached193_eval_shared250_full_counterfactual` with
 `--max-horizon-bars 120`:
@@ -96,6 +101,19 @@ more trades and still positive walk-forward return. The q90-label allocator
 cash-return policy has the best return-with-cash, but it trades broader and has
 lower active return than q80/hybrid.
 
+True walk-forward retraining results with 3 epochs per fold:
+
+| top-label | objective | active groups | coverage | mean active return | active beat-SPY | return with cash |
+|---|---|---:|---:|---:|---:|---:|
+| q80 | hybrid | 156 | 15.6% | +0.007564 | 59.0% | +0.001180 |
+| q90 | hybrid | 145 | 14.5% | +0.006496 | 58.6% | +0.000942 |
+
+Interpretation: true retraining improved the practical q80/hybrid policy over
+threshold-only walk-forward. This is the current best candidate policy. Fold 2
+remains weak in both q80 and q90 variants, so the next work should focus on
+regime filters, position sizing, and drawdown-aware thresholding rather than
+only increasing epochs.
+
 Recent follow-up iterations:
 
 | iteration | checkpoint/script | untouched eval readout | decision |
@@ -107,11 +125,13 @@ Recent follow-up iterations:
 | Horizon specialist 15-30 | `world_model_full500_h15_30_8m_actionkey.pt` | forced planner +0.000047, beat-SPY 47.8%; q95 +0.004248, beat-SPY 68.0% over only 25 groups | not champion, maybe useful as a selective sub-signal |
 | Second-stage allocator | `allocator_intraday120_q80.pt`, `allocator_intraday120_q90.pt` | q80/q90/q95 threshold slices improved over the fixed planner | current best direction |
 | Walk-forward thresholding | `walk_forward_allocator.py` | q80/hybrid: +0.006903 active return, 60.1% beat-SPY, 14.3% coverage | current practical policy candidate |
+| True walk-forward retraining | `retrain_walk_forward_allocator.py` | q80/hybrid: +0.007564 active return, 59.0% beat-SPY, 15.6% coverage | current best practical policy |
 
 Recommended next experiments:
 
-- Move from threshold-only walk-forward to true walk-forward retraining, where
-  each fold trains a fresh allocator using only past data.
+- Add regime filters and drawdown-aware position sizing to reduce weak folds.
+- Run longer per-fold allocator training only after the regime filter is in
+  place, because the weak fold pattern is probably data/regime-driven.
 - Add peer/market context more carefully: prune xsec features, add sector/peer
   ranks, and test them behind walk-forward validation.
 - Stress every candidate with fees, slippage, liquidity, max-position, and
