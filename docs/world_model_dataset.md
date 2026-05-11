@@ -16,6 +16,55 @@ market state + portfolio state + action + horizon -> future portfolio outcome
 The builder lives in `world_model_dataset.py` and writes parquet files under
 `data/world_model/`, which is gitignored.
 
+## Current Read-First Status
+
+As of 2026-05-11, the best local direction is still the plain intraday-120
+action-conditioned model, not the cross-sectional or narrower horizon
+specialists.
+
+Current champion checkpoint:
+
+```text
+checkpoints/world_model/world_model_full500_intraday120_8m_actionkey.pt
+```
+
+Untouched eval result on `cached193_eval_shared250_full_counterfactual` with
+`--max-horizon-bars 120`:
+
+| selector | groups | mean return | profit rate | beat-SPY rate | mean alpha vs SPY |
+|---|---:|---:|---:|---:|---:|
+| forced planner | 1000 | +0.001974 | 51.7% | 51.3% | +0.001630 |
+| planner q80 | 200 | +0.005555 | 60.5% | 58.5% | +0.004511 |
+| planner q85 | 150 | +0.006954 | 62.7% | 61.3% | +0.006069 |
+| buy-only | 1000 | +0.001977 | n/a | 52.2% | n/a |
+| random | 1000 | +0.000021 | n/a | 45.4% | n/a |
+
+Interpretation: this is a real improvement over random on an untouched split,
+but it is not deployment-ready. The q80/q85 slices are the most interesting
+signals so far. Do not claim the model can reliably beat SPY in live trading
+until it survives walk-forward evaluation, transaction-cost stress, liquidity
+filters, and a locked final test period.
+
+Recent follow-up iterations:
+
+| iteration | checkpoint/script | untouched eval readout | decision |
+|---|---|---|---|
+| Cross-sectional features | `world_model_full500_xsec_intraday120_actionkey.pt` | forced planner -0.000386, beat-SPY 49.7%; q80 +0.001003, beat-SPY 56.5% | not champion |
+| Regularized xsec | `world_model_full500_xsec_intraday120_regularized.pt` | forced planner +0.000392, beat-SPY 50.0%; q90 +0.002170, beat-SPY 60.0% | not champion |
+| Score tuner | `tune_planner_score.py` on the intraday-120 model | fixed tuned planner +0.001190, beat-SPY 51.7%; worse than the original fixed planner and q80/q85 | keep as diagnostic, not champion |
+| Horizon specialist 30-60 | `world_model_full500_h30_60_8m_actionkey.pt` | forced planner +0.001527, beat-SPY 49.0%; q60 +0.003254, beat-SPY 49.5% | not champion |
+| Horizon specialist 15-30 | `world_model_full500_h15_30_8m_actionkey.pt` | forced planner +0.000047, beat-SPY 47.8%; q95 +0.004248, beat-SPY 68.0% over only 25 groups | not champion, maybe useful as a selective sub-signal |
+
+Recommended next experiments:
+
+- Use walk-forward model selection before touching the final eval split again.
+- Train separate allocator/ranker heads for q80/q85 style selection instead of
+  relying on the fixed planner score.
+- Add peer/market context more carefully: prune xsec features, add sector/peer
+  ranks, and test them behind walk-forward validation.
+- Stress every candidate with fees, slippage, liquidity, max-position, and
+  cash-when-no-trade behavior.
+
 ## Row Semantics
 
 Each row asks one causal question:
