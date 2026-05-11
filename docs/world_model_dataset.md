@@ -107,12 +107,17 @@ True walk-forward retraining results with 3 epochs per fold:
 |---|---|---:|---:|---:|---:|---:|
 | q80 | hybrid | 156 | 15.6% | +0.007564 | 59.0% | +0.001180 |
 | q90 | hybrid | 145 | 14.5% | +0.006496 | 58.6% | +0.000942 |
+| q80 | hybrid + selected regime gate | 111 | 11.1% | +0.004181 | 59.5% | +0.000464 |
+| q80 | hybrid + score sizing | 156 | 15.6% | +0.005198 | 58.3% | +0.000811 |
+| q80 | cash-return | 233 | 23.3% | +0.004178 | 52.8% | +0.000973 |
 
 Interpretation: true retraining improved the practical q80/hybrid policy over
-threshold-only walk-forward. This is the current best candidate policy. Fold 2
-remains weak in both q80 and q90 variants, so the next work should focus on
-regime filters, position sizing, and drawdown-aware thresholding rather than
-only increasing epochs.
+threshold-only walk-forward. This is the current best candidate policy. The
+first hard regime-gate search and simple confidence sizing both reduced returns;
+cash-return thresholding increased coverage but weakened active trade quality.
+Fold 2 remains weak, so the next work should focus on learning a dedicated
+trade/no-trade gate or adding richer regime/peer context rather than only
+increasing epochs.
 
 Recent follow-up iterations:
 
@@ -126,12 +131,14 @@ Recent follow-up iterations:
 | Second-stage allocator | `allocator_intraday120_q80.pt`, `allocator_intraday120_q90.pt` | q80/q90/q95 threshold slices improved over the fixed planner | current best direction |
 | Walk-forward thresholding | `walk_forward_allocator.py` | q80/hybrid: +0.006903 active return, 60.1% beat-SPY, 14.3% coverage | current practical policy candidate |
 | True walk-forward retraining | `retrain_walk_forward_allocator.py` | q80/hybrid: +0.007564 active return, 59.0% beat-SPY, 15.6% coverage | current best practical policy |
+| Regime/sizing add-ons | `--regime-mode select`, `--sizing-mode score_quantile` | both reduced q80/hybrid return in first tests | keep as diagnostic only |
 
 Recommended next experiments:
 
-- Add regime filters and drawdown-aware position sizing to reduce weak folds.
-- Run longer per-fold allocator training only after the regime filter is in
-  place, because the weak fold pattern is probably data/regime-driven.
+- Train a dedicated trade/no-trade gate for the allocator instead of selecting
+  hand-written regime filters.
+- Add richer peer/market context to the allocator input, not only to the base
+  world model.
 - Add peer/market context more carefully: prune xsec features, add sector/peer
   ranks, and test them behind walk-forward validation.
 - Stress every candidate with fees, slippage, liquidity, max-position, and

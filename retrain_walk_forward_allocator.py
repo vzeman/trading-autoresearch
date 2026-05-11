@@ -58,6 +58,8 @@ class RetrainConfig:
     folds: int
     min_coverage: float
     objective_mode: str
+    regime_mode: str
+    sizing_mode: str
     seed: int
     device: str
 
@@ -179,6 +181,133 @@ def train_fold_allocator(scored_train: pd.DataFrame, config: RetrainConfig, devi
     return ckpt, metrics
 
 
+def regime_candidates(past_active: pd.DataFrame) -> list[dict]:
+    candidates = [{"name": "none", "conditions": []}]
+    specs = [
+        ("feat_spy_logret_60", ">=", (0.20, 0.30, 0.40)),
+        ("feat_spy_logret_390", ">=", (0.20, 0.30, 0.40)),
+        ("feat_spy_logret_2730", ">=", (0.20, 0.30, 0.40)),
+        ("state_ret_1d", ">=", (0.20, 0.30, 0.40)),
+        ("state_ret_5d", ">=", (0.20, 0.30, 0.40)),
+        ("state_vol_1d", "<=", (0.60, 0.70, 0.80)),
+        ("state_vol_5d", "<=", (0.60, 0.70, 0.80)),
+        ("state_drawdown_5d", ">=", (0.20, 0.30, 0.40)),
+    ]
+    for col, op, qs in specs:
+        if col not in past_active.columns:
+            continue
+        values = past_active[col].replace([np.inf, -np.inf], np.nan).dropna()
+        if values.empty:
+            continue
+        for q in qs:
+            threshold = float(values.quantile(q))
+            candidates.append({
+                "name": f"{col}_{op}_q{q:.2f}",
+                "conditions": [{"column": col, "op": op, "threshold": threshold}],
+            })
+
+    combos = [
+        ("feat_spy_logret_390", ">=", 0.30, "state_vol_1d", "<=", 0.70),
+        ("feat_spy_logret_60", ">=", 0.30, "state_vol_1d", "<=", 0.70),
+        ("state_ret_1d", ">=", 0.30, "state_vol_1d", "<=", 0.70),
+        ("state_ret_5d", ">=", 0.30, "state_drawdown_5d", ">=", 0.30),
+    ]
+    for col_a, op_a, q_a, col_b, op_b, q_b in combos:
+        if col_a not in past_active.columns or col_b not in past_active.columns:
+            continue
+        vals_a = past_active[col_a].replace([np.inf, -np.inf], np.nan).dropna()
+        vals_b = past_active[col_b].replace([np.inf, -np.inf], np.nan).dropna()
+        if vals_a.empty or vals_b.empty:
+            continue
+        candidates.append({
+            "name": f"{col_a}_{op_a}_q{q_a:.2f}__{col_b}_{op_b}_q{q_b:.2f}",
+            "conditions": [
+                {"column": col_a, "op": op_a, "threshold": float(vals_a.quantile(q_a))},
+                {"column": col_b, "op": op_b, "threshold": float(vals_b.quantile(q_b))},
+            ],
+        })
+    return candidates
+
+
+def apply_regime_rule(df: pd.DataFrame, rule: dict) -> pd.DataFrame:
+    if not rule.get("conditions"):
+        return df.copy()
+    mask = pd.Series(True, index=df.index)
+    for condition in rule["conditions"]:
+        col = condition["column"]
+        if col not in df.columns:
+            mask &= False
+            continue
+        values = df[col].replace([np.inf, -np.inf], np.nan)
+        if condition["op"] == ">=":
+            mask &= values >= condition["threshold"]
+        elif condition["op"] == "<=":
+            mask &= values <= condition["threshold"]
+        else:
+            raise ValueError(f"unknown regime op: {condition['op']}")
+    return df[mask].copy()
+
+
+def choose_regime_rule(
+    past_active: pd.DataFrame,
+    total_groups: int,
+    min_coverage: float,
+    objective_mode: str,
+    enabled: bool,
+) -> dict:
+    from walk_forward_allocator import objective
+
+    if not enabled or past_active.empty:
+        return {
+            "selected": {"name": "none", "conditions": [], "objective": 0.0},
+            "candidates": [],
+        }
+    best: dict | None = None
+    rows = []
+    for rule in regime_candidates(past_active):
+        filtered = apply_regime_rule(past_active, rule)
+        summary = summarize_with_cash(f"regime_{rule['name']}", filtered, total_groups, float("nan"), float("nan"))
+        score = float(objective(summary, min_coverage, objective_mode))
+        candidate = {**rule, "summary": summary, "objective": score}
+        rows.append(candidate)
+        if best is None or score > best["objective"]:
+            best = candidate
+    if best is None:
+        best = {"name": "none", "conditions": [], "objective": 0.0}
+    return {"selected": best, "candidates": rows}
+
+
+def fit_sizing_rule(past_active: pd.DataFrame, enabled: bool) -> dict:
+    if not enabled or past_active.empty:
+        return {"name": "none", "score_q50": None, "score_q80": None}
+    return {
+        "name": "score_quantile",
+        "score_q50": float(past_active["pred_score"].quantile(0.50)),
+        "score_q80": float(past_active["pred_score"].quantile(0.80)),
+    }
+
+
+def apply_sizing_rule(active: pd.DataFrame, rule: dict) -> pd.DataFrame:
+    if active.empty or rule.get("name") != "score_quantile":
+        out = active.copy()
+        out["position_size_multiplier"] = 1.0
+        return out
+    q50 = float(rule["score_q50"])
+    q80 = float(rule["score_q80"])
+    score = active["pred_score"].astype(float)
+    size = np.where(score >= q80, 1.0, np.where(score >= q50, 0.75, 0.50))
+    out = active.copy()
+    out["position_size_multiplier"] = size.astype(float)
+    for col in ("portfolio_return", "portfolio_pnl", "future_alpha_vs_spy", "max_drawdown", "path_vol"):
+        if col in out.columns:
+            out[col] = out[col].astype(float) * out["position_size_multiplier"]
+    if "portfolio_return" in out.columns:
+        out["profit_label"] = (out["portfolio_return"] > 0.0).astype(float)
+    if "future_alpha_vs_spy" in out.columns:
+        out["beat_spy_label"] = (out["future_alpha_vs_spy"] > 0.0).astype(float)
+    return out
+
+
 def score_raw_dataset(
     path: Path,
     world_ckpt: dict,
@@ -210,10 +339,21 @@ def run(config: RetrainConfig) -> dict:
         past_planner = planner_rows(past_allocated)
         threshold_choice = choose_threshold(past_planner, config.min_coverage, config.objective_mode)
         selected = threshold_choice["best"]
+        past_active = past_planner[past_planner["pred_score"] >= selected["threshold"]].copy()
+        regime_choice = choose_regime_rule(
+            past_active,
+            len(past_planner),
+            config.min_coverage,
+            config.objective_mode,
+            enabled=config.regime_mode == "select",
+        )
+        sizing_rule = fit_sizing_rule(past_active, enabled=config.sizing_mode == "score_quantile")
 
         fold_allocated = apply_allocator(fold_base, allocator_ckpt, device=device, batch_size=config.batch_size)
         fold_planner = planner_rows(fold_allocated)
         active = fold_planner[fold_planner["pred_score"] >= selected["threshold"]].copy()
+        active = apply_regime_rule(active, regime_choice["selected"])
+        active = apply_sizing_rule(active, sizing_rule)
         applied = summarize_with_cash(
             f"retrained_walk_forward_fold_{fold_idx}",
             active,
@@ -229,6 +369,8 @@ def run(config: RetrainConfig) -> dict:
             "selected_quantile": selected["quantile"],
             "selected_threshold": selected["threshold"],
             "calibration_objective": selected["objective"],
+            "regime_rule": regime_choice["selected"],
+            "sizing_rule": sizing_rule,
             "applied": applied,
         })
         active_frames.append(active)
@@ -275,6 +417,8 @@ def main() -> None:
     parser.add_argument("--folds", type=int, default=5)
     parser.add_argument("--min-coverage", type=float, default=0.05)
     parser.add_argument("--objective-mode", choices=["cash_return", "active_return", "hybrid"], default="hybrid")
+    parser.add_argument("--regime-mode", choices=["none", "select"], default="none")
+    parser.add_argument("--sizing-mode", choices=["none", "score_quantile"], default="none")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="auto")
     args = parser.parse_args()
