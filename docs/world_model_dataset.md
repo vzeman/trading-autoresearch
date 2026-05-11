@@ -40,6 +40,11 @@ the frozen world model, then learns a compact planner score from predicted
 outcomes plus action/portfolio metadata. It does not train on the untouched eval
 split.
 
+Walk-forward threshold selection is evaluated by `walk_forward_allocator.py`.
+It chooses a score threshold from calibration/past windows only, then applies
+that threshold to the next window. This is more realistic than choosing q80/q90
+after seeing the full final eval split.
+
 Untouched base world-model eval result on
 `cached193_eval_shared250_full_counterfactual` with
 `--max-horizon-bars 120`:
@@ -72,6 +77,25 @@ not deployment-ready. Do not claim the model can reliably beat SPY in live
 trading until it survives walk-forward evaluation, transaction-cost stress,
 liquidity filters, max-position/cash behavior, and a locked final test period.
 
+Walk-forward allocator threshold results on the same untouched eval split:
+
+| allocator | threshold objective | active groups | coverage | mean active return | active beat-SPY | return with cash |
+|---|---|---:|---:|---:|---:|---:|
+| q80-label allocator | cash-return | 309 | 30.9% | +0.004190 | 57.3% | +0.001295 |
+| q90-label allocator | cash-return | 290 | 29.0% | +0.004533 | 58.3% | +0.001314 |
+| q80-label allocator | active-return | 16 | 1.6% | +0.018124 | 75.0% | +0.000290 |
+| q90-label allocator | active-return | 12 | 1.2% | +0.021355 | 75.0% | +0.000256 |
+| q80-label allocator | hybrid | 143 | 14.3% | +0.006903 | 60.1% | +0.000987 |
+| q90-label allocator | hybrid | 136 | 13.6% | +0.004765 | 60.3% | +0.000648 |
+
+Interpretation: the high q90/q95 headline slices mostly survive as very
+selective active-trade signals, but coverage collapses when the objective is
+pure active-return. The most practical current policy is the q80-label
+allocator with the `hybrid` objective: lower headline return than q95, but many
+more trades and still positive walk-forward return. The q90-label allocator
+cash-return policy has the best return-with-cash, but it trades broader and has
+lower active return than q80/hybrid.
+
 Recent follow-up iterations:
 
 | iteration | checkpoint/script | untouched eval readout | decision |
@@ -82,12 +106,12 @@ Recent follow-up iterations:
 | Horizon specialist 30-60 | `world_model_full500_h30_60_8m_actionkey.pt` | forced planner +0.001527, beat-SPY 49.0%; q60 +0.003254, beat-SPY 49.5% | not champion |
 | Horizon specialist 15-30 | `world_model_full500_h15_30_8m_actionkey.pt` | forced planner +0.000047, beat-SPY 47.8%; q95 +0.004248, beat-SPY 68.0% over only 25 groups | not champion, maybe useful as a selective sub-signal |
 | Second-stage allocator | `allocator_intraday120_q80.pt`, `allocator_intraday120_q90.pt` | q80/q90/q95 threshold slices improved over the fixed planner | current best direction |
+| Walk-forward thresholding | `walk_forward_allocator.py` | q80/hybrid: +0.006903 active return, 60.1% beat-SPY, 14.3% coverage | current practical policy candidate |
 
 Recommended next experiments:
 
-- Use walk-forward model selection before touching the final eval split again.
-- Extend `train_allocator.py` with walk-forward folds and a locked threshold
-  chosen on validation only.
+- Move from threshold-only walk-forward to true walk-forward retraining, where
+  each fold trains a fresh allocator using only past data.
 - Add peer/market context more carefully: prune xsec features, add sector/peer
   ranks, and test them behind walk-forward validation.
 - Stress every candidate with fees, slippage, liquidity, max-position, and
