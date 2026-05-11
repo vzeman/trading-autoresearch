@@ -87,6 +87,7 @@ class BuildConfig:
     context_bars: int
     output: str
     action_mode: str = "basic"
+    cross_sectional: bool = False
     shared_timestamps: bool = False
     shard_by_symbol: bool = False
 
@@ -131,6 +132,96 @@ def _safe_log_return(close: np.ndarray, start: int, end: int) -> float:
     if start < 0 or end < 0 or start >= len(close) or end >= len(close):
         return 0.0
     return float(math.log(float(close[end]) / max(float(close[start]), 1e-12)))
+
+
+def _safe_window_vol(close: np.ndarray, end: int, bars: int) -> float:
+    start = end - bars
+    if start < 0 or end >= len(close):
+        return 0.0
+    window = close[start : end + 1].astype(np.float64)
+    rets = np.diff(np.log(np.maximum(window, 1e-12)))
+    return float(np.std(rets, ddof=1)) if len(rets) > 2 else 0.0
+
+
+def _safe_volume_z(volume: np.ndarray, end: int, bars: int) -> float:
+    start = end - bars
+    if start < 0 or end >= len(volume):
+        return 0.0
+    window = volume[start : end + 1].astype(np.float64)
+    std = float(np.std(window, ddof=1)) if len(window) > 2 else 0.0
+    return float((float(volume[end]) - float(np.mean(window))) / max(std, 1e-9))
+
+
+def _build_cross_sectional_features(
+    config: BuildConfig,
+    context: dict[str, pd.DataFrame],
+    decision_ts: pd.Series,
+) -> dict[str, dict[int, dict[str, float]]]:
+    """Compute universe breadth and per-symbol rank features at shared timestamps."""
+    if decision_ts is None or len(decision_ts) == 0:
+        return {}
+    decision_ns = pd.to_datetime(decision_ts, utc=True).astype("int64").to_numpy()
+    records: list[dict[str, float | str | int]] = []
+    windows = ((30, "30m"), (120, "2h"), (390, "1d"))
+
+    for sym in config.symbols:
+        try:
+            bars = fetch_bars(sym, force=not config.cached_only)
+        except Exception:
+            continue
+        train_bars, eval_bars = split(bars)
+        source_bars = train_bars if config.split_name == "train" else eval_bars
+        if len(source_bars) < max(w for w, _ in windows) + 2:
+            continue
+        feat = featurize(source_bars, context=context).dropna().reset_index(drop=True)
+        if len(feat) < max(w for w, _ in windows) + 2:
+            continue
+        ts_arr = pd.to_datetime(feat["timestamp"], utc=True).astype("int64").to_numpy()
+        close = feat["close"].to_numpy(np.float32)
+        volume = source_bars.sort_values("timestamp")["volume"].to_numpy(np.float32)[-len(feat):]
+        for ts_ns in decision_ns:
+            i = int(np.searchsorted(ts_arr, int(ts_ns), side="right") - 1)
+            if i < max(w for w, _ in windows) or i >= len(feat):
+                continue
+            row: dict[str, float | str | int] = {
+                "symbol": sym,
+                "decision_ns": int(ts_ns),
+                "xsec_price": float(close[i]),
+            }
+            for bars, label in windows:
+                row[f"xsec_ret_{label}"] = _safe_log_return(close, i - bars, i)
+            row["xsec_vol_1d"] = _safe_window_vol(close, i, 390)
+            row["xsec_volume_z_1d"] = _safe_volume_z(volume, i, 390)
+            records.append(row)
+
+    if not records:
+        return {}
+    df = pd.DataFrame(records)
+    out = df[["symbol", "decision_ns"]].copy()
+    grouped = df.groupby("decision_ns", sort=False)
+    out["xsec_universe_count"] = grouped["symbol"].transform("count").astype(float)
+    metric_cols = ["xsec_ret_30m", "xsec_ret_2h", "xsec_ret_1d", "xsec_vol_1d", "xsec_volume_z_1d"]
+    for col in metric_cols:
+        g = grouped[col]
+        out[f"{col}_mean"] = g.transform("mean")
+        out[f"{col}_median"] = g.transform("median")
+        out[f"{col}_std"] = g.transform("std").fillna(0.0)
+        out[f"{col}_p10"] = g.transform(lambda s: s.quantile(0.10))
+        out[f"{col}_p90"] = g.transform(lambda s: s.quantile(0.90))
+        out[f"{col}_dispersion"] = out[f"{col}_p90"] - out[f"{col}_p10"]
+        out[f"{col}_rank_pct"] = grouped[col].rank(pct=True, method="average")
+        out[f"{col}_minus_median"] = df[col] - out[f"{col}_median"]
+        if col.startswith("xsec_ret_"):
+            out[f"{col}_up_frac"] = grouped[col].transform(lambda s: float((s > 0).mean()))
+
+    feature_cols = [c for c in out.columns if c not in ("symbol", "decision_ns")]
+    out[feature_cols] = out[feature_cols].replace([np.inf, -np.inf], np.nan).fillna(0.0).astype(np.float32)
+    feature_map: dict[str, dict[int, dict[str, float]]] = {}
+    for rec in out.to_dict(orient="records"):
+        sym = str(rec.pop("symbol"))
+        ts_ns = int(rec.pop("decision_ns"))
+        feature_map.setdefault(sym, {})[ts_ns] = {k: float(v) for k, v in rec.items()}
+    return feature_map
 
 
 def _rolling_state_features(close: np.ndarray, volume: np.ndarray, i: int) -> dict[str, float]:
@@ -262,6 +353,7 @@ def _build_symbol_rows(
     context: dict[str, pd.DataFrame],
     spy_bars: pd.DataFrame | None,
     rng: np.random.Generator,
+    cross_sectional: dict[str, dict[int, dict[str, float]]] | None = None,
 ) -> tuple[pd.DataFrame, dict]:
     rows: list[dict] = []
     max_horizon = max(config.horizons)
@@ -301,6 +393,9 @@ def _build_symbol_rows(
         for name in USE_FEATURES:
             base[f"feat_{name}"] = float(feat[name].iloc[int(i)])
         base.update(_rolling_state_features(close, volume, int(i)))
+        if cross_sectional:
+            ts_ns = int(pd.Timestamp(base["timestamp"]).value)
+            base.update(cross_sectional.get(sym, {}).get(ts_ns, {}))
 
         sampled_actions = rng.choice(
             len(action_specs),
@@ -339,6 +434,7 @@ def _build_symbol_rows_at_timestamps(
     spy_bars: pd.DataFrame | None,
     decision_ts: pd.Series,
     rng: np.random.Generator,
+    cross_sectional: dict[str, dict[int, dict[str, float]]] | None = None,
 ) -> tuple[pd.DataFrame, dict]:
     rows: list[dict] = []
     max_horizon = max(config.horizons)
@@ -376,6 +472,8 @@ def _build_symbol_rows_at_timestamps(
         for name in USE_FEATURES:
             base[f"feat_{name}"] = float(feat[name].iloc[i])
         base.update(_rolling_state_features(close, volume, i))
+        if cross_sectional:
+            base.update(cross_sectional.get(sym, {}).get(int(ts_ns), {}))
 
         sampled_actions = rng.choice(
             len(action_specs),
@@ -408,7 +506,10 @@ def _build_symbol_rows_at_timestamps(
 
 def _metadata(config: BuildConfig, row_count: int, symbol_stats: dict[str, dict], df: pd.DataFrame | None = None) -> dict:
     if df is not None and not df.empty:
-        feature_columns = [c for c in df.columns if c.startswith("feat_") or c.startswith("state_")]
+        feature_columns = [
+            c for c in df.columns
+            if c.startswith("feat_") or c.startswith("state_") or c.startswith("xsec_")
+        ]
     else:
         feature_columns = [f"feat_{name}" for name in USE_FEATURES] + [
             f"state_{kind}_{label}"
@@ -459,11 +560,12 @@ def build_dataset(config: BuildConfig) -> tuple[pd.DataFrame, dict]:
     rng = np.random.default_rng(config.seed)
     context = fetch_context(force=False)
     spy_bars = fetch_bars("SPY", force=False) if _cache_path("SPY").exists() else None
+    cross_sectional: dict[str, dict[int, dict[str, float]]] | None = None
     frames: list[pd.DataFrame] = []
     symbol_stats: dict[str, dict] = {}
 
     for sym in config.symbols:
-        df_sym, stats = _build_symbol_rows(sym, config, context, spy_bars, rng)
+        df_sym, stats = _build_symbol_rows(sym, config, context, spy_bars, rng, cross_sectional)
         symbol_stats[sym] = stats
         if not df_sym.empty:
             frames.append(df_sym)
@@ -485,6 +587,13 @@ def build_dataset_sharded(config: BuildConfig, output_dir: Path) -> dict:
     decision_ts = _sample_decision_timestamps(config, context) if config.shared_timestamps else None
     if decision_ts is not None:
         print(f"[world-dataset] shared decision timestamps={len(decision_ts):,}", flush=True)
+    cross_sectional = None
+    if config.cross_sectional:
+        if decision_ts is None:
+            raise RuntimeError("--cross-sectional requires --shared-timestamps")
+        print("[world-dataset] building cross-sectional universe features", flush=True)
+        cross_sectional = _build_cross_sectional_features(config, context, decision_ts)
+        print(f"[world-dataset] cross-sectional symbols={len(cross_sectional):,}", flush=True)
     output_dir.mkdir(parents=True, exist_ok=True)
     symbol_stats: dict[str, dict] = {}
     rows_total = 0
@@ -492,9 +601,9 @@ def build_dataset_sharded(config: BuildConfig, output_dir: Path) -> dict:
 
     for sym in config.symbols:
         if decision_ts is not None:
-            df_sym, stats = _build_symbol_rows_at_timestamps(sym, config, context, spy_bars, decision_ts, rng)
+            df_sym, stats = _build_symbol_rows_at_timestamps(sym, config, context, spy_bars, decision_ts, rng, cross_sectional)
         else:
-            df_sym, stats = _build_symbol_rows(sym, config, context, spy_bars, rng)
+            df_sym, stats = _build_symbol_rows(sym, config, context, spy_bars, rng, cross_sectional)
         if not df_sym.empty:
             shard = output_dir / f"{sym}.parquet"
             df_sym.to_parquet(shard, index=False)
@@ -529,6 +638,7 @@ def main(argv: Iterable[str] | None = None) -> None:
     parser.add_argument("--horizons", default=",".join(str(x) for x in DEFAULT_HORIZONS))
     parser.add_argument("--horizon-mode", choices=["basic", "rich"], default="basic")
     parser.add_argument("--action-mode", choices=["basic", "rich", "full"], default="basic")
+    parser.add_argument("--cross-sectional", action="store_true", help="add universe breadth, dispersion, and cross-sectional rank features")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--split", choices=["train", "eval"], default="train")
     parser.add_argument("--context-bars", type=int, default=CONTEXT_BARS)
@@ -560,6 +670,7 @@ def main(argv: Iterable[str] | None = None) -> None:
         context_bars=args.context_bars,
         output=str(output),
         action_mode=args.action_mode,
+        cross_sectional=args.cross_sectional,
         shared_timestamps=args.shared_timestamps,
         shard_by_symbol=args.shard_by_symbol,
     )

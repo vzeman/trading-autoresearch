@@ -158,7 +158,7 @@ def load_frame(path: Path, limit_rows: int = 0, seed: int = 0) -> pd.DataFrame:
 def make_matrices(df: pd.DataFrame, val_fraction: float, val_gap_days: float) -> dict:
     feature_cols = [
         c for c in df.columns
-        if c.startswith("feat_") or c.startswith("state_")
+        if c.startswith("feat_") or c.startswith("state_") or c.startswith("xsec_")
     ]
     feature_cols += [
         "price",

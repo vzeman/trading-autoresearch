@@ -417,6 +417,106 @@ but weakened the thresholded high-confidence slices compared with the previous
 short-horizon checkpoint. Keep `world_model_full500_short_8m_actionkey.pt` as
 the safer baseline for now.
 
+## Intraday 120-Bar Variant
+
+The next horizon split trained only the 15, 30, 60, and 120 bar horizons:
+
+```bash
+.venv/bin/python train_world_model.py \
+  --data data/world_model/cached193_shared500_full_counterfactual \
+  --limit-rows 8000000 \
+  --max-horizon-bars 120 \
+  --epochs 12 \
+  --batch-size 32768 \
+  --hidden-dim 384 \
+  --n-layers 4 \
+  --dropout 0.30 \
+  --lr 1e-4 \
+  --weight-decay 1e-3 \
+  --symbol-dropout 0.20 \
+  --rank-loss-coef 0.75 \
+  --patience 4 \
+  --val-gap-days 14 \
+  --output checkpoints/world_model/world_model_full500_intraday120_8m_actionkey.pt
+```
+
+Untouched eval result:
+
+| selector | groups | mean return | mean PnL | profit rate | beat-SPY rate | mean alpha vs SPY |
+|---|---:|---:|---:|---:|---:|---:|
+| intraday-120 planner | 1,000 | +0.001974 | $+98.70 | 51.7% | 51.3% | +0.001630 |
+| q50 threshold planner | 500 | +0.003245 | $+162.25 | 53.0% | 51.2% | +0.002514 |
+| q80 threshold planner | 200 | +0.005555 | $+277.74 | 60.5% | 58.5% | +0.004511 |
+| q85 threshold planner | 150 | +0.006954 | $+347.69 | 62.7% | 61.3% | +0.006069 |
+| buy-only planner | 1,000 | +0.001977 | $+98.83 | 52.1% | 52.2% | +0.001711 |
+| random candidate | 1,000 | +0.000021 | $+1.06 | 39.7% | 45.4% | +0.000091 |
+
+Interpretation: this is the best plain model family so far. It is still not a
+large enough edge for deployment, but the high-confidence slices are materially
+better than random on the untouched eval split.
+
+## Cross-Sectional Feature Attempt
+
+The dataset builder now supports `--cross-sectional`. It adds universe movement
+features at each shared decision timestamp:
+
+- breadth/count features
+- 30m, 2h, and 1d universe return mean/median/std/p10/p90/dispersion
+- per-symbol cross-sectional rank percentile
+- symbol return minus universe median
+- up-fraction features
+- 1d volatility and volume-z cross-sectional summaries/ranks
+
+Train/eval datasets:
+
+```bash
+.venv/bin/python world_model_dataset.py \
+  --cached-all \
+  --symbol-limit 0 \
+  --samples-per-symbol 500 \
+  --actions-per-timestamp 12 \
+  --action-mode full \
+  --horizons 15,30,60,120 \
+  --shared-timestamps \
+  --cross-sectional \
+  --shard-by-symbol \
+  --output data/world_model/cached193_shared500_full_xsec_intraday120
+
+.venv/bin/python world_model_dataset.py \
+  --cached-all \
+  --symbol-limit 0 \
+  --samples-per-symbol 250 \
+  --actions-per-timestamp 12 \
+  --action-mode full \
+  --horizons 15,30,60,120 \
+  --shared-timestamps \
+  --cross-sectional \
+  --shard-by-symbol \
+  --split eval \
+  --output data/world_model/cached193_eval_shared250_full_xsec_intraday120
+```
+
+Local dataset results:
+
+- train rows: 4,543,488
+- eval rows: 1,937,808
+- model features: 103 total, including 44 `xsec_` features
+
+Two xsec models were trained:
+
+| model | planner return | planner beat-SPY | best threshold | threshold return | threshold beat-SPY |
+|---|---:|---:|---|---:|---:|
+| plain intraday-120 baseline | +0.001974 | 51.3% | q50 | +0.003245 | 51.2% |
+| xsec MLP | -0.000386 | 49.7% | q80 | +0.001003 | 56.5% |
+| xsec regularized MLP | +0.000392 | 50.0% | q90 | +0.002170 | 60.0% |
+
+Interpretation: adding cross-sectional features naively did not improve the
+main planner. It helped some narrow thresholded beat-SPY slices, but returns
+were weaker than the plain intraday-120 model. Keep the feature code, but do not
+use the current xsec checkpoints as champions. Better next experiments:
+feature pruning, sector/peer grouping, a separate cross-sectional ranker, and
+calibrating the threshold on walk-forward validation rather than final eval.
+
 ## First Trained Model
 
 The first baseline trainer is `train_world_model.py`. It trains a compact
