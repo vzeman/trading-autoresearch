@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 import torch
 from torch import nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 
 from evaluate_world_model import load_frame, predict
 from train_allocator import (
@@ -60,8 +60,54 @@ class RetrainConfig:
     objective_mode: str
     regime_mode: str
     sizing_mode: str
+    gate_mode: str
     seed: int
     device: str
+
+
+GATE_FEATURES = [
+    "pred_score",
+    "pred_portfolio_return",
+    "pred_max_drawdown",
+    "pred_path_vol",
+    "pred_future_alpha_vs_spy",
+    "pred_profit_label",
+    "pred_beat_spy_label",
+    "pred_rank_top_quartile",
+    "feat_spy_logret_60",
+    "feat_spy_logret_390",
+    "feat_spy_logret_2730",
+    "state_ret_30m",
+    "state_ret_2h",
+    "state_ret_1d",
+    "state_ret_5d",
+    "state_vol_30m",
+    "state_vol_2h",
+    "state_vol_1d",
+    "state_vol_5d",
+    "state_drawdown_5d",
+    "horizon_bars",
+    "current_position_frac",
+    "target_position_frac",
+]
+
+
+class TradeGate(nn.Module):
+    def __init__(self, n_features: int, hidden_dim: int = 64, dropout: float = 0.15) -> None:
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(n_features, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, 1),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x).squeeze(-1)
 
 
 def split_candidates_by_time(scored: pd.DataFrame, folds: int) -> list[pd.DataFrame]:
@@ -308,6 +354,139 @@ def apply_sizing_rule(active: pd.DataFrame, rule: dict) -> pd.DataFrame:
     return out
 
 
+def make_gate_matrix(df: pd.DataFrame, feature_cols: list[str], mean: np.ndarray | None = None, std: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    x = df[feature_cols].replace([np.inf, -np.inf], np.nan).fillna(0.0).to_numpy(np.float32)
+    if "horizon_bars" in feature_cols:
+        x[:, feature_cols.index("horizon_bars")] = np.log1p(x[:, feature_cols.index("horizon_bars")])
+    if mean is None:
+        mean = x.mean(axis=0)
+    if std is None:
+        std = x.std(axis=0)
+    std = np.where(std < 1e-8, 1.0, std)
+    x = np.clip((x - mean) / std, -20.0, 20.0).astype(np.float32)
+    return x, mean, std
+
+
+def train_trade_gate(past_planner: pd.DataFrame, config: RetrainConfig, device: str, fold_idx: int) -> tuple[dict, dict]:
+    feature_cols = [c for c in GATE_FEATURES if c in past_planner.columns]
+    if not feature_cols:
+        return {"mode": "none"}, {"enabled": False}
+    time_col = "decision_timestamp" if "decision_timestamp" in past_planner.columns else "timestamp"
+    timestamps = pd.to_datetime(past_planner[time_col], utc=True)
+    cutoff = timestamps.quantile(0.80)
+    train_mask = (timestamps <= cutoff).to_numpy()
+    val_mask = (timestamps > cutoff).to_numpy()
+    if train_mask.sum() == 0 or val_mask.sum() == 0:
+        train_mask = np.ones(len(past_planner), dtype=bool)
+        val_mask = np.ones(len(past_planner), dtype=bool)
+
+    y = (
+        (past_planner["portfolio_return"].astype(float) > 0.0)
+        & (past_planner["future_alpha_vs_spy"].astype(float) > 0.0)
+    ).astype(np.float32).to_numpy()
+    x, mean, std = make_gate_matrix(past_planner, feature_cols)
+    train_ds = TensorDataset(torch.from_numpy(x[train_mask]), torch.from_numpy(y[train_mask]))
+    val_ds = TensorDataset(torch.from_numpy(x[val_mask]), torch.from_numpy(y[val_mask]))
+    train_loader = DataLoader(train_ds, batch_size=min(4096, max(128, len(train_ds))), shuffle=True)
+    val_loader = DataLoader(val_ds, batch_size=min(8192, max(128, len(val_ds))), shuffle=False)
+    model = TradeGate(len(feature_cols)).to(device)
+    opt = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=1e-3)
+    pos = float(y[train_mask].sum())
+    neg = float(train_mask.sum() - pos)
+    pos_weight = torch.tensor([min(10.0, max(1.0, neg / max(pos, 1.0)))], device=device)
+    bce = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    best_loss = float("inf")
+    best_state: dict[str, torch.Tensor] | None = None
+    history = []
+    for epoch in range(8):
+        model.train()
+        losses = []
+        for xb, yb in train_loader:
+            xb, yb = xb.to(device), yb.to(device)
+            opt.zero_grad(set_to_none=True)
+            logits = model(xb)
+            loss = bce(logits, yb)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            opt.step()
+            losses.append(float(loss.item()))
+        model.eval()
+        val_losses = []
+        correct = total = 0
+        with torch.no_grad():
+            for xb, yb in val_loader:
+                xb, yb = xb.to(device), yb.to(device)
+                logits = model(xb)
+                val_losses.append(float(bce(logits, yb).item()))
+                correct += int(((torch.sigmoid(logits) >= 0.5) == (yb >= 0.5)).sum().item())
+                total += int(yb.numel())
+        val_loss = float(np.mean(val_losses)) if val_losses else 0.0
+        row = {
+            "epoch": epoch + 1,
+            "train_loss": float(np.mean(losses)) if losses else 0.0,
+            "val_loss": val_loss,
+            "val_accuracy": float(correct / max(total, 1)),
+        }
+        history.append(row)
+        if val_loss < best_loss:
+            best_loss = val_loss
+            best_state = copy.deepcopy({k: v.detach().cpu() for k, v in model.state_dict().items()})
+    if best_state is not None:
+        model.load_state_dict(best_state)
+    ckpt = {
+        "mode": "learned",
+        "state_dict": model.state_dict(),
+        "feature_cols": feature_cols,
+        "x_mean": mean,
+        "x_std": std,
+    }
+    metrics = {
+        "enabled": True,
+        "fold": fold_idx,
+        "rows": int(len(past_planner)),
+        "positive_rate": float(y.mean()),
+        "best_val_loss": float(best_loss),
+        "last": history[-1] if history else {},
+    }
+    return ckpt, metrics
+
+
+def apply_trade_gate(df: pd.DataFrame, gate_ckpt: dict, device: str) -> pd.DataFrame:
+    if gate_ckpt.get("mode") != "learned" or df.empty:
+        out = df.copy()
+        out["trade_gate_score"] = 1.0
+        return out
+    x, _, _ = make_gate_matrix(df, gate_ckpt["feature_cols"], gate_ckpt["x_mean"], gate_ckpt["x_std"])
+    model = TradeGate(len(gate_ckpt["feature_cols"]), dropout=0.0).to(device)
+    model.load_state_dict(gate_ckpt["state_dict"])
+    model.eval()
+    scores = []
+    with torch.no_grad():
+        for i in range(0, len(df), 8192):
+            xb = torch.from_numpy(x[i : i + 8192]).to(device)
+            scores.append(torch.sigmoid(model(xb)).detach().cpu().numpy())
+    out = df.copy()
+    out["trade_gate_score"] = np.concatenate(scores, axis=0)
+    return out
+
+
+def choose_gate_threshold(past_active: pd.DataFrame, total_groups: int, min_coverage: float, objective_mode: str, enabled: bool) -> dict:
+    from walk_forward_allocator import objective
+
+    if not enabled or past_active.empty or "trade_gate_score" not in past_active.columns:
+        return {"threshold": 0.0, "quantile": 0.0, "objective": 0.0, "selected": "none"}
+    best: dict | None = None
+    for q in (0.0, 0.20, 0.40, 0.60, 0.80):
+        threshold = float(past_active["trade_gate_score"].quantile(q))
+        gated = past_active[past_active["trade_gate_score"] >= threshold].copy()
+        summary = summarize_with_cash(f"gate_q{q:.2f}", gated, total_groups, threshold, q)
+        score = float(objective(summary, min_coverage, objective_mode))
+        row = {"threshold": threshold, "quantile": q, "objective": score, "summary": summary, "selected": "learned"}
+        if best is None or score > best["objective"]:
+            best = row
+    return best or {"threshold": 0.0, "quantile": 0.0, "objective": 0.0, "selected": "none"}
+
+
 def score_raw_dataset(
     path: Path,
     world_ckpt: dict,
@@ -348,11 +527,23 @@ def run(config: RetrainConfig) -> dict:
             enabled=config.regime_mode == "select",
         )
         sizing_rule = fit_sizing_rule(past_active, enabled=config.sizing_mode == "score_quantile")
+        gate_ckpt, gate_metrics = train_trade_gate(past_planner, config, device, fold_idx) if config.gate_mode == "learned" else ({"mode": "none"}, {"enabled": False})
+        past_active_gated = apply_trade_gate(past_active, gate_ckpt, device)
+        gate_rule = choose_gate_threshold(
+            past_active_gated,
+            len(past_planner),
+            config.min_coverage,
+            config.objective_mode,
+            enabled=config.gate_mode == "learned",
+        )
 
         fold_allocated = apply_allocator(fold_base, allocator_ckpt, device=device, batch_size=config.batch_size)
         fold_planner = planner_rows(fold_allocated)
         active = fold_planner[fold_planner["pred_score"] >= selected["threshold"]].copy()
         active = apply_regime_rule(active, regime_choice["selected"])
+        active = apply_trade_gate(active, gate_ckpt, device)
+        if config.gate_mode == "learned":
+            active = active[active["trade_gate_score"] >= gate_rule["threshold"]].copy()
         active = apply_sizing_rule(active, sizing_rule)
         applied = summarize_with_cash(
             f"retrained_walk_forward_fold_{fold_idx}",
@@ -371,6 +562,8 @@ def run(config: RetrainConfig) -> dict:
             "calibration_objective": selected["objective"],
             "regime_rule": regime_choice["selected"],
             "sizing_rule": sizing_rule,
+            "gate_metrics": gate_metrics,
+            "gate_rule": gate_rule,
             "applied": applied,
         })
         active_frames.append(active)
@@ -419,6 +612,7 @@ def main() -> None:
     parser.add_argument("--objective-mode", choices=["cash_return", "active_return", "hybrid"], default="hybrid")
     parser.add_argument("--regime-mode", choices=["none", "select"], default="none")
     parser.add_argument("--sizing-mode", choices=["none", "score_quantile"], default="none")
+    parser.add_argument("--gate-mode", choices=["none", "learned"], default="none")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="auto")
     args = parser.parse_args()

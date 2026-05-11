@@ -110,14 +110,16 @@ True walk-forward retraining results with 3 epochs per fold:
 | q80 | hybrid + selected regime gate | 111 | 11.1% | +0.004181 | 59.5% | +0.000464 |
 | q80 | hybrid + score sizing | 156 | 15.6% | +0.005198 | 58.3% | +0.000811 |
 | q80 | cash-return | 233 | 23.3% | +0.004178 | 52.8% | +0.000973 |
+| q80 | hybrid + learned trade gate | 152 | 15.2% | +0.007712 | 59.9% | +0.001172 |
 
 Interpretation: true retraining improved the practical q80/hybrid policy over
 threshold-only walk-forward. This is the current best candidate policy. The
 first hard regime-gate search and simple confidence sizing both reduced returns;
 cash-return thresholding increased coverage but weakened active trade quality.
-Fold 2 remains weak, so the next work should focus on learning a dedicated
-trade/no-trade gate or adding richer regime/peer context rather than only
-increasing epochs.
+The learned trade/no-trade gate slightly improved active return and beat-SPY,
+but did not improve cash-adjusted return. Fold 2 remains weak, so the next work
+should focus on richer peer/market context and fold-level risk controls rather
+than only increasing epochs.
 
 Recent follow-up iterations:
 
@@ -132,15 +134,14 @@ Recent follow-up iterations:
 | Walk-forward thresholding | `walk_forward_allocator.py` | q80/hybrid: +0.006903 active return, 60.1% beat-SPY, 14.3% coverage | current practical policy candidate |
 | True walk-forward retraining | `retrain_walk_forward_allocator.py` | q80/hybrid: +0.007564 active return, 59.0% beat-SPY, 15.6% coverage | current best practical policy |
 | Regime/sizing add-ons | `--regime-mode select`, `--sizing-mode score_quantile` | both reduced q80/hybrid return in first tests | keep as diagnostic only |
+| Learned trade gate | `--gate-mode learned` | +0.007712 active return, 59.9% beat-SPY, but +0.001172 cash return | small active-quality improvement |
 
 Recommended next experiments:
 
-- Train a dedicated trade/no-trade gate for the allocator instead of selecting
-  hand-written regime filters.
 - Add richer peer/market context to the allocator input, not only to the base
   world model.
-- Add peer/market context more carefully: prune xsec features, add sector/peer
-  ranks, and test them behind walk-forward validation.
+- Add fold-level risk controls that can pause after recent losses without using
+  future fold outcomes.
 - Stress every candidate with fees, slippage, liquidity, max-position, and
   cash-when-no-trade behavior.
 
