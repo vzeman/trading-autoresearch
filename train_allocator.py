@@ -39,6 +39,47 @@ NUMERIC_FEATURES = [
     "slippage",
 ]
 
+CONTEXT_FEATURES = [
+    "feat_tlt_logret_1",
+    "feat_uup_logret_1",
+    "feat_spy_logret_1",
+    "feat_spy_logret_60",
+    "feat_spy_logret_240",
+    "feat_spy_logret_390",
+    "feat_spy_logret_2730",
+    "feat_spy_logret_5460",
+    "feat_spy_logret_10920",
+    "feat_spy_logret_16380",
+    "state_ret_30m",
+    "state_vol_30m",
+    "state_volume_z_30m",
+    "state_ret_2h",
+    "state_vol_2h",
+    "state_volume_z_2h",
+    "state_ret_1d",
+    "state_vol_1d",
+    "state_volume_z_1d",
+    "state_ret_5d",
+    "state_vol_5d",
+    "state_volume_z_5d",
+    "state_ret_20d",
+    "state_vol_20d",
+    "state_volume_z_20d",
+    "state_drawdown_5d",
+    "xsec_universe_count",
+    "xsec_ret_30m_rank_pct",
+    "xsec_ret_30m_minus_median",
+    "xsec_ret_30m_up_frac",
+    "xsec_ret_2h_rank_pct",
+    "xsec_ret_2h_minus_median",
+    "xsec_ret_2h_up_frac",
+    "xsec_ret_1d_rank_pct",
+    "xsec_ret_1d_minus_median",
+    "xsec_ret_1d_up_frac",
+    "xsec_vol_1d_rank_pct",
+    "xsec_volume_z_1d_rank_pct",
+]
+
 
 @dataclass(frozen=True)
 class AllocatorConfig:
@@ -59,6 +100,7 @@ class AllocatorConfig:
     min_horizon_bars: int
     max_horizon_bars: int
     top_quantile: float
+    feature_mode: str
     seed: int
     device: str
 
@@ -124,8 +166,13 @@ def add_targets(df: pd.DataFrame, top_quantile: float) -> pd.DataFrame:
     return out
 
 
-def make_matrices(df: pd.DataFrame, train_mask: np.ndarray) -> dict:
-    feature_cols = [c for c in NUMERIC_FEATURES if c in df.columns]
+def make_matrices(df: pd.DataFrame, train_mask: np.ndarray, feature_mode: str = "compact") -> dict:
+    wanted_features = list(NUMERIC_FEATURES)
+    if feature_mode == "market":
+        wanted_features += CONTEXT_FEATURES
+    elif feature_mode != "compact":
+        raise ValueError(f"unknown allocator feature mode: {feature_mode}")
+    feature_cols = [c for c in wanted_features if c in df.columns]
     x = df[feature_cols].replace([np.inf, -np.inf], np.nan).fillna(0.0).to_numpy(np.float32)
     if "horizon_bars" in feature_cols:
         x[:, feature_cols.index("horizon_bars")] = np.log1p(x[:, feature_cols.index("horizon_bars")])
@@ -256,7 +303,7 @@ def train(config: AllocatorConfig) -> dict:
     train_scored = predict(train_df, world_ckpt, device=device, batch_size=config.batch_size)
     train_scored = add_targets(train_scored, config.top_quantile)
     train_mask, val_mask = split_masks(train_scored, config.val_fraction, config.val_gap_days)
-    mats = make_matrices(train_scored, train_mask)
+    mats = make_matrices(train_scored, train_mask, feature_mode=config.feature_mode)
 
     train_loader = DataLoader(dataset(mats, train_mask), batch_size=config.batch_size, shuffle=True)
     val_loader = DataLoader(dataset(mats, val_mask), batch_size=config.batch_size * 2, shuffle=False)
@@ -343,6 +390,7 @@ def train(config: AllocatorConfig) -> dict:
         "val_rows": int(val_mask.sum()),
         "min_horizon_bars": int(config.min_horizon_bars),
         "max_horizon_bars": int(config.max_horizon_bars),
+        "feature_mode": config.feature_mode,
         "device": device,
         "best_epoch": int(best_epoch),
         "best_val_loss": float(best_loss),
@@ -374,6 +422,7 @@ def main() -> None:
     parser.add_argument("--min-horizon-bars", type=int, default=0)
     parser.add_argument("--max-horizon-bars", type=int, default=0)
     parser.add_argument("--top-quantile", type=float, default=0.80)
+    parser.add_argument("--feature-mode", choices=["compact", "market"], default="compact")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="auto")
     args = parser.parse_args()

@@ -61,6 +61,7 @@ class RetrainConfig:
     regime_mode: str
     sizing_mode: str
     gate_mode: str
+    feature_mode: str
     seed: int
     device: str
 
@@ -148,7 +149,7 @@ def train_fold_allocator(scored_train: pd.DataFrame, config: RetrainConfig, devi
 
     train_scored = add_targets(scored_train, config.top_quantile)
     train_mask, val_mask = split_masks(train_scored, config.val_fraction, config.val_gap_days)
-    mats = make_matrices(train_scored, train_mask)
+    mats = make_matrices(train_scored, train_mask, feature_mode=config.feature_mode)
     train_loader = DataLoader(dataset(mats, train_mask), batch_size=config.batch_size, shuffle=True)
     val_loader = DataLoader(dataset(mats, val_mask), batch_size=config.batch_size * 2, shuffle=False)
     model = AllocatorModel(
@@ -613,6 +614,7 @@ def main() -> None:
     parser.add_argument("--regime-mode", choices=["none", "select"], default="none")
     parser.add_argument("--sizing-mode", choices=["none", "score_quantile"], default="none")
     parser.add_argument("--gate-mode", choices=["none", "learned"], default="none")
+    parser.add_argument("--feature-mode", choices=["compact", "market"], default="compact")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="auto")
     args = parser.parse_args()
