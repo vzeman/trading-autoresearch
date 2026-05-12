@@ -134,6 +134,8 @@ best new locked-year result is the existing stress allocator plus observable
 filters: +51.5%, 40 trades, -8.5% max drawdown, 47.5% profitable trades, and
 55.0% active beat-SPY rate. It improves the stressed survivor, but it is still
 not live-tradable until it survives full rolling retrains and paper trading.
+The repo now includes `rolling_retrain_tradable.py` for full per-year retrains
+and `backfill_alpaca_history.py` for explicit older Alpaca bar backfills.
 
 Read the full model creation notes, features, training settings, attempts, and
 simulated portfolio charts in

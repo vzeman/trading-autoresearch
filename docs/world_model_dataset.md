@@ -95,7 +95,16 @@ The yearly rolling-eval harness now exists, but its first calendar-year run is
 only diagnostic because it reuses the current trained model. A 2025 calendar
 slice with 2022-2024 calibration returned +18.1%, -15.1% DD, 34 trades, and
 41.2% beat-SPY. The next real proof step is to retrain the world model and
-allocator inside each yearly fold.
+allocator inside each yearly fold. `rolling_retrain_tradable.py` now generates
+those full fold commands and was dry-run validated for a 2025 fold.
+
+More historical data should help if it adds regimes the model has not seen:
+2020 crash/rebound, 2022 inflation/rates drawdown, low-vol bull periods,
+high-rate rotations, and weak/sideways years. The useful version is not simply
+"more rows"; it is more non-overlapping years, more symbols available at those
+times, and a non-survivorship-biased universe. `backfill_alpaca_history.py`
+can explicitly fetch older Alpaca bars into the same cache format without
+modifying the frozen `prepare.py` path.
 
 The important caveat: the policy only beats SPY when idle capital remains in
 SPY. If idle capital sits in cash, the same active stock trades return +21.7%,
@@ -448,6 +457,28 @@ Filtered and ensemble tradable diagnostics:
   --device mps
 ```
 
+Full rolling retrain dry run and older Alpaca backfill:
+
+```bash
+.venv/bin/python rolling_retrain_tradable.py \
+  --start-year 2025 \
+  --end-year 2025 \
+  --train-years 3 \
+  --world-epochs 4 \
+  --allocator-epochs 4 \
+  --utility-mode stress_adjusted \
+  --rule-mode fixed_threshold \
+  --dry-run
+
+.venv/bin/python backfill_alpaca_history.py \
+  --top500 \
+  --start 2016-01-01 \
+  --end 2020-01-01 \
+  --feed iex \
+  --adjustment raw \
+  --sleep 0.05
+```
+
 ## What We Tried
 
 The main iterations and current decisions:
@@ -478,6 +509,8 @@ The main iterations and current decisions:
 | Tradability-stress allocator target | +20.5%, -9.2% DD with same filters | rejected; too conservative |
 | Allocator ensemble gating | +35.8%, -14.5% DD with calibrated rule | diagnostic; below filtered stress-only |
 | Yearly rolling harness | 2025 calendar diagnostic +18.1%, -15.1% DD | code ready; needs full per-year retraining |
+| Full rolling retrain runner | dry-run generated fold-specific dataset/train/eval commands | next proof workflow |
+| Alpaca historical backfill tool | explicit start/end/feed cache merge for older bars | use for broader regimes |
 
 The most important open weakness is reliability of the active trades. The
 locked winner has strong portfolio return, but only 44.8% of active trades are
