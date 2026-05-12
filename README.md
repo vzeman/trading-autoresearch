@@ -115,6 +115,9 @@ first five years of cached data, locks 2025-05-05 through 2026-05-05 for final
 testing, holds SPY when idle, and replaces SPY with one model-selected stock
 trade at a time. On the locked year it returns +55.7% versus SPY buy-and-hold
 at +27.7%, with 58 non-overlapping trades and -10.0% max drawdown. This is
+still the raw-return champion, but a newer calibration-only risk-controlled
+rule is the better paper-trading candidate: +39.2%, 57 trades, -8.0% max
+drawdown, 52.6% profitable trades, and 57.9% active beat-SPY rate. This is
 still a research simulation, not a live guarantee.
 
 Read the full model creation notes, features, training settings, attempts, and

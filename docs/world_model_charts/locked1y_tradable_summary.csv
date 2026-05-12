@@ -18,3 +18,14 @@ spy_buy_hold_return,0.2771560236998025
 max_drawdown_spy_idle,-0.09997290784458814
 trade_profit_rate,0.4482758620689655
 trade_beat_spy_rate,0.5
+risk_rule,q0.50 | target<=0.75 | h<=120 | pred_alpha>=0.0003
+risk_active_groups,143
+risk_active_group_coverage,0.143
+risk_non_overlapping_trades,57
+risk_final_equity_spy_idle,69581.51609543152
+risk_return_spy_idle,0.39163032190863034
+risk_max_drawdown_spy_idle,-0.07967721157114836
+risk_trade_profit_rate,0.5263157894736842
+risk_trade_beat_spy_rate,0.5789473684210527
+rejected_calibrated_return_spy_idle,0.18907160349048358
+rejected_calibrated_max_drawdown_spy_idle,-0.15047702147644956

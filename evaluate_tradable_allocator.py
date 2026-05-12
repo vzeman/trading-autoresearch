@@ -47,6 +47,137 @@ def entry_candidates(scored: pd.DataFrame) -> pd.DataFrame:
     ].copy()
 
 
+def apply_trade_rule(planner: pd.DataFrame, rule: dict) -> pd.DataFrame:
+    out = planner[planner["pred_score"] >= float(rule["score_threshold"])].copy()
+    if "max_target_position_frac" in rule:
+        out = out[out["target_position_frac"].astype(float) <= float(rule["max_target_position_frac"])].copy()
+    if "max_horizon_bars" in rule:
+        out = out[out["horizon_bars"].astype(float) <= float(rule["max_horizon_bars"])].copy()
+    if "min_pred_profit_label" in rule and "pred_profit_label" in out.columns:
+        out = out[out["pred_profit_label"].astype(float) >= float(rule["min_pred_profit_label"])].copy()
+    if "min_pred_beat_spy_label" in rule and "pred_beat_spy_label" in out.columns:
+        out = out[out["pred_beat_spy_label"].astype(float) >= float(rule["min_pred_beat_spy_label"])].copy()
+    if "min_pred_future_alpha_vs_spy" in rule and "pred_future_alpha_vs_spy" in out.columns:
+        out = out[out["pred_future_alpha_vs_spy"].astype(float) >= float(rule["min_pred_future_alpha_vs_spy"])].copy()
+    return out
+
+
+def rule_name(rule: dict) -> str:
+    parts = [f"q{rule['score_quantile']:.2f}"]
+    if "max_target_position_frac" in rule:
+        parts.append(f"target<={rule['max_target_position_frac']:.2f}")
+    if "max_horizon_bars" in rule:
+        parts.append(f"h<={int(rule['max_horizon_bars'])}")
+    if "min_pred_profit_label" in rule:
+        parts.append(f"p_profit>={rule['min_pred_profit_label']:.2f}")
+    if "min_pred_beat_spy_label" in rule:
+        parts.append(f"p_beat>={rule['min_pred_beat_spy_label']:.2f}")
+    if "min_pred_future_alpha_vs_spy" in rule:
+        parts.append(f"pred_alpha>={rule['min_pred_future_alpha_vs_spy']:.4f}")
+    return " | ".join(parts)
+
+
+def candidate_rules(calibration_planner: pd.DataFrame) -> list[dict]:
+    score_quantiles = (0.50, 0.60, 0.70, 0.80, 0.85, 0.90)
+    max_targets = (0.50, 0.75, 1.00)
+    max_horizons = (30, 60, 120)
+    min_profit = (None, 0.50, 0.55)
+    min_beat = (None, 0.50, 0.55)
+    alpha_thresholds: list[float | None] = [None]
+    if "pred_future_alpha_vs_spy" in calibration_planner.columns:
+        alpha_thresholds += [
+            float(calibration_planner["pred_future_alpha_vs_spy"].quantile(q))
+            for q in (0.50, 0.60)
+        ]
+
+    rules = []
+    for q in score_quantiles:
+        score_threshold = float(calibration_planner["pred_score"].quantile(q))
+        for max_target in max_targets:
+            for max_horizon in max_horizons:
+                for profit_threshold in min_profit:
+                    for beat_threshold in min_beat:
+                        for alpha_threshold in alpha_thresholds:
+                            rule = {
+                                "name": "",
+                                "score_quantile": float(q),
+                                "score_threshold": score_threshold,
+                                "max_target_position_frac": float(max_target),
+                                "max_horizon_bars": int(max_horizon),
+                            }
+                            if profit_threshold is not None:
+                                rule["min_pred_profit_label"] = float(profit_threshold)
+                            if beat_threshold is not None:
+                                rule["min_pred_beat_spy_label"] = float(beat_threshold)
+                            if alpha_threshold is not None:
+                                rule["min_pred_future_alpha_vs_spy"] = float(alpha_threshold)
+                            rule["name"] = rule_name(rule)
+                            rules.append(rule)
+    return rules
+
+
+def _date_range(planner: pd.DataFrame) -> tuple[pd.Timestamp, pd.Timestamp]:
+    time_col = _time_col(planner)
+    start = pd.to_datetime(planner[time_col], utc=True).min()
+    exit_col = "exit_timestamp" if "exit_timestamp" in planner.columns else time_col
+    end = pd.to_datetime(planner[exit_col], utc=True).max()
+    return start, end
+
+
+def choose_trade_rule(
+    calibration_planner: pd.DataFrame,
+    min_coverage: float,
+    idle_asset: str,
+    starting_equity: float,
+    max_calibration_drawdown: float,
+) -> dict:
+    total_groups = len(calibration_planner)
+    test_start, test_end = _date_range(calibration_planner)
+    best: dict | None = None
+    evaluated = []
+    for rule in candidate_rules(calibration_planner):
+        active = apply_trade_rule(calibration_planner, rule)
+        coverage = len(active) / max(total_groups, 1)
+        if coverage < min_coverage:
+            continue
+        candidates = one_candidate_per_timestamp(active)
+        seq = sequential_portfolio(
+            candidates,
+            starting_equity=starting_equity,
+            idle_asset=idle_asset,
+            test_start=test_start,
+            test_end=test_end,
+            include_details=False,
+        )
+        if seq["trades"] < 10:
+            continue
+        if abs(float(seq["max_drawdown"])) > max_calibration_drawdown:
+            continue
+        score = (
+            seq["total_return"]
+            - 2.00 * abs(seq["max_drawdown"])
+            + 0.05 * seq["profit_rate"]
+            + 0.05 * seq["beat_spy_rate"]
+        )
+        row = {
+            "rule": rule,
+            "coverage": float(coverage),
+            "timestamp_candidates": int(len(candidates)),
+            "objective": float(score),
+            "sequential": {
+                k: v for k, v in seq.items()
+                if k not in ("equity_curve", "trades_detail")
+            },
+        }
+        evaluated.append(row)
+        if best is None or row["objective"] > best["objective"]:
+            best = row
+    if best is None:
+        raise RuntimeError("could not select calibrated trade rule")
+    evaluated = sorted(evaluated, key=lambda x: x["objective"], reverse=True)
+    return {"best": best, "top_candidates": evaluated[:20], "evaluated_rules": int(len(evaluated))}
+
+
 def _spy_lookup() -> tuple[np.ndarray, np.ndarray]:
     spy = pd.read_parquet(CACHE_DIR / "SPY_1m.parquet", columns=["timestamp", "close"]).sort_values("timestamp")
     ts = pd.to_datetime(spy["timestamp"], utc=True).astype("int64").to_numpy()
@@ -74,6 +205,7 @@ def sequential_portfolio(
     idle_asset: str = "cash",
     test_start: pd.Timestamp | None = None,
     test_end: pd.Timestamp | None = None,
+    include_details: bool = True,
 ) -> dict:
     time_col = _time_col(candidates)
     if candidates.empty:
@@ -129,22 +261,28 @@ def sequential_portfolio(
         next_available = max(exit_ts, entry_ts)
         portfolio_clock = next_available
         curve.append({"timestamp": str(exit_ts), "equity": equity, "spy_active_equity": spy_equity})
-        details.append({
-            "entry_timestamp": str(entry_ts),
-            "exit_timestamp": str(exit_ts),
-            "symbol": str(row["symbol"]),
-            "action": str(row["action"]),
-            "horizon_bars": int(row["horizon_bars"]),
-            "target_position_frac": float(row["target_position_frac"]),
-            "pred_score": float(row["pred_score"]),
-            "portfolio_return": ret,
-            "future_spy_return": spy_ret,
-            "future_alpha_vs_spy": float(row["future_alpha_vs_spy"]),
-            "idle_asset": idle_asset,
-            "idle_return_before_entry": idle_return,
-            "equity_before": before,
-            "equity_after": equity,
-        })
+        if include_details:
+            details.append({
+                "entry_timestamp": str(entry_ts),
+                "exit_timestamp": str(exit_ts),
+                "symbol": str(row["symbol"]),
+                "action": str(row["action"]),
+                "horizon_bars": int(row["horizon_bars"]),
+                "target_position_frac": float(row["target_position_frac"]),
+                "pred_score": float(row["pred_score"]),
+                "portfolio_return": ret,
+                "future_spy_return": spy_ret,
+                "future_alpha_vs_spy": float(row["future_alpha_vs_spy"]),
+                "idle_asset": idle_asset,
+                "idle_return_before_entry": idle_return,
+                "equity_before": before,
+                "equity_after": equity,
+            })
+        else:
+            details.append({
+                "portfolio_return": ret,
+                "future_alpha_vs_spy": float(row["future_alpha_vs_spy"]),
+            })
 
     if idle_asset == "spy" and ts_ns is not None and spy_close is not None and test_end is not None and test_end > portfolio_clock:
         tail_return = _asset_return(ts_ns, spy_close, portfolio_clock, test_end)
@@ -178,7 +316,7 @@ def sequential_portfolio(
         "beat_spy_rate": beat_spy_rate,
         "max_drawdown": max_dd,
         "equity_curve": curve,
-        "trades_detail": details,
+        "trades_detail": details if include_details else [],
     }
 
 
@@ -203,6 +341,22 @@ def run(args: argparse.Namespace) -> dict:
     calibration_planner = planner_rows(calibration_scored)
     threshold_choice = choose_threshold(calibration_planner, args.min_coverage, args.objective_mode)
     selected = threshold_choice["best"]
+    fixed_rule = {
+        "name": f"fixed_threshold_q{selected['quantile']:.2f}",
+        "score_quantile": float(selected["quantile"]),
+        "score_threshold": float(selected["threshold"]),
+    }
+    calibrated_rule = None
+    selected_rule = fixed_rule
+    if args.rule_mode == "calibrated":
+        calibrated_rule = choose_trade_rule(
+            calibration_planner,
+            min_coverage=args.min_coverage,
+            idle_asset=args.idle_asset,
+            starting_equity=args.starting_equity,
+            max_calibration_drawdown=args.max_calibration_drawdown,
+        )
+        selected_rule = calibrated_rule["best"]["rule"]
 
     test_scored = score_dataset(
         Path(args.test_data),
@@ -222,7 +376,7 @@ def run(args: argparse.Namespace) -> dict:
     test_start = pd.to_datetime(test_planner[time_col], utc=True).min()
     exit_col = "exit_timestamp" if "exit_timestamp" in test_planner.columns else time_col
     test_end = pd.to_datetime(test_planner[exit_col], utc=True).max()
-    active_groups = test_planner[test_planner["pred_score"] >= selected["threshold"]].copy()
+    active_groups = apply_trade_rule(test_planner, selected_rule)
     timestamp_candidates = one_candidate_per_timestamp(active_groups)
     sequential = sequential_portfolio(
         timestamp_candidates,
@@ -241,15 +395,18 @@ def run(args: argparse.Namespace) -> dict:
         "objective_mode": args.objective_mode,
         "entry_only": bool(args.entry_only),
         "idle_asset": args.idle_asset,
+        "rule_mode": args.rule_mode,
         "selected_threshold": selected,
+        "selected_trade_rule": selected_rule,
+        "calibrated_rule_search": calibrated_rule,
         "calibration_groups": int(len(calibration_planner)),
         "test_groups": int(len(test_planner)),
         "active_group_summary": summarize_with_cash(
             "locked_test_active_groups",
             active_groups,
             len(test_planner),
-            selected["threshold"],
-            selected["quantile"],
+            selected_rule["score_threshold"],
+            selected_rule["score_quantile"],
         ),
         "timestamp_candidates": int(len(timestamp_candidates)),
         "sequential_portfolio": sequential,
@@ -274,6 +431,8 @@ def main() -> None:
     parser.add_argument("--max-horizon-bars", type=int, default=120)
     parser.add_argument("--min-coverage", type=float, default=0.05)
     parser.add_argument("--objective-mode", choices=["cash_return", "active_return", "hybrid"], default="hybrid")
+    parser.add_argument("--rule-mode", choices=["fixed_threshold", "calibrated"], default="fixed_threshold")
+    parser.add_argument("--max-calibration-drawdown", type=float, default=0.18)
     parser.add_argument("--entry-only", action=argparse.BooleanOptionalAction, default=True, help="only allow buy entries from cash")
     parser.add_argument("--idle-asset", choices=["cash", "spy"], default="cash", help="asset held between model-selected trades")
     parser.add_argument("--starting-equity", type=float, default=50_000.0)

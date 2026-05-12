@@ -2,8 +2,10 @@
 
 ## Winning Strategy and Model Description
 
-As of 2026-05-12, the current deploy-shaped winning strategy is the locked
-five-year/one-year model with entry-only trades and SPY as the idle asset:
+As of 2026-05-12, the current raw-return winner is the locked five-year/one-year
+model with entry-only trades and SPY as the idle asset. The current
+risk-controlled paper-trading candidate uses the same model and allocator, but
+selects an additional action rule on calibration data only:
 
 ```text
 hold SPY by default -> replace SPY with model-selected stock only during active signals
@@ -15,7 +17,7 @@ out of training, chooses the score threshold from calibration only, allows only
 cash-entry `buy` actions, and simulates one non-overlapping active position at a
 time. It is still a research simulation, not a live-trading guarantee.
 
-Current winner:
+Raw-return winner:
 
 | item | value |
 |---|---|
@@ -36,6 +38,30 @@ Current winner:
 | max drawdown, SPY idle | -10.0% |
 | trade profit rate | 44.8% |
 | trade beat-SPY rate | 50.0% |
+
+Risk-controlled paper-trading candidate:
+
+| item | value |
+|---|---|
+| rule search data | train/calibration period only |
+| rule mode | calibrated |
+| risk cap | reject calibration rules below -18% max drawdown |
+| selected rule | q50 score, target <= 0.75, horizon <= 120 bars, predicted alpha >= 0.0003203 |
+| active candidate groups | 143 / 1,000 |
+| non-overlapping trades | 57 |
+| final equity | $69,581 from $50,000 |
+| sequential return, SPY idle | +39.2% |
+| SPY buy-and-hold over locked year | +27.7% |
+| max drawdown, SPY idle | -8.0% |
+| trade profit rate | 52.6% |
+| trade beat-SPY rate | 57.9% |
+
+This risk-controlled rule gives up raw return versus the q70 champion, but it
+is more attractive as the next paper-trading candidate because the active trades
+are profitable more often, beat SPY more often, and draw down less. A broader
+calibrated search without the drawdown cap overfit the calibration period and
+was rejected: it returned only +18.9% on the locked year with -15.0% max
+drawdown.
 
 The important caveat: the policy only beats SPY when idle capital remains in
 SPY. If idle capital sits in cash, the same active stock trades return +21.7%,
@@ -240,6 +266,22 @@ Locked allocator and tradable evaluation commands:
   --entry-only \
   --idle-asset spy \
   --device mps
+
+.venv/bin/python evaluate_tradable_allocator.py \
+  --calibration-data data/world_model/locked5y_train_intraday120 \
+  --test-data data/world_model/locked1y_test_intraday120 \
+  --world-checkpoint checkpoints/world_model/world_model_locked5y_intraday120_actionkey.pt \
+  --allocator-checkpoint checkpoints/world_model/allocator_locked5y_intraday120_q80.pt \
+  --output checkpoints/world_model/tradable_locked1y_intraday120_q80_calibrated_dd18_spyidle.json \
+  --batch-size 32768 \
+  --max-horizon-bars 120 \
+  --min-coverage 0.05 \
+  --objective-mode hybrid \
+  --rule-mode calibrated \
+  --max-calibration-drawdown 0.18 \
+  --entry-only \
+  --idle-asset spy \
+  --device mps
 ```
 
 ## What We Tried
@@ -263,12 +305,15 @@ The main iterations and current decisions:
 | Market-context allocator | active return fell to +0.094%, beat-SPY 48.6% | reject for now |
 | Locked 5y train / 1y test | cash-idle sequential return +21.7%, below SPY +27.7% | not enough alone |
 | Locked 5y train / 1y test with SPY idle | SPY-idle sequential return +55.7%, max DD -10.0% | current deploy-shaped winner |
+| Calibration-only risk rule search | uncapped search returned +18.9%, -15.0% DD on locked year | rejected overfit |
+| Calibration-only risk rule search with -18% DD cap | +39.2%, -8.0% DD, 52.6% profit rate, 57.9% beat-SPY | current paper-trading candidate |
 
 The most important open weakness is reliability of the active trades. The
 locked winner has strong portfolio return, but only 44.8% of active trades are
-profitable and one large CIEN trade contributes materially. The next useful work
-is paper trading, liquidity/order filters, single-trade risk caps, and
-additional locked years or rolling yearly tests.
+profitable and one large CIEN trade contributes materially. The risk-controlled
+candidate improves this to 52.6% profitable trades and 57.9% beat-SPY trades,
+but the next useful work is still paper trading, liquidity/order filters,
+single-trade risk caps, and additional locked years or rolling yearly tests.
 
 This dataset is the first step away from the old forecaster architecture.
 Instead of training only:
