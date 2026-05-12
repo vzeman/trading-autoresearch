@@ -90,6 +90,8 @@ class BuildConfig:
     cross_sectional: bool = False
     shared_timestamps: bool = False
     shard_by_symbol: bool = False
+    start_date: str = ""
+    end_date: str = ""
 
 
 def _cache_path(symbol: str) -> Path:
@@ -126,6 +128,43 @@ def _action_specs(action_mode: str) -> tuple[tuple[str, float, float], ...]:
     if action_mode == "rich":
         return DEFAULT_ACTIONS_RICH
     return DEFAULT_ACTIONS_BASIC
+
+
+def _source_bars_for_split(bars: pd.DataFrame, split_name: str) -> pd.DataFrame:
+    if split_name == "all":
+        return bars.sort_values("timestamp").reset_index(drop=True)
+    train_bars, eval_bars = split(bars)
+    return train_bars if split_name == "train" else eval_bars
+
+
+def _date_bound(text: str) -> pd.Timestamp | None:
+    if not text:
+        return None
+    ts = pd.Timestamp(text)
+    if ts.tzinfo is None:
+        return ts.tz_localize("UTC")
+    return ts.tz_convert("UTC")
+
+
+def _mask_indices_by_date(
+    feat: pd.DataFrame,
+    indices: np.ndarray,
+    max_horizon: int,
+    start_date: str,
+    end_date: str,
+) -> np.ndarray:
+    if len(indices) == 0 or (not start_date and not end_date):
+        return indices
+    timestamps_ns = pd.to_datetime(feat["timestamp"], utc=True).astype("int64").reset_index(drop=True)
+    start = _date_bound(start_date)
+    end = _date_bound(end_date)
+    mask = np.ones(len(indices), dtype=bool)
+    if start is not None:
+        mask &= timestamps_ns.iloc[indices].to_numpy() >= int(start.value)
+    if end is not None:
+        horizon_end_idx = np.minimum(indices + max_horizon, len(timestamps_ns) - 1)
+        mask &= timestamps_ns.iloc[horizon_end_idx].to_numpy() < int(end.value)
+    return indices[mask]
 
 
 def _safe_log_return(close: np.ndarray, start: int, end: int) -> float:
@@ -169,8 +208,7 @@ def _build_cross_sectional_features(
             bars = fetch_bars(sym, force=not config.cached_only)
         except Exception:
             continue
-        train_bars, eval_bars = split(bars)
-        source_bars = train_bars if config.split_name == "train" else eval_bars
+        source_bars = _source_bars_for_split(bars, config.split_name)
         if len(source_bars) < max(w for w, _ in windows) + 2:
             continue
         feat = featurize(source_bars, context=context).dropna().reset_index(drop=True)
@@ -324,11 +362,16 @@ def _choose_indices(
     min_i: int,
     max_horizon: int,
     rng: np.random.Generator,
+    feat: pd.DataFrame | None = None,
+    start_date: str = "",
+    end_date: str = "",
 ) -> np.ndarray:
     hi = n - max_horizon - 1
     if hi <= min_i:
         return np.empty(0, dtype=np.int64)
     available = np.arange(min_i, hi, dtype=np.int64)
+    if feat is not None:
+        available = _mask_indices_by_date(feat, available, max_horizon, start_date, end_date)
     if samples <= 0 or samples >= len(available):
         return available
     return np.sort(rng.choice(available, size=samples, replace=False))
@@ -363,8 +406,7 @@ def _build_symbol_rows(
         bars = fetch_bars(sym, force=not config.cached_only)
     except Exception as exc:
         return pd.DataFrame(), {"status": "failed", "error": str(exc)}
-    train_bars, eval_bars = split(bars)
-    source_bars = train_bars if config.split_name == "train" else eval_bars
+    source_bars = _source_bars_for_split(bars, config.split_name)
     if len(source_bars) < config.context_bars + max_horizon + 2:
         return pd.DataFrame(), {"status": "skipped", "bars": int(len(source_bars))}
 
@@ -379,6 +421,9 @@ def _build_symbol_rows(
         min_i=config.context_bars,
         max_horizon=max_horizon,
         rng=rng,
+        feat=feat,
+        start_date=config.start_date,
+        end_date=config.end_date,
     )
     if len(valid_indices) == 0:
         return pd.DataFrame(), {"status": "skipped", "bars": int(len(feat))}
@@ -406,6 +451,7 @@ def _build_symbol_rows(
             action, current_frac, target_frac = action_specs[int(action_idx)]
             for horizon in config.horizons:
                 row = dict(base)
+                row["exit_timestamp"] = feat["timestamp"].iloc[int(i) + int(horizon)]
                 row.update(
                     _outcome_for_action(
                         close=close,
@@ -443,8 +489,7 @@ def _build_symbol_rows_at_timestamps(
         bars = fetch_bars(sym, force=not config.cached_only)
     except Exception as exc:
         return pd.DataFrame(), {"status": "failed", "error": str(exc)}
-    train_bars, eval_bars = split(bars)
-    source_bars = train_bars if config.split_name == "train" else eval_bars
+    source_bars = _source_bars_for_split(bars, config.split_name)
     if len(source_bars) < config.context_bars + max_horizon + 2:
         return pd.DataFrame(), {"status": "skipped", "bars": int(len(source_bars))}
 
@@ -460,6 +505,8 @@ def _build_symbol_rows_at_timestamps(
         ts_ns = pd.Timestamp(ts).value
         i = int(np.searchsorted(ts_arr, ts_ns, side="right") - 1)
         if i < config.context_bars or i + max_horizon >= len(feat):
+            continue
+        if config.end_date and pd.Timestamp(feat["timestamp"].iloc[i + max_horizon]) >= _date_bound(config.end_date):
             continue
         sampled += 1
         base = {
@@ -484,6 +531,7 @@ def _build_symbol_rows_at_timestamps(
             action, current_frac, target_frac = action_specs[int(action_idx)]
             for horizon in config.horizons:
                 row = dict(base)
+                row["exit_timestamp"] = feat["timestamp"].iloc[i + int(horizon)]
                 row.update(
                     _outcome_for_action(
                         close=close,
@@ -541,8 +589,7 @@ def _metadata(config: BuildConfig, row_count: int, symbol_stats: dict[str, dict]
 def _sample_decision_timestamps(config: BuildConfig, context: dict[str, pd.DataFrame]) -> pd.Series:
     anchor = "SPY" if _cache_path("SPY").exists() else config.symbols[0]
     bars = fetch_bars(anchor, force=False)
-    train_bars, eval_bars = split(bars)
-    source_bars = train_bars if config.split_name == "train" else eval_bars
+    source_bars = _source_bars_for_split(bars, config.split_name)
     feat = featurize(source_bars, context=context).dropna().reset_index(drop=True)
     max_horizon = max(config.horizons)
     lo = config.context_bars
@@ -550,6 +597,9 @@ def _sample_decision_timestamps(config: BuildConfig, context: dict[str, pd.DataF
     if hi <= lo:
         raise RuntimeError("not enough anchor bars for shared timestamp sampling")
     idxs = np.arange(lo, hi, dtype=np.int64)
+    idxs = _mask_indices_by_date(feat, idxs, max_horizon, config.start_date, config.end_date)
+    if len(idxs) == 0:
+        raise RuntimeError("no anchor timestamps left after date filtering")
     rng = np.random.default_rng(config.seed)
     n = min(config.samples_per_symbol, len(idxs))
     picked = np.sort(rng.choice(idxs, size=n, replace=False))
@@ -640,11 +690,13 @@ def main(argv: Iterable[str] | None = None) -> None:
     parser.add_argument("--action-mode", choices=["basic", "rich", "full"], default="basic")
     parser.add_argument("--cross-sectional", action="store_true", help="add universe breadth, dispersion, and cross-sectional rank features")
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--split", choices=["train", "eval"], default="train")
+    parser.add_argument("--split", choices=["train", "eval", "all"], default="train")
     parser.add_argument("--context-bars", type=int, default=CONTEXT_BARS)
     parser.add_argument("--allow-download", action="store_true", help="fetch missing symbol bars instead of using cache only")
     parser.add_argument("--shard-by-symbol", action="store_true", help="write one parquet shard per symbol; recommended for large builds")
     parser.add_argument("--shared-timestamps", action="store_true", help="sample shared decision timestamps so groups rank across symbols")
+    parser.add_argument("--start-date", default="", help="optional UTC decision start date, inclusive; keeps earlier bars for feature context")
+    parser.add_argument("--end-date", default="", help="optional UTC outcome end date, exclusive; max horizon must finish before this")
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     symbols = _load_symbols(
@@ -673,6 +725,8 @@ def main(argv: Iterable[str] | None = None) -> None:
         cross_sectional=args.cross_sectional,
         shared_timestamps=args.shared_timestamps,
         shard_by_symbol=args.shard_by_symbol,
+        start_date=args.start_date,
+        end_date=args.end_date,
     )
     if args.shard_by_symbol:
         meta = build_dataset_sharded(config, output)

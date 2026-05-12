@@ -2,42 +2,54 @@
 
 ## Winning Strategy and Model Description
 
-As of 2026-05-12, the current winning strategy is the compact q80-label
-allocator with true walk-forward retraining and the `hybrid` threshold
-objective:
+As of 2026-05-12, the current deploy-shaped winning strategy is the locked
+five-year/one-year model with entry-only trades and SPY as the idle asset:
 
 ```text
-world model predictions -> compact allocator score -> past-only threshold -> trade or hold cash
+hold SPY by default -> replace SPY with model-selected stock only during active signals
 ```
 
-It is the best current backtest/walk-forward candidate, not a live-trading
-guarantee. The policy trades only when the allocator score is strong enough
-under thresholds selected from prior folds. When no candidate passes the
-threshold, the simulated portfolio stays in cash.
+This is closer to a tradable policy than the earlier independent group
+averages. It trains on the first five years of cached data, locks the final year
+out of training, chooses the score threshold from calibration only, allows only
+cash-entry `buy` actions, and simulates one non-overlapping active position at a
+time. It is still a research simulation, not a live-trading guarantee.
 
 Current winner:
 
 | item | value |
 |---|---|
-| base world model | `checkpoints/world_model/world_model_full500_intraday120_8m_actionkey.pt` |
-| allocator mode | q80 top-label, compact feature mode |
-| walk-forward method | retrain allocator each fold on calibration plus prior observed folds only |
+| base world model | `checkpoints/world_model/world_model_locked5y_intraday120_actionkey.pt` |
+| allocator | `checkpoints/world_model/allocator_locked5y_intraday120_q80.pt` |
+| train/calibration data | first five years, ending before 2025-05-05 |
+| locked test data | 2025-05-05 through 2026-05-05 |
+| tradable rule | hold SPY when idle; enter one selected stock trade at a time |
+| allowed actions | `buy` from cash only (`current_position_frac == 0`) |
 | threshold objective | `hybrid` |
-| epochs per fold | 3 |
-| active groups | 156 / 1,000 |
-| coverage | 15.6% |
-| mean active return | +0.756% |
-| active profit rate | 60.3% |
-| active beat-SPY rate | 59.0% |
-| return with cash | +0.118% |
-| mean PnL with cash | +$59.00 per $50k notional group |
+| selected threshold | calibration q70, score >= 0.2834358 |
+| active candidate groups | 205 / 1,000 |
+| non-overlapping trades | 58 |
+| final equity | $77,873 from $50,000 |
+| sequential return, SPY idle | +55.7% |
+| SPY buy-and-hold over locked year | +27.7% |
+| sequential return, cash idle | +21.7% |
+| max drawdown, SPY idle | -10.0% |
+| trade profit rate | 44.8% |
+| trade beat-SPY rate | 50.0% |
 
-The closest variant is `q80 hybrid + learned trade gate`: it improves active
-return to +0.771% and active beat-SPY to 59.9%, but its return with cash is
-slightly lower at +0.117%. Because the user goal is portfolio value, the compact
-q80 hybrid retrain stays the winner for now.
+The important caveat: the policy only beats SPY when idle capital remains in
+SPY. If idle capital sits in cash, the same active stock trades return +21.7%,
+which is good but below SPY's +27.7% over this unusually strong locked year.
+The edge is therefore an overlay: use SPY as the default exposure and let the
+world model temporarily replace SPY with selected stocks.
 
 Charts committed for the current simulated portfolio diagnostics:
+
+![locked one-year tradable equity](world_model_charts/locked1y_tradable_equity.png)
+
+![locked one-year drawdown](world_model_charts/locked1y_tradable_drawdown.png)
+
+![locked one-year trade returns](world_model_charts/locked1y_trade_returns.png)
 
 ![winning strategy equity](world_model_charts/winning_strategy_equity.png)
 
@@ -57,6 +69,9 @@ charts with:
 .venv/bin/python scripts/plot_world_model_results.py \
   --results-dir checkpoints/world_model \
   --output-dir docs/world_model_charts
+
+.venv/bin/python scripts/plot_tradable_locked_eval.py \
+  --output-dir docs/world_model_charts
 ```
 
 ## How the Model Was Created
@@ -70,22 +85,56 @@ market state + portfolio state + action + horizon -> realized portfolio outcome
 
 The data builder samples cached liquid US symbols at shared decision timestamps
 and expands each timestamp into many possible actions. The current training
-dataset is:
+datasets are:
 
 ```text
-data/world_model/cached193_shared500_full_counterfactual
+data/world_model/locked5y_train_intraday120
+data/world_model/locked1y_test_intraday120
 ```
 
 Key dataset settings:
 
 - 193 cached symbols.
-- 12,203,532 counterfactual rows.
+- 4,535,136 locked train/calibration rows.
+- 2,311,728 locked final-year test rows.
 - `full` action grid: 0%, 5%, 10%, 25%, 50%, 75%, and 100% target exposure.
 - Shared timestamps, so symbols/actions can be ranked at the same market
   moment.
-- Rich horizons in the full dataset; the winning checkpoint filters to 15, 30,
-  60, and 120 bar horizons.
+- Intraday horizons: 15, 30, 60, and 120 bars.
+- Explicit `exit_timestamp` per row, so the sequential evaluator can avoid
+  overlapping positions.
 - Fees and slippage are included in each simulated action outcome.
+
+Locked dataset build commands:
+
+```bash
+.venv/bin/python world_model_dataset.py \
+  --cached-all \
+  --symbol-limit 0 \
+  --samples-per-symbol 500 \
+  --actions-per-timestamp 12 \
+  --horizons 15,30,60,120 \
+  --action-mode full \
+  --split all \
+  --end-date 2025-05-05 \
+  --shared-timestamps \
+  --shard-by-symbol \
+  --output data/world_model/locked5y_train_intraday120
+
+.venv/bin/python world_model_dataset.py \
+  --cached-all \
+  --symbol-limit 0 \
+  --samples-per-symbol 250 \
+  --actions-per-timestamp 12 \
+  --horizons 15,30,60,120 \
+  --action-mode full \
+  --split all \
+  --start-date 2025-05-05 \
+  --end-date 2026-05-05 \
+  --shared-timestamps \
+  --shard-by-symbol \
+  --output data/world_model/locked1y_test_intraday120
+```
 
 Feature extraction combines three layers:
 
@@ -111,10 +160,10 @@ head. The current intraday-120 champion was trained on Apple MPS with:
 
 ```bash
 .venv/bin/python train_world_model.py \
-  --data data/world_model/cached193_shared500_full_counterfactual \
-  --limit-rows 8000000 \
+  --data data/world_model/locked5y_train_intraday120 \
+  --limit-rows 4500000 \
   --max-horizon-bars 120 \
-  --epochs 12 \
+  --epochs 8 \
   --batch-size 32768 \
   --hidden-dim 384 \
   --n-layers 4 \
@@ -123,10 +172,22 @@ head. The current intraday-120 champion was trained on Apple MPS with:
   --weight-decay 1e-3 \
   --symbol-dropout 0.20 \
   --rank-loss-coef 0.75 \
-  --patience 4 \
+  --patience 3 \
   --val-gap-days 14 \
-  --output checkpoints/world_model/world_model_full500_intraday120_8m_actionkey.pt
+  --output checkpoints/world_model/world_model_locked5y_intraday120_actionkey.pt \
+  --device mps
 ```
+
+Locked base model result:
+
+- rows loaded: 4,468,236
+- train rows: 3,555,706
+- validation rows: 885,141
+- best epoch: 5
+- best validation loss: 1.4012
+- validation profit accuracy: 59.8%
+- validation beat-SPY accuracy: 50.6%
+- device: Apple MPS
 
 The second-stage allocator freezes the world model, scores candidate actions,
 then learns which predicted outcomes are actually worth trading. The winning
@@ -144,6 +205,42 @@ allocator uses compact features only:
 Broad market-context allocator features were tested and made the result worse,
 so they remain optional diagnostics via `--feature-mode market`, not the
 default winner.
+
+Locked allocator and tradable evaluation commands:
+
+```bash
+.venv/bin/python train_allocator.py \
+  --train-data data/world_model/locked5y_train_intraday120 \
+  --test-data data/world_model/locked1y_test_intraday120 \
+  --world-checkpoint checkpoints/world_model/world_model_locked5y_intraday120_actionkey.pt \
+  --output checkpoints/world_model/allocator_locked5y_intraday120_q80.pt \
+  --epochs 5 \
+  --batch-size 32768 \
+  --hidden-dim 192 \
+  --n-layers 3 \
+  --dropout 0.25 \
+  --lr 1e-4 \
+  --weight-decay 1e-3 \
+  --val-gap-days 14 \
+  --max-horizon-bars 120 \
+  --top-quantile 0.80 \
+  --feature-mode compact \
+  --device mps
+
+.venv/bin/python evaluate_tradable_allocator.py \
+  --calibration-data data/world_model/locked5y_train_intraday120 \
+  --test-data data/world_model/locked1y_test_intraday120 \
+  --world-checkpoint checkpoints/world_model/world_model_locked5y_intraday120_actionkey.pt \
+  --allocator-checkpoint checkpoints/world_model/allocator_locked5y_intraday120_q80.pt \
+  --output checkpoints/world_model/tradable_locked1y_intraday120_q80_hybrid_entryonly_spyidle.json \
+  --batch-size 32768 \
+  --max-horizon-bars 120 \
+  --min-coverage 0.05 \
+  --objective-mode hybrid \
+  --entry-only \
+  --idle-asset spy \
+  --device mps
+```
 
 ## What We Tried
 
@@ -164,11 +261,14 @@ The main iterations and current decisions:
 | Score-based sizing | lowered drawdown but reduced return | not champion |
 | Learned trade gate | improved active quality, slightly lower cash return | close diagnostic |
 | Market-context allocator | active return fell to +0.094%, beat-SPY 48.6% | reject for now |
+| Locked 5y train / 1y test | cash-idle sequential return +21.7%, below SPY +27.7% | not enough alone |
+| Locked 5y train / 1y test with SPY idle | SPY-idle sequential return +55.7%, max DD -10.0% | current deploy-shaped winner |
 
-The most important open weakness is fold 2: the winner still loses in that
-period. The next useful work is not more blind feature injection; it is
-past-only risk control, peer-context features that are carefully regularized,
-and more robust fold coverage tests.
+The most important open weakness is reliability of the active trades. The
+locked winner has strong portfolio return, but only 44.8% of active trades are
+profitable and one large CIEN trade contributes materially. The next useful work
+is paper trading, liquidity/order filters, single-trade risk caps, and
+additional locked years or rolling yearly tests.
 
 This dataset is the first step away from the old forecaster architecture.
 Instead of training only:
