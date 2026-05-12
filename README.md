@@ -110,6 +110,18 @@ counterfactual dataset builder in `world_model_dataset.py`; see
 `train_world_model.py` and predicts action-conditioned portfolio outcomes;
 `evaluate_world_model.py` scores candidate actions as a first planner baseline.
 
+Latest world-model status: the current best walk-forward candidate is the
+compact q80-label allocator with true fold-by-fold retraining and the `hybrid`
+threshold objective. It trades 15.6% of eval groups, returns +0.756% on active
+groups, beats SPY on 59.0% of active groups, and returns +0.118% with cash when
+no trade is taken. This is a research backtest candidate, not a live guarantee.
+
+Read the full model creation notes, features, training settings, attempts, and
+simulated portfolio charts in
+[`docs/world_model_dataset.md`](docs/world_model_dataset.md).
+
+![world-model winning strategy](docs/world_model_charts/winning_strategy_equity.png)
+
 ## Reading the charts
 
 `docs/weighted_latest.png`:

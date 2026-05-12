@@ -1,5 +1,175 @@
 # Action-Conditioned Portfolio World-Model Dataset
 
+## Winning Strategy and Model Description
+
+As of 2026-05-12, the current winning strategy is the compact q80-label
+allocator with true walk-forward retraining and the `hybrid` threshold
+objective:
+
+```text
+world model predictions -> compact allocator score -> past-only threshold -> trade or hold cash
+```
+
+It is the best current backtest/walk-forward candidate, not a live-trading
+guarantee. The policy trades only when the allocator score is strong enough
+under thresholds selected from prior folds. When no candidate passes the
+threshold, the simulated portfolio stays in cash.
+
+Current winner:
+
+| item | value |
+|---|---|
+| base world model | `checkpoints/world_model/world_model_full500_intraday120_8m_actionkey.pt` |
+| allocator mode | q80 top-label, compact feature mode |
+| walk-forward method | retrain allocator each fold on calibration plus prior observed folds only |
+| threshold objective | `hybrid` |
+| epochs per fold | 3 |
+| active groups | 156 / 1,000 |
+| coverage | 15.6% |
+| mean active return | +0.756% |
+| active profit rate | 60.3% |
+| active beat-SPY rate | 59.0% |
+| return with cash | +0.118% |
+| mean PnL with cash | +$59.00 per $50k notional group |
+
+The closest variant is `q80 hybrid + learned trade gate`: it improves active
+return to +0.771% and active beat-SPY to 59.9%, but its return with cash is
+slightly lower at +0.117%. Because the user goal is portfolio value, the compact
+q80 hybrid retrain stays the winner for now.
+
+Charts committed for the current simulated portfolio diagnostics:
+
+![winning strategy equity](world_model_charts/winning_strategy_equity.png)
+
+![winning strategy fold returns](world_model_charts/winning_strategy_fold_returns.png)
+
+![experiment comparison](world_model_charts/experiment_comparison.png)
+
+![coverage vs return](world_model_charts/coverage_vs_return.png)
+
+![trade quality](world_model_charts/trade_quality.png)
+
+The experiment summary CSV is committed at
+`docs/world_model_charts/world_model_experiment_summary.csv`. Regenerate the
+charts with:
+
+```bash
+.venv/bin/python scripts/plot_world_model_results.py \
+  --results-dir checkpoints/world_model \
+  --output-dir docs/world_model_charts
+```
+
+## How the Model Was Created
+
+This is a separate action-conditioned portfolio world model, not the old
+single-point forecaster. Each row is a causal counterfactual:
+
+```text
+market state + portfolio state + action + horizon -> realized portfolio outcome
+```
+
+The data builder samples cached liquid US symbols at shared decision timestamps
+and expands each timestamp into many possible actions. The current training
+dataset is:
+
+```text
+data/world_model/cached193_shared500_full_counterfactual
+```
+
+Key dataset settings:
+
+- 193 cached symbols.
+- 12,203,532 counterfactual rows.
+- `full` action grid: 0%, 5%, 10%, 25%, 50%, 75%, and 100% target exposure.
+- Shared timestamps, so symbols/actions can be ranked at the same market
+  moment.
+- Rich horizons in the full dataset; the winning checkpoint filters to 15, 30,
+  60, and 120 bar horizons.
+- Fees and slippage are included in each simulated action outcome.
+
+Feature extraction combines three layers:
+
+- Market features from `experiment.featurize()`: symbol returns, ranges,
+  volatility, EMA distances, volume features, SPY/TLT/UUP context, and SPY
+  multi-horizon regime returns.
+- State summaries added by `world_model_dataset.py`: return, realized
+  volatility, and volume z-score over 30m, 2h, 1d, 5d, and 20d, plus 5d
+  drawdown.
+- Action/portfolio features: price, horizon, current position fraction, target
+  position fraction, trade notional, fees, slippage, symbol id, and transition
+  action key such as `buy|0.00->1.00`.
+
+World-model targets:
+
+- `portfolio_return`, `portfolio_pnl`, `max_drawdown`, `path_vol`
+- `future_asset_return`, `future_spy_return`, `future_alpha_vs_spy`
+- `profit_label`, `beat_spy_label`
+
+The base world model is a tabular latent MLP with symbol embeddings, action-key
+embeddings, regression heads, classification heads, and a rank top-quartile
+head. The current intraday-120 champion was trained on Apple MPS with:
+
+```bash
+.venv/bin/python train_world_model.py \
+  --data data/world_model/cached193_shared500_full_counterfactual \
+  --limit-rows 8000000 \
+  --max-horizon-bars 120 \
+  --epochs 12 \
+  --batch-size 32768 \
+  --hidden-dim 384 \
+  --n-layers 4 \
+  --dropout 0.30 \
+  --lr 1e-4 \
+  --weight-decay 1e-3 \
+  --symbol-dropout 0.20 \
+  --rank-loss-coef 0.75 \
+  --patience 4 \
+  --val-gap-days 14 \
+  --output checkpoints/world_model/world_model_full500_intraday120_8m_actionkey.pt
+```
+
+The second-stage allocator freezes the world model, scores candidate actions,
+then learns which predicted outcomes are actually worth trading. The winning
+allocator uses compact features only:
+
+- predicted portfolio return
+- predicted max drawdown
+- predicted path volatility
+- predicted future alpha versus SPY
+- predicted profit label
+- predicted beat-SPY label
+- predicted rank top-quartile score
+- price, horizon, current/target position, trade notional, fees, and slippage
+
+Broad market-context allocator features were tested and made the result worse,
+so they remain optional diagnostics via `--feature-mode market`, not the
+default winner.
+
+## What We Tried
+
+The main iterations and current decisions:
+
+| iteration | result | decision |
+|---|---|---|
+| Full-action base world model | overfit long-horizon buys on untouched eval | not tradable |
+| Short-horizon model up to 390 bars | generalized better, edge still small | useful baseline |
+| Intraday 15/30/60/120 bar model | best base model for current allocator | current base |
+| Cross-sectional feature world model | weaker forced planner and active returns | not champion |
+| Regularized cross-sectional model | better selective q90 slice, still weaker | diagnostic only |
+| Score tuner | worsened fixed planner versus original score | diagnostic only |
+| Second-stage allocator | improved high-confidence action ranking | current direction |
+| Walk-forward thresholding | reduced leakage from fixed thresholds | required |
+| True walk-forward allocator retraining | improved q80/hybrid practical policy | current winner |
+| Regime gate | reduced return despite decent beat-SPY | not champion |
+| Score-based sizing | lowered drawdown but reduced return | not champion |
+| Learned trade gate | improved active quality, slightly lower cash return | close diagnostic |
+| Market-context allocator | active return fell to +0.094%, beat-SPY 48.6% | reject for now |
+
+The most important open weakness is fold 2: the winner still loses in that
+period. The next useful work is not more blind feature injection; it is
+past-only risk control, peer-context features that are carefully regularized,
+and more robust fold coverage tests.
+
 This dataset is the first step away from the old forecaster architecture.
 Instead of training only:
 
@@ -18,7 +188,7 @@ The builder lives in `world_model_dataset.py` and writes parquet files under
 
 ## Current Read-First Status
 
-As of 2026-05-11, the best local direction is the plain intraday-120
+As of 2026-05-12, the best local direction is the plain intraday-120
 action-conditioned world model plus a second-stage allocator/ranker. The
 cross-sectional and narrower horizon specialists are not champions.
 
