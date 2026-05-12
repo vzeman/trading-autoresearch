@@ -73,13 +73,17 @@ Friction and concentration stress, added after the first locked result:
 | fixed q70 + extra 10 bps + max 3 trades/symbol + 10-day cooldown | +42.7%, -11.1% DD, 51 trades | survives SPY, but active hit rate is weak |
 | stress-trained allocator, fixed q70, same stress | +35.8%, -15.2% DD, 55 trades | beats SPY but not the old stressed survivor |
 | stress-trained allocator, calibrated rule, same stress | +27.3%, -12.9% DD, 44 trades, 59.1% beat-SPY | cleaner active quality, slightly below SPY |
+| stress-convex allocator, fixed q50, same stress | -1.8%, -15.7% DD, 66 trades | rejected; overtrades |
+| stress-convex allocator, calibrated rule, same stress | +25.4%, -10.0% DD, 45 trades, 55.6% beat-SPY | below SPY; rejected |
 
 The stress result changes the practical reading: the fixed q70 overlay is the
 best friction-stressed survivor. The first stress-trained allocator improves
 trade quality but does not improve locked portfolio return, so it is diagnostic
-rather than the new champion. A tradability bug was also fixed here: entry-only
-evaluation now excludes caret-prefixed symbols such as `^VIX`, which are useful
-market context but should not be treated as normal stock buy candidates.
+rather than the new champion. The convex stress target preserved some calibrated
+trade quality but failed to preserve portfolio return, so it is also rejected.
+A tradability bug was also fixed here: entry-only evaluation now excludes
+caret-prefixed symbols such as `^VIX`, which are useful market context but
+should not be treated as normal stock buy candidates.
 
 The important caveat: the policy only beats SPY when idle capital remains in
 SPY. If idle capital sits in cash, the same active stock trades return +21.7%,
@@ -293,6 +297,28 @@ Locked allocator and tradable evaluation commands:
   --volatility-penalty 0.25 \
   --device mps
 
+.venv/bin/python train_allocator.py \
+  --train-data data/world_model/locked5y_train_intraday120 \
+  --test-data data/world_model/locked1y_test_intraday120 \
+  --world-checkpoint checkpoints/world_model/world_model_locked5y_intraday120_actionkey.pt \
+  --output checkpoints/world_model/allocator_locked5y_intraday120_q80_stressconvex10.pt \
+  --epochs 4 \
+  --batch-size 32768 \
+  --hidden-dim 192 \
+  --n-layers 3 \
+  --dropout 0.25 \
+  --lr 1e-4 \
+  --weight-decay 1e-3 \
+  --val-gap-days 14 \
+  --max-horizon-bars 120 \
+  --top-quantile 0.80 \
+  --feature-mode compact \
+  --utility-mode stress_convex \
+  --extra-roundtrip-bps 10 \
+  --drawdown-penalty 0.40 \
+  --volatility-penalty 0.18 \
+  --device mps
+
 .venv/bin/python evaluate_tradable_allocator.py \
   --calibration-data data/world_model/locked5y_train_intraday120 \
   --test-data data/world_model/locked1y_test_intraday120 \
@@ -367,13 +393,15 @@ The main iterations and current decisions:
 | Calibration-only risk rule search with -18% DD cap | +39.2%, -8.0% DD, 52.6% profit rate, 57.9% beat-SPY | current paper-trading candidate |
 | Friction/concentration stress | fixed q70 survives at +42.7%; calibrated risk rule falls below SPY | next training objective must include frictions |
 | Stress-adjusted allocator target | +35.8% fixed, +27.3% calibrated under same stress | improves hit rate, not return champion |
+| Stress-convex allocator target | -1.8% fixed, +25.4% calibrated under same stress | rejected; overtrades or underperforms SPY |
 
 The most important open weakness is reliability of the active trades. The
 locked winner has strong portfolio return, but only 44.8% of active trades are
 profitable and one large CIEN trade contributes materially. The risk-controlled
 candidate improves this to 52.6% profitable trades and 57.9% beat-SPY trades,
-and the stress-trained calibrated allocator reaches 59.1% beat-SPY trades, but
-the stress tests show these cleaner rules give up too much portfolio return.
+the stress-trained calibrated allocator reaches 59.1% beat-SPY trades, and the
+stress-convex calibrated allocator reaches 55.6% beat-SPY trades, but the
+stress tests show these cleaner rules give up too much portfolio return.
 The next useful work is still paper trading, liquidity/order filters,
 single-trade risk caps, and additional locked years or rolling yearly tests.
 

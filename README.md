@@ -125,7 +125,9 @@ now followed by a stress-adjusted allocator experiment: it improves hit rates
 but not portfolio return, reaching +35.8% fixed and +27.3% calibrated under the
 same friction/concentration stress. Caret-prefixed market symbols such as `^VIX`
 are excluded from entry trades.
-still a research simulation, not a live guarantee.
+A convex stress-objective follow-up was rejected: fixed q50 overtraded and lost
+-1.8%, while the calibrated rule reached +25.4%, below SPY. This is still a
+research simulation, not a live guarantee.
 
 Read the full model creation notes, features, training settings, attempts, and
 simulated portfolio charts in

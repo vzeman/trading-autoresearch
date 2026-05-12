@@ -177,7 +177,7 @@ def add_targets(
         beat_label = out["beat_spy_label"].astype(float)
         dd_penalty = 0.25
         vol_penalty = 0.10
-    elif utility_mode == "stress_adjusted":
+    elif utility_mode in {"stress_adjusted", "stress_convex"}:
         target_return = _stress_adjusted_return(out, extra_roundtrip_bps)
         alpha = target_return - out["future_spy_return"].astype(float)
         profit_label = (target_return > 0.0).astype(float)
@@ -191,16 +191,28 @@ def add_targets(
     out["allocator_target_alpha"] = alpha.astype(np.float32)
     out["allocator_target_profit_label"] = profit_label.astype(np.float32)
     out["allocator_target_beat_spy_label"] = beat_label.astype(np.float32)
-    rank_pct = out.assign(_allocator_target_return=target_return).groupby(group_key)["_allocator_target_return"].rank(pct=True, method="average")
+    rank_target = target_return
+    if utility_mode == "stress_convex":
+        raw_return = out["portfolio_return"].astype(float)
+        raw_alpha = out["future_alpha_vs_spy"].astype(float)
+        rank_target = (
+            target_return
+            + 0.35 * raw_return.clip(lower=0.0)
+            + 0.25 * raw_alpha.clip(lower=0.0)
+        )
+    rank_pct = out.assign(_allocator_rank_target=rank_target).groupby(group_key)["_allocator_rank_target"].rank(pct=True, method="average")
     out["allocator_top_label"] = (rank_pct >= top_quantile).astype(np.float32)
-    out["allocator_utility"] = (
+    utility = (
         target_return.clip(-1.0, 3.0)
         + 0.35 * alpha.clip(-1.0, 3.0)
         + 0.15 * profit_label
         + 0.25 * beat_label
         + dd_penalty * out["max_drawdown"].clip(-1.0, 0.0)
         - vol_penalty * out["path_vol"].clip(0.0, 0.20)
-    ).astype(np.float32)
+    )
+    if utility_mode == "stress_convex":
+        utility = utility + 0.35 * raw_return.clip(lower=0.0, upper=0.12) + 0.25 * raw_alpha.clip(lower=0.0, upper=0.12)
+    out["allocator_utility"] = utility.astype(np.float32)
     return out
 
 
@@ -472,7 +484,7 @@ def main() -> None:
     parser.add_argument("--max-horizon-bars", type=int, default=0)
     parser.add_argument("--top-quantile", type=float, default=0.80)
     parser.add_argument("--feature-mode", choices=["compact", "market"], default="compact")
-    parser.add_argument("--utility-mode", choices=["default", "stress_adjusted"], default="default")
+    parser.add_argument("--utility-mode", choices=["default", "stress_adjusted", "stress_convex"], default="default")
     parser.add_argument("--extra-roundtrip-bps", type=float, default=0.0)
     parser.add_argument("--drawdown-penalty", type=float, default=0.25)
     parser.add_argument("--volatility-penalty", type=float, default=0.10)
