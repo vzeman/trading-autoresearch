@@ -75,15 +75,27 @@ Friction and concentration stress, added after the first locked result:
 | stress-trained allocator, calibrated rule, same stress | +27.3%, -12.9% DD, 44 trades, 59.1% beat-SPY | cleaner active quality, slightly below SPY |
 | stress-convex allocator, fixed q50, same stress | -1.8%, -15.7% DD, 66 trades | rejected; overtrades |
 | stress-convex allocator, calibrated rule, same stress | +25.4%, -10.0% DD, 45 trades, 55.6% beat-SPY | below SPY; rejected |
+| stress allocator + observable tradability filters | +51.5%, -8.5% DD, 40 trades, 55.0% beat-SPY | best filtered stressed survivor |
+| tradability-stress allocator + same filters | +20.5%, -9.2% DD, 44 trades, 54.5% beat-SPY | too conservative; below SPY |
+| stress/tradability-stress ensemble + calibrated rule | +35.8%, -14.5% DD, 38 trades, 55.3% beat-SPY | useful diagnostic, not winner |
 
 The stress result changes the practical reading: the fixed q70 overlay is the
 best friction-stressed survivor. The first stress-trained allocator improves
 trade quality but does not improve locked portfolio return, so it is diagnostic
 rather than the new champion. The convex stress target preserved some calibrated
 trade quality but failed to preserve portfolio return, so it is also rejected.
-A tradability bug was also fixed here: entry-only evaluation now excludes
-caret-prefixed symbols such as `^VIX`, which are useful market context but
-should not be treated as normal stock buy candidates.
+The next improvement came from observable tradability filters rather than a new
+allocator objective: minimum price, minimum notional, one-day volume-z,
+one-day volatility, and one-day move guards raised the locked stressed result to
++51.5% with lower drawdown. A tradability bug was also fixed here: entry-only
+evaluation now excludes caret-prefixed symbols such as `^VIX`, which are useful
+market context but should not be treated as normal stock buy candidates.
+
+The yearly rolling-eval harness now exists, but its first calendar-year run is
+only diagnostic because it reuses the current trained model. A 2025 calendar
+slice with 2022-2024 calibration returned +18.1%, -15.1% DD, 34 trades, and
+41.2% beat-SPY. The next real proof step is to retrain the world model and
+allocator inside each yearly fold.
 
 The important caveat: the policy only beats SPY when idle capital remains in
 SPY. If idle capital sits in cash, the same active stock trades return +21.7%,
@@ -319,6 +331,28 @@ Locked allocator and tradable evaluation commands:
   --volatility-penalty 0.18 \
   --device mps
 
+.venv/bin/python train_allocator.py \
+  --train-data data/world_model/locked5y_train_intraday120 \
+  --test-data data/world_model/locked1y_test_intraday120 \
+  --world-checkpoint checkpoints/world_model/world_model_locked5y_intraday120_actionkey.pt \
+  --output checkpoints/world_model/allocator_locked5y_intraday120_q80_tradablestress10.pt \
+  --epochs 4 \
+  --batch-size 32768 \
+  --hidden-dim 192 \
+  --n-layers 3 \
+  --dropout 0.25 \
+  --lr 1e-4 \
+  --weight-decay 1e-3 \
+  --val-gap-days 14 \
+  --max-horizon-bars 120 \
+  --top-quantile 0.80 \
+  --feature-mode compact \
+  --utility-mode tradable_stress \
+  --extra-roundtrip-bps 10 \
+  --drawdown-penalty 0.65 \
+  --volatility-penalty 0.25 \
+  --device mps
+
 .venv/bin/python evaluate_tradable_allocator.py \
   --calibration-data data/world_model/locked5y_train_intraday120 \
   --test-data data/world_model/locked1y_test_intraday120 \
@@ -368,6 +402,52 @@ Locked allocator and tradable evaluation commands:
   --device mps
 ```
 
+Filtered and ensemble tradable diagnostics:
+
+```bash
+.venv/bin/python evaluate_tradable_allocator.py \
+  --calibration-data data/world_model/locked5y_train_intraday120 \
+  --test-data data/world_model/locked1y_test_intraday120 \
+  --world-checkpoint checkpoints/world_model/world_model_locked5y_intraday120_actionkey.pt \
+  --allocator-checkpoint checkpoints/world_model/allocator_locked5y_intraday120_q80_stress10.pt \
+  --output checkpoints/world_model/tradable_locked1y_intraday120_q80_stress10_filters_fixed_cost10_cap3_cd10_spyidle.json \
+  --rule-mode fixed_threshold \
+  --objective-mode hybrid \
+  --extra-roundtrip-bps 10 \
+  --max-trades-per-symbol 3 \
+  --symbol-cooldown-days 10 \
+  --min-price 5 \
+  --min-trade-notional 1000 \
+  --min-state-volume-z-1d -3 \
+  --max-state-vol-1d 0.08 \
+  --max-abs-state-ret-1d 0.20 \
+  --entry-only \
+  --idle-asset spy \
+  --device mps
+
+.venv/bin/python rolling_yearly_tradable_eval.py \
+  --world-checkpoint checkpoints/world_model/world_model_locked5y_intraday120_actionkey.pt \
+  --allocator-checkpoint checkpoints/world_model/allocator_locked5y_intraday120_q80_stress10.pt \
+  --output checkpoints/world_model/rolling_yearly_tradable_filters_2025_summary.json \
+  --output-dir checkpoints/world_model/rolling_yearly_filters_2025 \
+  --work-dir data/world_model/yearly_slices_filters \
+  --start-year 2025 \
+  --end-year 2025 \
+  --train-years 3 \
+  --rule-mode fixed_threshold \
+  --objective-mode hybrid \
+  --extra-roundtrip-bps 10 \
+  --max-trades-per-symbol 3 \
+  --symbol-cooldown-days 10 \
+  --min-price 5 \
+  --min-trade-notional 1000 \
+  --min-state-volume-z-1d -3 \
+  --max-state-vol-1d 0.08 \
+  --max-abs-state-ret-1d 0.20 \
+  --idle-asset spy \
+  --device mps
+```
+
 ## What We Tried
 
 The main iterations and current decisions:
@@ -394,6 +474,10 @@ The main iterations and current decisions:
 | Friction/concentration stress | fixed q70 survives at +42.7%; calibrated risk rule falls below SPY | next training objective must include frictions |
 | Stress-adjusted allocator target | +35.8% fixed, +27.3% calibrated under same stress | improves hit rate, not return champion |
 | Stress-convex allocator target | -1.8% fixed, +25.4% calibrated under same stress | rejected; overtrades or underperforms SPY |
+| Observable tradability filters | +51.5%, -8.5% DD on locked year under cost/cap/cooldown | current best stressed survivor |
+| Tradability-stress allocator target | +20.5%, -9.2% DD with same filters | rejected; too conservative |
+| Allocator ensemble gating | +35.8%, -14.5% DD with calibrated rule | diagnostic; below filtered stress-only |
+| Yearly rolling harness | 2025 calendar diagnostic +18.1%, -15.1% DD | code ready; needs full per-year retraining |
 
 The most important open weakness is reliability of the active trades. The
 locked winner has strong portfolio return, but only 44.8% of active trades are
@@ -401,9 +485,10 @@ profitable and one large CIEN trade contributes materially. The risk-controlled
 candidate improves this to 52.6% profitable trades and 57.9% beat-SPY trades,
 the stress-trained calibrated allocator reaches 59.1% beat-SPY trades, and the
 stress-convex calibrated allocator reaches 55.6% beat-SPY trades, but the
-stress tests show these cleaner rules give up too much portfolio return.
-The next useful work is still paper trading, liquidity/order filters,
-single-trade risk caps, and additional locked years or rolling yearly tests.
+stress tests show these cleaner rules give up too much portfolio return. The
+filtered stress allocator is the best current balance, but active trade hit
+rate is still only 47.5%. The next useful work is full rolling retrains,
+paper trading, earnings/liquidity/order filters, and single-trade risk caps.
 
 This dataset is the first step away from the old forecaster architecture.
 Instead of training only:

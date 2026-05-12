@@ -177,7 +177,7 @@ def add_targets(
         beat_label = out["beat_spy_label"].astype(float)
         dd_penalty = 0.25
         vol_penalty = 0.10
-    elif utility_mode in {"stress_adjusted", "stress_convex"}:
+    elif utility_mode in {"stress_adjusted", "stress_convex", "tradable_stress"}:
         target_return = _stress_adjusted_return(out, extra_roundtrip_bps)
         alpha = target_return - out["future_spy_return"].astype(float)
         profit_label = (target_return > 0.0).astype(float)
@@ -200,6 +200,15 @@ def add_targets(
             + 0.35 * raw_return.clip(lower=0.0)
             + 0.25 * raw_alpha.clip(lower=0.0)
         )
+    elif utility_mode == "tradable_stress":
+        rank_target = (
+            target_return
+            + 0.50 * alpha.clip(lower=-0.05, upper=0.15)
+            + 0.08 * profit_label
+            + 0.12 * beat_label
+            + 0.65 * out["max_drawdown"].astype(float).clip(lower=-0.25, upper=0.0)
+            - 0.20 * out["path_vol"].astype(float).clip(lower=0.0, upper=0.20)
+        )
     rank_pct = out.assign(_allocator_rank_target=rank_target).groupby(group_key)["_allocator_rank_target"].rank(pct=True, method="average")
     out["allocator_top_label"] = (rank_pct >= top_quantile).astype(np.float32)
     utility = (
@@ -212,6 +221,16 @@ def add_targets(
     )
     if utility_mode == "stress_convex":
         utility = utility + 0.35 * raw_return.clip(lower=0.0, upper=0.12) + 0.25 * raw_alpha.clip(lower=0.0, upper=0.12)
+    elif utility_mode == "tradable_stress":
+        target_frac = out["target_position_frac"].astype(float).clip(lower=0.0, upper=1.0)
+        state_vol = out["state_vol_1d"].astype(float).clip(lower=0.0, upper=0.20) if "state_vol_1d" in out.columns else 0.0
+        utility = (
+            utility
+            + 0.20 * target_return.clip(lower=0.0, upper=0.12)
+            + 0.25 * alpha.clip(lower=0.0, upper=0.12)
+            - 0.08 * target_frac
+            - 0.15 * state_vol
+        )
     out["allocator_utility"] = utility.astype(np.float32)
     return out
 
@@ -484,7 +503,7 @@ def main() -> None:
     parser.add_argument("--max-horizon-bars", type=int, default=0)
     parser.add_argument("--top-quantile", type=float, default=0.80)
     parser.add_argument("--feature-mode", choices=["compact", "market"], default="compact")
-    parser.add_argument("--utility-mode", choices=["default", "stress_adjusted", "stress_convex"], default="default")
+    parser.add_argument("--utility-mode", choices=["default", "stress_adjusted", "stress_convex", "tradable_stress"], default="default")
     parser.add_argument("--extra-roundtrip-bps", type=float, default=0.0)
     parser.add_argument("--drawdown-penalty", type=float, default=0.25)
     parser.add_argument("--volatility-penalty", type=float, default=0.10)

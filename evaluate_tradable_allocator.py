@@ -22,6 +22,7 @@ import pandas as pd
 import torch
 
 from prepare import CACHE_DIR
+from train_allocator import apply_allocator
 from walk_forward_allocator import choose_threshold, planner_rows, score_dataset, summarize_with_cash
 from train_world_model import pick_device
 
@@ -48,6 +49,27 @@ def entry_candidates(scored: pd.DataFrame) -> pd.DataFrame:
     ].copy()
 
 
+def tradability_filters(scored: pd.DataFrame, args: argparse.Namespace) -> tuple[pd.DataFrame, dict]:
+    """Apply filters known at decision time before any threshold search."""
+    out = scored.copy()
+    before = len(out)
+    counts: dict[str, int | float] = {"input_rows": int(before)}
+    if args.min_price > 0 and "price" in out.columns:
+        out = out[out["price"].astype(float) >= float(args.min_price)].copy()
+    if args.min_trade_notional > 0 and "trade_notional" in out.columns:
+        out = out[out["trade_notional"].astype(float) >= float(args.min_trade_notional)].copy()
+    if args.min_state_volume_z_1d > -99 and "state_volume_z_1d" in out.columns:
+        out = out[out["state_volume_z_1d"].astype(float) >= float(args.min_state_volume_z_1d)].copy()
+    if args.max_state_vol_1d > 0 and "state_vol_1d" in out.columns:
+        out = out[out["state_vol_1d"].astype(float) <= float(args.max_state_vol_1d)].copy()
+    if args.max_abs_state_ret_1d > 0 and "state_ret_1d" in out.columns:
+        out = out[out["state_ret_1d"].astype(float).abs() <= float(args.max_abs_state_ret_1d)].copy()
+    counts["output_rows"] = int(len(out))
+    counts["dropped_rows"] = int(before - len(out))
+    counts["drop_rate"] = float((before - len(out)) / max(before, 1))
+    return out, counts
+
+
 def apply_trade_rule(planner: pd.DataFrame, rule: dict) -> pd.DataFrame:
     out = planner[planner["pred_score"] >= float(rule["score_threshold"])].copy()
     if "max_target_position_frac" in rule:
@@ -60,6 +82,8 @@ def apply_trade_rule(planner: pd.DataFrame, rule: dict) -> pd.DataFrame:
         out = out[out["pred_beat_spy_label"].astype(float) >= float(rule["min_pred_beat_spy_label"])].copy()
     if "min_pred_future_alpha_vs_spy" in rule and "pred_future_alpha_vs_spy" in out.columns:
         out = out[out["pred_future_alpha_vs_spy"].astype(float) >= float(rule["min_pred_future_alpha_vs_spy"])].copy()
+    if "max_pred_score_std" in rule and "pred_score_std" in out.columns:
+        out = out[out["pred_score_std"].astype(float) <= float(rule["max_pred_score_std"])].copy()
     return out
 
 
@@ -75,6 +99,8 @@ def rule_name(rule: dict) -> str:
         parts.append(f"p_beat>={rule['min_pred_beat_spy_label']:.2f}")
     if "min_pred_future_alpha_vs_spy" in rule:
         parts.append(f"pred_alpha>={rule['min_pred_future_alpha_vs_spy']:.4f}")
+    if "max_pred_score_std" in rule:
+        parts.append(f"score_std<={rule['max_pred_score_std']:.4f}")
     return " | ".join(parts)
 
 
@@ -90,6 +116,12 @@ def candidate_rules(calibration_planner: pd.DataFrame) -> list[dict]:
             float(calibration_planner["pred_future_alpha_vs_spy"].quantile(q))
             for q in (0.50, 0.60)
         ]
+    score_std_thresholds: list[float | None] = [None]
+    if "pred_score_std" in calibration_planner.columns:
+        score_std_thresholds += [
+            float(calibration_planner["pred_score_std"].quantile(q))
+            for q in (0.50, 0.75)
+        ]
 
     rules = []
     for q in score_quantiles:
@@ -99,22 +131,62 @@ def candidate_rules(calibration_planner: pd.DataFrame) -> list[dict]:
                 for profit_threshold in min_profit:
                     for beat_threshold in min_beat:
                         for alpha_threshold in alpha_thresholds:
-                            rule = {
-                                "name": "",
-                                "score_quantile": float(q),
-                                "score_threshold": score_threshold,
-                                "max_target_position_frac": float(max_target),
-                                "max_horizon_bars": int(max_horizon),
-                            }
-                            if profit_threshold is not None:
-                                rule["min_pred_profit_label"] = float(profit_threshold)
-                            if beat_threshold is not None:
-                                rule["min_pred_beat_spy_label"] = float(beat_threshold)
-                            if alpha_threshold is not None:
-                                rule["min_pred_future_alpha_vs_spy"] = float(alpha_threshold)
-                            rule["name"] = rule_name(rule)
-                            rules.append(rule)
+                            for score_std_threshold in score_std_thresholds:
+                                rule = {
+                                    "name": "",
+                                    "score_quantile": float(q),
+                                    "score_threshold": score_threshold,
+                                    "max_target_position_frac": float(max_target),
+                                    "max_horizon_bars": int(max_horizon),
+                                }
+                                if profit_threshold is not None:
+                                    rule["min_pred_profit_label"] = float(profit_threshold)
+                                if beat_threshold is not None:
+                                    rule["min_pred_beat_spy_label"] = float(beat_threshold)
+                                if alpha_threshold is not None:
+                                    rule["min_pred_future_alpha_vs_spy"] = float(alpha_threshold)
+                                if score_std_threshold is not None:
+                                    rule["max_pred_score_std"] = float(score_std_threshold)
+                                rule["name"] = rule_name(rule)
+                                rules.append(rule)
     return rules
+
+
+def score_dataset_ensemble(
+    data: Path,
+    world_ckpt: dict,
+    allocator_ckpts: list[dict],
+    device: str,
+    batch_size: int,
+    limit_rows: int,
+    min_horizon_bars: int,
+    max_horizon_bars: int,
+    seed: int,
+) -> pd.DataFrame:
+    base = score_dataset(
+        data,
+        world_ckpt,
+        allocator_ckpts[0],
+        device,
+        batch_size,
+        limit_rows,
+        min_horizon_bars,
+        max_horizon_bars,
+        seed,
+    )
+    score_cols = [base["pred_score"].to_numpy(np.float32)]
+    for ckpt in allocator_ckpts[1:]:
+        scored = apply_allocator(base.drop(columns=["pred_score"], errors="ignore"), ckpt, device=device, batch_size=batch_size)
+        score_cols.append(scored["pred_score"].to_numpy(np.float32))
+    if len(score_cols) == 1:
+        return base
+    scores = np.vstack(score_cols)
+    out = base.copy()
+    out["pred_score"] = scores.mean(axis=0)
+    out["pred_score_std"] = scores.std(axis=0)
+    out["pred_score_min"] = scores.min(axis=0)
+    out["ensemble_size"] = int(scores.shape[0])
+    return out
 
 
 def _date_range(planner: pd.DataFrame) -> tuple[pd.Timestamp, pd.Timestamp]:
@@ -444,12 +516,13 @@ def constrained_sequential_portfolio(
 def run(args: argparse.Namespace) -> dict:
     device = pick_device(args.device)
     world_ckpt = torch.load(args.world_checkpoint, map_location="cpu", weights_only=False)
-    allocator_ckpt = torch.load(args.allocator_checkpoint, map_location="cpu", weights_only=False)
+    allocator_paths = [args.allocator_checkpoint] + list(args.ensemble_allocator_checkpoints)
+    allocator_ckpts = [torch.load(path, map_location="cpu", weights_only=False) for path in allocator_paths]
 
-    calibration_scored = score_dataset(
+    calibration_scored = score_dataset_ensemble(
         Path(args.calibration_data),
         world_ckpt,
-        allocator_ckpt,
+        allocator_ckpts,
         device,
         args.batch_size,
         args.limit_rows,
@@ -459,6 +532,7 @@ def run(args: argparse.Namespace) -> dict:
     )
     if args.entry_only:
         calibration_scored = entry_candidates(calibration_scored)
+    calibration_scored, calibration_filter_summary = tradability_filters(calibration_scored, args)
     calibration_planner = planner_rows(calibration_scored)
     threshold_choice = choose_threshold(calibration_planner, args.min_coverage, args.objective_mode)
     selected = threshold_choice["best"]
@@ -483,10 +557,10 @@ def run(args: argparse.Namespace) -> dict:
         )
         selected_rule = calibrated_rule["best"]["rule"]
 
-    test_scored = score_dataset(
+    test_scored = score_dataset_ensemble(
         Path(args.test_data),
         world_ckpt,
-        allocator_ckpt,
+        allocator_ckpts,
         device,
         args.batch_size,
         args.limit_rows,
@@ -496,6 +570,7 @@ def run(args: argparse.Namespace) -> dict:
     )
     if args.entry_only:
         test_scored = entry_candidates(test_scored)
+    test_scored, test_filter_summary = tradability_filters(test_scored, args)
     test_planner = planner_rows(test_scored)
     time_col = _time_col(test_planner)
     test_start = pd.to_datetime(test_planner[time_col], utc=True).min()
@@ -518,6 +593,7 @@ def run(args: argparse.Namespace) -> dict:
     payload = {
         "world_checkpoint": args.world_checkpoint,
         "allocator_checkpoint": args.allocator_checkpoint,
+        "ensemble_allocator_checkpoints": list(args.ensemble_allocator_checkpoints),
         "calibration_data": args.calibration_data,
         "test_data": args.test_data,
         "device": device,
@@ -529,6 +605,15 @@ def run(args: argparse.Namespace) -> dict:
         "extra_fee_usd": float(args.extra_fee_usd),
         "max_trades_per_symbol": int(args.max_trades_per_symbol),
         "symbol_cooldown_days": float(args.symbol_cooldown_days),
+        "tradability_filters": {
+            "min_price": float(args.min_price),
+            "min_trade_notional": float(args.min_trade_notional),
+            "min_state_volume_z_1d": float(args.min_state_volume_z_1d),
+            "max_state_vol_1d": float(args.max_state_vol_1d),
+            "max_abs_state_ret_1d": float(args.max_abs_state_ret_1d),
+        },
+        "calibration_filter_summary": calibration_filter_summary,
+        "test_filter_summary": test_filter_summary,
         "selected_threshold": selected,
         "selected_trade_rule": selected_rule,
         "calibrated_rule_search": calibrated_rule,
@@ -557,6 +642,7 @@ def main() -> None:
     parser.add_argument("--test-data", required=True)
     parser.add_argument("--world-checkpoint", required=True)
     parser.add_argument("--allocator-checkpoint", required=True)
+    parser.add_argument("--ensemble-allocator-checkpoints", nargs="*", default=[], help="optional extra allocator checkpoints; scores are averaged and calibrated rules may gate disagreement")
     parser.add_argument("--output", required=True)
     parser.add_argument("--batch-size", type=int, default=32768)
     parser.add_argument("--limit-rows", type=int, default=0)
@@ -570,6 +656,11 @@ def main() -> None:
     parser.add_argument("--extra-fee-usd", type=float, default=0.0, help="extra flat cost stress per active trade")
     parser.add_argument("--max-trades-per-symbol", type=int, default=0, help="optional cap on selected active trades per symbol")
     parser.add_argument("--symbol-cooldown-days", type=float, default=0.0, help="optional cooldown before reusing the same symbol")
+    parser.add_argument("--min-price", type=float, default=0.0, help="observable liquidity guard: minimum entry price")
+    parser.add_argument("--min-trade-notional", type=float, default=0.0, help="observable liquidity guard: minimum simulated trade notional")
+    parser.add_argument("--min-state-volume-z-1d", type=float, default=-99.0, help="observable liquidity guard using one-day volume z-score")
+    parser.add_argument("--max-state-vol-1d", type=float, default=0.0, help="observable risk guard using one-day state volatility")
+    parser.add_argument("--max-abs-state-ret-1d", type=float, default=0.0, help="observable event guard using absolute one-day state return")
     parser.add_argument("--entry-only", action=argparse.BooleanOptionalAction, default=True, help="only allow buy entries from cash")
     parser.add_argument("--idle-asset", choices=["cash", "spy"], default="cash", help="asset held between model-selected trades")
     parser.add_argument("--starting-equity", type=float, default=50_000.0)

@@ -127,7 +127,13 @@ same friction/concentration stress. Caret-prefixed market symbols such as `^VIX`
 are excluded from entry trades.
 A convex stress-objective follow-up was rejected: fixed q50 overtraded and lost
 -1.8%, while the calibrated rule reached +25.4%, below SPY. This is still a
-research simulation, not a live guarantee.
+research simulation, not a live guarantee. The latest tradability pass adds
+observable liquidity/volatility filters, a yearly rolling-eval harness, a
+tradability-stress allocator objective, and optional allocator ensembling. The
+best new locked-year result is the existing stress allocator plus observable
+filters: +51.5%, 40 trades, -8.5% max drawdown, 47.5% profitable trades, and
+55.0% active beat-SPY rate. It improves the stressed survivor, but it is still
+not live-tradable until it survives full rolling retrains and paper trading.
 
 Read the full model creation notes, features, training settings, attempts, and
 simulated portfolio charts in
