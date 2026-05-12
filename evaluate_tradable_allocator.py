@@ -44,6 +44,7 @@ def entry_candidates(scored: pd.DataFrame) -> pd.DataFrame:
         (scored["current_position_frac"].astype(float) == 0.0)
         & (scored["action"].astype(str) == "buy")
         & (scored["target_position_frac"].astype(float) > 0.0)
+        & (~scored["symbol"].astype(str).str.startswith("^"))
     ].copy()
 
 

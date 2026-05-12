@@ -101,6 +101,10 @@ class AllocatorConfig:
     max_horizon_bars: int
     top_quantile: float
     feature_mode: str
+    utility_mode: str
+    extra_roundtrip_bps: float
+    drawdown_penalty: float
+    volatility_penalty: float
     seed: int
     device: str
 
@@ -149,19 +153,53 @@ def split_masks(df: pd.DataFrame, val_fraction: float, val_gap_days: float) -> t
     return train_mask, val_mask
 
 
-def add_targets(df: pd.DataFrame, top_quantile: float) -> pd.DataFrame:
+def _stress_adjusted_return(df: pd.DataFrame, extra_roundtrip_bps: float) -> pd.Series:
+    target_frac = df["target_position_frac"].astype(float) if "target_position_frac" in df.columns else 1.0
+    extra_cost = target_frac * max(0.0, extra_roundtrip_bps) * 1e-4
+    return df["portfolio_return"].astype(float) - extra_cost
+
+
+def add_targets(
+    df: pd.DataFrame,
+    top_quantile: float,
+    utility_mode: str = "default",
+    extra_roundtrip_bps: float = 0.0,
+    drawdown_penalty: float = 0.25,
+    volatility_penalty: float = 0.10,
+) -> pd.DataFrame:
     out = df.copy()
     time_col = "decision_timestamp" if "decision_timestamp" in out.columns else "timestamp"
     group_key = out[time_col].astype(str) + "|" + out["horizon_bars"].astype(str)
-    rank_pct = out.groupby(group_key)["portfolio_return"].rank(pct=True, method="average")
+    if utility_mode == "default":
+        target_return = out["portfolio_return"].astype(float)
+        alpha = out["future_alpha_vs_spy"].astype(float)
+        profit_label = out["profit_label"].astype(float)
+        beat_label = out["beat_spy_label"].astype(float)
+        dd_penalty = 0.25
+        vol_penalty = 0.10
+    elif utility_mode == "stress_adjusted":
+        target_return = _stress_adjusted_return(out, extra_roundtrip_bps)
+        alpha = target_return - out["future_spy_return"].astype(float)
+        profit_label = (target_return > 0.0).astype(float)
+        beat_label = (alpha > 0.0).astype(float)
+        dd_penalty = drawdown_penalty
+        vol_penalty = volatility_penalty
+    else:
+        raise ValueError(f"unknown utility mode: {utility_mode}")
+
+    out["allocator_target_return"] = target_return.astype(np.float32)
+    out["allocator_target_alpha"] = alpha.astype(np.float32)
+    out["allocator_target_profit_label"] = profit_label.astype(np.float32)
+    out["allocator_target_beat_spy_label"] = beat_label.astype(np.float32)
+    rank_pct = out.assign(_allocator_target_return=target_return).groupby(group_key)["_allocator_target_return"].rank(pct=True, method="average")
     out["allocator_top_label"] = (rank_pct >= top_quantile).astype(np.float32)
     out["allocator_utility"] = (
-        out["portfolio_return"].clip(-1.0, 3.0)
-        + 0.35 * out["future_alpha_vs_spy"].clip(-1.0, 3.0)
-        + 0.15 * out["profit_label"]
-        + 0.25 * out["beat_spy_label"]
-        + 0.25 * out["max_drawdown"].clip(-1.0, 0.0)
-        - 0.10 * out["path_vol"].clip(0.0, 0.20)
+        target_return.clip(-1.0, 3.0)
+        + 0.35 * alpha.clip(-1.0, 3.0)
+        + 0.15 * profit_label
+        + 0.25 * beat_label
+        + dd_penalty * out["max_drawdown"].clip(-1.0, 0.0)
+        - vol_penalty * out["path_vol"].clip(0.0, 0.20)
     ).astype(np.float32)
     return out
 
@@ -301,7 +339,14 @@ def train(config: AllocatorConfig) -> dict:
 
     train_df = filter_frame(load_frame(Path(config.train_data), config.limit_rows, seed=config.seed), config.min_horizon_bars, config.max_horizon_bars)
     train_scored = predict(train_df, world_ckpt, device=device, batch_size=config.batch_size)
-    train_scored = add_targets(train_scored, config.top_quantile)
+    train_scored = add_targets(
+        train_scored,
+        config.top_quantile,
+        utility_mode=config.utility_mode,
+        extra_roundtrip_bps=config.extra_roundtrip_bps,
+        drawdown_penalty=config.drawdown_penalty,
+        volatility_penalty=config.volatility_penalty,
+    )
     train_mask, val_mask = split_masks(train_scored, config.val_fraction, config.val_gap_days)
     mats = make_matrices(train_scored, train_mask, feature_mode=config.feature_mode)
 
@@ -391,6 +436,10 @@ def train(config: AllocatorConfig) -> dict:
         "min_horizon_bars": int(config.min_horizon_bars),
         "max_horizon_bars": int(config.max_horizon_bars),
         "feature_mode": config.feature_mode,
+        "utility_mode": config.utility_mode,
+        "extra_roundtrip_bps": float(config.extra_roundtrip_bps),
+        "drawdown_penalty": float(config.drawdown_penalty),
+        "volatility_penalty": float(config.volatility_penalty),
         "device": device,
         "best_epoch": int(best_epoch),
         "best_val_loss": float(best_loss),
@@ -423,6 +472,10 @@ def main() -> None:
     parser.add_argument("--max-horizon-bars", type=int, default=0)
     parser.add_argument("--top-quantile", type=float, default=0.80)
     parser.add_argument("--feature-mode", choices=["compact", "market"], default="compact")
+    parser.add_argument("--utility-mode", choices=["default", "stress_adjusted"], default="default")
+    parser.add_argument("--extra-roundtrip-bps", type=float, default=0.0)
+    parser.add_argument("--drawdown-penalty", type=float, default=0.25)
+    parser.add_argument("--volatility-penalty", type=float, default=0.10)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="auto")
     args = parser.parse_args()
