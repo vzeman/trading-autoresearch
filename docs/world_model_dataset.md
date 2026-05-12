@@ -63,6 +63,21 @@ calibrated search without the drawdown cap overfit the calibration period and
 was rejected: it returned only +18.9% on the locked year with -15.0% max
 drawdown.
 
+Friction and concentration stress, added after the first locked result:
+
+| stress test | result | interpretation |
+|---|---|---|
+| calibrated risk rule + extra 10 bps active-trade cost | +19.6%, -10.3% DD, 26 trades | below SPY; not robust enough |
+| calibrated risk rule + max 3 trades/symbol + 10-day cooldown | +19.2%, -11.9% DD, 42 trades | below SPY; concentration controls hurt |
+| calibrated risk rule + cost + cap + cooldown | no calibration rule survived the -18% DD cap | reject |
+| fixed q70 + extra 10 bps + max 3 trades/symbol + 10-day cooldown | +42.7%, -11.1% DD, 51 trades | survives SPY, but active hit rate is weak |
+
+The stress result changes the practical reading: the fixed q70 overlay is the
+best friction-stressed survivor, while the calibrated risk rule is cleaner on
+un-stressed trade quality but too fragile under added costs/concentration
+limits. The next improvement should train the allocator objective directly for
+friction-stressed sequential utility instead of selecting rules after the fact.
+
 The important caveat: the policy only beats SPY when idle capital remains in
 SPY. If idle capital sits in cash, the same active stock trades return +21.7%,
 which is good but below SPY's +27.7% over this unusually strong locked year.
@@ -282,6 +297,24 @@ Locked allocator and tradable evaluation commands:
   --entry-only \
   --idle-asset spy \
   --device mps
+
+.venv/bin/python evaluate_tradable_allocator.py \
+  --calibration-data data/world_model/locked5y_train_intraday120 \
+  --test-data data/world_model/locked1y_test_intraday120 \
+  --world-checkpoint checkpoints/world_model/world_model_locked5y_intraday120_actionkey.pt \
+  --allocator-checkpoint checkpoints/world_model/allocator_locked5y_intraday120_q80.pt \
+  --output checkpoints/world_model/tradable_locked1y_intraday120_q80_fixed_cost10_cap3_cd10_spyidle.json \
+  --batch-size 32768 \
+  --max-horizon-bars 120 \
+  --min-coverage 0.05 \
+  --objective-mode hybrid \
+  --rule-mode fixed_threshold \
+  --extra-roundtrip-bps 10 \
+  --max-trades-per-symbol 3 \
+  --symbol-cooldown-days 10 \
+  --entry-only \
+  --idle-asset spy \
+  --device mps
 ```
 
 ## What We Tried
@@ -307,13 +340,16 @@ The main iterations and current decisions:
 | Locked 5y train / 1y test with SPY idle | SPY-idle sequential return +55.7%, max DD -10.0% | current deploy-shaped winner |
 | Calibration-only risk rule search | uncapped search returned +18.9%, -15.0% DD on locked year | rejected overfit |
 | Calibration-only risk rule search with -18% DD cap | +39.2%, -8.0% DD, 52.6% profit rate, 57.9% beat-SPY | current paper-trading candidate |
+| Friction/concentration stress | fixed q70 survives at +42.7%; calibrated risk rule falls below SPY | next training objective must include frictions |
 
 The most important open weakness is reliability of the active trades. The
 locked winner has strong portfolio return, but only 44.8% of active trades are
 profitable and one large CIEN trade contributes materially. The risk-controlled
 candidate improves this to 52.6% profitable trades and 57.9% beat-SPY trades,
-but the next useful work is still paper trading, liquidity/order filters,
-single-trade risk caps, and additional locked years or rolling yearly tests.
+but the stress tests show this rule is fragile once costs and concentration
+limits are added. The next useful work is still paper trading, liquidity/order
+filters, single-trade risk caps, and additional locked years or rolling yearly
+tests.
 
 This dataset is the first step away from the old forecaster architecture.
 Instead of training only:

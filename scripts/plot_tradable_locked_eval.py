@@ -41,13 +41,16 @@ def load_optional_curve(path: Path | None) -> tuple[pd.DataFrame, dict] | None:
     return load_curve(path)
 
 
-def plot_equity(spy_idle_json: Path, cash_idle_json: Path, risk_json: Path | None, output: Path) -> None:
+def plot_equity(spy_idle_json: Path, cash_idle_json: Path, risk_json: Path | None, stress_json: Path | None, output: Path) -> None:
     spy_idle, payload_spy = load_curve(spy_idle_json)
     cash_idle, _ = load_curve(cash_idle_json)
     risk = load_optional_curve(risk_json)
+    stress = load_optional_curve(stress_json)
     curves = [spy_idle, cash_idle]
     if risk is not None:
         curves.append(risk[0])
+    if stress is not None:
+        curves.append(stress[0])
     start = min(curve["timestamp"].min() for curve in curves)
     end = max(curve["timestamp"].max() for curve in curves)
     starting = float(payload_spy["sequential_portfolio"]["starting_equity"])
@@ -60,6 +63,9 @@ def plot_equity(spy_idle_json: Path, cash_idle_json: Path, risk_json: Path | Non
     if risk is not None:
         risk_curve, _ = risk
         plt.plot(risk_curve["timestamp"], risk_curve["equity"], linewidth=2.7, label="risk-controlled model, SPY idle")
+    if stress is not None:
+        stress_curve, _ = stress
+        plt.plot(stress_curve["timestamp"], stress_curve["equity"], linewidth=2.3, linestyle=":", label="fixed q70, cost/cap stress")
     plt.axhline(starting, color="#555555", linewidth=1.0)
     plt.title("Locked one-year sequential tradable simulation")
     plt.ylabel("Portfolio equity ($)")
@@ -70,13 +76,16 @@ def plot_equity(spy_idle_json: Path, cash_idle_json: Path, risk_json: Path | Non
     plt.close()
 
 
-def plot_drawdown(spy_idle_json: Path, cash_idle_json: Path, risk_json: Path | None, output: Path) -> None:
+def plot_drawdown(spy_idle_json: Path, cash_idle_json: Path, risk_json: Path | None, stress_json: Path | None, output: Path) -> None:
     spy_idle, payload_spy = load_curve(spy_idle_json)
     cash_idle, _ = load_curve(cash_idle_json)
     risk = load_optional_curve(risk_json)
+    stress = load_optional_curve(stress_json)
     curves = [spy_idle, cash_idle]
     if risk is not None:
         curves.append(risk[0])
+    if stress is not None:
+        curves.append(stress[0])
     start = min(curve["timestamp"].min() for curve in curves)
     end = max(curve["timestamp"].max() for curve in curves)
     starting = float(payload_spy["sequential_portfolio"]["starting_equity"])
@@ -89,6 +98,9 @@ def plot_drawdown(spy_idle_json: Path, cash_idle_json: Path, risk_json: Path | N
     if risk is not None:
         risk_curve, _ = risk
         plt.plot(risk_curve["timestamp"], 100 * drawdown(risk_curve["equity"]), linewidth=2.5, label="risk-controlled model, SPY idle")
+    if stress is not None:
+        stress_curve, _ = stress
+        plt.plot(stress_curve["timestamp"], 100 * drawdown(stress_curve["equity"]), linewidth=2.2, linestyle=":", label="fixed q70, cost/cap stress")
     plt.axhline(0, color="#555555", linewidth=1.0)
     plt.title("Locked one-year drawdown")
     plt.ylabel("Drawdown (%)")
@@ -125,6 +137,7 @@ def main() -> None:
     parser.add_argument("--spy-idle-json", default="checkpoints/world_model/tradable_locked1y_intraday120_q80_hybrid_entryonly_spyidle.json")
     parser.add_argument("--cash-idle-json", default="checkpoints/world_model/tradable_locked1y_intraday120_q80_hybrid_entryonly.json")
     parser.add_argument("--risk-json", default="checkpoints/world_model/tradable_locked1y_intraday120_q80_calibrated_dd18_spyidle.json")
+    parser.add_argument("--stress-json", default="checkpoints/world_model/tradable_locked1y_intraday120_q80_fixed_cost10_cap3_cd10_spyidle.json")
     parser.add_argument("--output-dir", default="docs/world_model_charts")
     args = parser.parse_args()
 
@@ -133,8 +146,9 @@ def main() -> None:
     spy_idle_json = Path(args.spy_idle_json)
     cash_idle_json = Path(args.cash_idle_json)
     risk_json = Path(args.risk_json) if args.risk_json else None
-    plot_equity(spy_idle_json, cash_idle_json, risk_json, output / "locked1y_tradable_equity.png")
-    plot_drawdown(spy_idle_json, cash_idle_json, risk_json, output / "locked1y_tradable_drawdown.png")
+    stress_json = Path(args.stress_json) if args.stress_json else None
+    plot_equity(spy_idle_json, cash_idle_json, risk_json, stress_json, output / "locked1y_tradable_equity.png")
+    plot_drawdown(spy_idle_json, cash_idle_json, risk_json, stress_json, output / "locked1y_tradable_drawdown.png")
     plot_trade_returns(risk_json if risk_json and risk_json.exists() else spy_idle_json, output / "locked1y_trade_returns.png")
     print(f"Wrote locked tradable charts to {output}")
 

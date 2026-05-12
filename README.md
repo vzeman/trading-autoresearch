@@ -118,6 +118,9 @@ at +27.7%, with 58 non-overlapping trades and -10.0% max drawdown. This is
 still the raw-return champion, but a newer calibration-only risk-controlled
 rule is the better paper-trading candidate: +39.2%, 57 trades, -8.0% max
 drawdown, 52.6% profitable trades, and 57.9% active beat-SPY rate. This is
+not yet robust to all frictions: with extra 10 bps active-trade cost plus a
+3-trade-per-symbol cap and 10-day symbol cooldown, the fixed q70 overlay still
+returns +42.7%, but the calibrated risk rule falls below SPY. This is
 still a research simulation, not a live guarantee.
 
 Read the full model creation notes, features, training settings, attempts, and

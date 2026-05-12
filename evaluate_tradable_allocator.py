@@ -130,6 +130,10 @@ def choose_trade_rule(
     idle_asset: str,
     starting_equity: float,
     max_calibration_drawdown: float,
+    extra_roundtrip_bps: float,
+    extra_fee_usd: float,
+    max_trades_per_symbol: int,
+    symbol_cooldown_days: float,
 ) -> dict:
     total_groups = len(calibration_planner)
     test_start, test_end = _date_range(calibration_planner)
@@ -140,14 +144,17 @@ def choose_trade_rule(
         coverage = len(active) / max(total_groups, 1)
         if coverage < min_coverage:
             continue
-        candidates = one_candidate_per_timestamp(active)
-        seq = sequential_portfolio(
-            candidates,
+        seq = constrained_sequential_portfolio(
+            active,
             starting_equity=starting_equity,
             idle_asset=idle_asset,
             test_start=test_start,
             test_end=test_end,
             include_details=False,
+            extra_roundtrip_bps=extra_roundtrip_bps,
+            extra_fee_usd=extra_fee_usd,
+            max_trades_per_symbol=max_trades_per_symbol,
+            symbol_cooldown_days=symbol_cooldown_days,
         )
         if seq["trades"] < 10:
             continue
@@ -162,7 +169,7 @@ def choose_trade_rule(
         row = {
             "rule": rule,
             "coverage": float(coverage),
-            "timestamp_candidates": int(len(candidates)),
+            "timestamp_candidates": int(seq["trades"]),
             "objective": float(score),
             "sequential": {
                 k: v for k, v in seq.items()
@@ -206,6 +213,8 @@ def sequential_portfolio(
     test_start: pd.Timestamp | None = None,
     test_end: pd.Timestamp | None = None,
     include_details: bool = True,
+    extra_roundtrip_bps: float = 0.0,
+    extra_fee_usd: float = 0.0,
 ) -> dict:
     time_col = _time_col(candidates)
     if candidates.empty:
@@ -254,6 +263,9 @@ def sequential_portfolio(
             equity *= 1.0 + idle_return
         exit_ts = pd.Timestamp(row["exit_timestamp"])
         ret = float(row["portfolio_return"])
+        target_frac = float(row["target_position_frac"])
+        extra_cost_return = target_frac * max(0.0, extra_roundtrip_bps) * 1e-4 + max(0.0, extra_fee_usd) / max(equity, 1e-12)
+        ret -= extra_cost_return
         spy_ret = float(row.get("future_spy_return", 0.0))
         before = equity
         equity *= 1.0 + ret
@@ -271,6 +283,7 @@ def sequential_portfolio(
                 "target_position_frac": float(row["target_position_frac"]),
                 "pred_score": float(row["pred_score"]),
                 "portfolio_return": ret,
+                "extra_cost_return": extra_cost_return,
                 "future_spy_return": spy_ret,
                 "future_alpha_vs_spy": float(row["future_alpha_vs_spy"]),
                 "idle_asset": idle_asset,
@@ -281,6 +294,7 @@ def sequential_portfolio(
         else:
             details.append({
                 "portfolio_return": ret,
+                "extra_cost_return": extra_cost_return,
                 "future_alpha_vs_spy": float(row["future_alpha_vs_spy"]),
             })
 
@@ -310,6 +324,8 @@ def sequential_portfolio(
         "total_return": float(equity / starting_equity - 1.0),
         "spy_active_return": float(spy_equity / starting_equity - 1.0),
         "idle_asset": idle_asset,
+        "extra_roundtrip_bps": float(extra_roundtrip_bps),
+        "extra_fee_usd": float(extra_fee_usd),
         "trades": int(len(details)),
         "skipped_overlap": int(skipped),
         "profit_rate": profit_rate,
@@ -318,6 +334,110 @@ def sequential_portfolio(
         "equity_curve": curve,
         "trades_detail": details if include_details else [],
     }
+
+
+def constrained_sequential_portfolio(
+    active: pd.DataFrame,
+    starting_equity: float = 50_000.0,
+    idle_asset: str = "cash",
+    test_start: pd.Timestamp | None = None,
+    test_end: pd.Timestamp | None = None,
+    include_details: bool = True,
+    extra_roundtrip_bps: float = 0.0,
+    extra_fee_usd: float = 0.0,
+    max_trades_per_symbol: int = 0,
+    symbol_cooldown_days: float = 0.0,
+) -> dict:
+    """Run the sequential simulator while allowing lower-ranked eligible fallbacks.
+
+    The earlier path picked exactly one highest-scored row per timestamp before
+    checking overlap. For concentration controls, that can discard useful
+    second-best candidates. This function walks timestamps chronologically and
+    picks the highest-scored row that is currently eligible.
+    """
+    if max_trades_per_symbol <= 0 and symbol_cooldown_days <= 0:
+        return sequential_portfolio(
+            one_candidate_per_timestamp(active),
+            starting_equity=starting_equity,
+            idle_asset=idle_asset,
+            test_start=test_start,
+            test_end=test_end,
+            include_details=include_details,
+            extra_roundtrip_bps=extra_roundtrip_bps,
+            extra_fee_usd=extra_fee_usd,
+        )
+
+    time_col = _time_col(active)
+    if active.empty:
+        return sequential_portfolio(
+            active,
+            starting_equity=starting_equity,
+            idle_asset=idle_asset,
+            test_start=test_start,
+            test_end=test_end,
+            include_details=include_details,
+            extra_roundtrip_bps=extra_roundtrip_bps,
+            extra_fee_usd=extra_fee_usd,
+        )
+
+    rows = active.copy()
+    rows[time_col] = pd.to_datetime(rows[time_col], utc=True)
+    if "exit_timestamp" in rows.columns:
+        rows["exit_timestamp"] = pd.to_datetime(rows["exit_timestamp"], utc=True)
+    else:
+        rows["exit_timestamp"] = rows[time_col] + pd.to_timedelta(rows["horizon_bars"].astype(float), unit="m")
+    rows = rows.sort_values([time_col, "pred_score"], ascending=[True, False]).reset_index(drop=True)
+
+    selected = []
+    symbol_counts: dict[str, int] = {}
+    symbol_available: dict[str, pd.Timestamp] = {}
+    next_available = pd.Timestamp.min.tz_localize("UTC")
+    cooldown = pd.Timedelta(days=max(0.0, symbol_cooldown_days))
+    skipped_overlap = skipped_concentration = skipped_cooldown = 0
+
+    for entry_ts, group in rows.groupby(time_col, sort=False):
+        entry_ts = pd.Timestamp(entry_ts)
+        if entry_ts < next_available:
+            skipped_overlap += len(group)
+            continue
+        chosen = None
+        for _, row in group.iterrows():
+            symbol = str(row["symbol"])
+            if max_trades_per_symbol > 0 and symbol_counts.get(symbol, 0) >= max_trades_per_symbol:
+                skipped_concentration += 1
+                continue
+            if symbol_cooldown_days > 0 and entry_ts < symbol_available.get(symbol, pd.Timestamp.min.tz_localize("UTC")):
+                skipped_cooldown += 1
+                continue
+            chosen = row
+            break
+        if chosen is None:
+            continue
+        selected.append(chosen)
+        symbol = str(chosen["symbol"])
+        symbol_counts[symbol] = symbol_counts.get(symbol, 0) + 1
+        exit_ts = pd.Timestamp(chosen["exit_timestamp"])
+        next_available = max(exit_ts, entry_ts)
+        symbol_available[symbol] = next_available + cooldown
+
+    selected_df = pd.DataFrame(selected)
+    seq = sequential_portfolio(
+        selected_df,
+        starting_equity=starting_equity,
+        idle_asset=idle_asset,
+        test_start=test_start,
+        test_end=test_end,
+        include_details=include_details,
+        extra_roundtrip_bps=extra_roundtrip_bps,
+        extra_fee_usd=extra_fee_usd,
+    )
+    seq["skipped_overlap_candidates"] = int(skipped_overlap)
+    seq["skipped_concentration_candidates"] = int(skipped_concentration)
+    seq["skipped_cooldown_candidates"] = int(skipped_cooldown)
+    seq["max_trades_per_symbol"] = int(max_trades_per_symbol)
+    seq["symbol_cooldown_days"] = float(symbol_cooldown_days)
+    seq["symbol_trade_counts"] = {k: int(v) for k, v in sorted(symbol_counts.items(), key=lambda kv: (-kv[1], kv[0]))}
+    return seq
 
 
 def run(args: argparse.Namespace) -> dict:
@@ -355,6 +475,10 @@ def run(args: argparse.Namespace) -> dict:
             idle_asset=args.idle_asset,
             starting_equity=args.starting_equity,
             max_calibration_drawdown=args.max_calibration_drawdown,
+            extra_roundtrip_bps=args.extra_roundtrip_bps,
+            extra_fee_usd=args.extra_fee_usd,
+            max_trades_per_symbol=args.max_trades_per_symbol,
+            symbol_cooldown_days=args.symbol_cooldown_days,
         )
         selected_rule = calibrated_rule["best"]["rule"]
 
@@ -378,12 +502,16 @@ def run(args: argparse.Namespace) -> dict:
     test_end = pd.to_datetime(test_planner[exit_col], utc=True).max()
     active_groups = apply_trade_rule(test_planner, selected_rule)
     timestamp_candidates = one_candidate_per_timestamp(active_groups)
-    sequential = sequential_portfolio(
-        timestamp_candidates,
+    sequential = constrained_sequential_portfolio(
+        active_groups,
         args.starting_equity,
         idle_asset=args.idle_asset,
         test_start=test_start,
         test_end=test_end,
+        extra_roundtrip_bps=args.extra_roundtrip_bps,
+        extra_fee_usd=args.extra_fee_usd,
+        max_trades_per_symbol=args.max_trades_per_symbol,
+        symbol_cooldown_days=args.symbol_cooldown_days,
     )
 
     payload = {
@@ -396,6 +524,10 @@ def run(args: argparse.Namespace) -> dict:
         "entry_only": bool(args.entry_only),
         "idle_asset": args.idle_asset,
         "rule_mode": args.rule_mode,
+        "extra_roundtrip_bps": float(args.extra_roundtrip_bps),
+        "extra_fee_usd": float(args.extra_fee_usd),
+        "max_trades_per_symbol": int(args.max_trades_per_symbol),
+        "symbol_cooldown_days": float(args.symbol_cooldown_days),
         "selected_threshold": selected,
         "selected_trade_rule": selected_rule,
         "calibrated_rule_search": calibrated_rule,
@@ -433,6 +565,10 @@ def main() -> None:
     parser.add_argument("--objective-mode", choices=["cash_return", "active_return", "hybrid"], default="hybrid")
     parser.add_argument("--rule-mode", choices=["fixed_threshold", "calibrated"], default="fixed_threshold")
     parser.add_argument("--max-calibration-drawdown", type=float, default=0.18)
+    parser.add_argument("--extra-roundtrip-bps", type=float, default=0.0, help="extra per-active-trade cost stress in bps of target exposure")
+    parser.add_argument("--extra-fee-usd", type=float, default=0.0, help="extra flat cost stress per active trade")
+    parser.add_argument("--max-trades-per-symbol", type=int, default=0, help="optional cap on selected active trades per symbol")
+    parser.add_argument("--symbol-cooldown-days", type=float, default=0.0, help="optional cooldown before reusing the same symbol")
     parser.add_argument("--entry-only", action=argparse.BooleanOptionalAction, default=True, help="only allow buy entries from cash")
     parser.add_argument("--idle-asset", choices=["cash", "spy"], default="cash", help="asset held between model-selected trades")
     parser.add_argument("--starting-equity", type=float, default=50_000.0)
