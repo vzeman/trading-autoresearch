@@ -91,6 +91,7 @@ def add_cross_sectional_scores(frame: pd.DataFrame, daily: pd.DataFrame) -> pd.D
     features["volume_ratio_prev"] = by_symbol["volume"].shift(1) / features["avg_vol_20_prev"].replace(0.0, np.nan)
     features["roll_max_20_prev"] = by_symbol["close"].rolling(20).max().reset_index(level=0, drop=True).groupby(features["symbol"]).shift(1)
     features["roll_min_20_prev"] = by_symbol["close"].rolling(20).min().reset_index(level=0, drop=True).groupby(features["symbol"]).shift(1)
+    features["roll_max_50_prev"] = by_symbol["close"].rolling(50).max().reset_index(level=0, drop=True).groupby(features["symbol"]).shift(1)
     features["close_prev"] = by_symbol["close"].shift(1)
     features["breakout_20_prev"] = features["close_prev"] / features["roll_max_20_prev"].replace(0.0, np.nan) - 1.0
     features["drawdown_20_prev"] = features["close_prev"] / features["roll_max_20_prev"].replace(0.0, np.nan) - 1.0
@@ -98,6 +99,28 @@ def add_cross_sectional_scores(frame: pd.DataFrame, daily: pd.DataFrame) -> pd.D
         (features["close_prev"] - features["roll_min_20_prev"])
         / (features["roll_max_20_prev"] - features["roll_min_20_prev"]).replace(0.0, np.nan)
     )
+    features["gap_return"] = features.get("gap_return", np.nan)
+    features["open_to_close_return"] = features.get("open_to_close_return", np.nan)
+    features["gap_return_prev"] = by_symbol["gap_return"].shift(1)
+    features["gap_followthrough_prev"] = by_symbol["open_to_close_return"].shift(1)
+    features["gap_up_prev"] = features["gap_return_prev"].ge(0.01)
+    features["gap_failed_prev"] = features["gap_up_prev"] & features["gap_followthrough_prev"].lt(0.0)
+    features["gap_up_count_20_prev"] = (
+        features["gap_return"].ge(0.01).astype(float).groupby(features["symbol"]).rolling(20).sum().reset_index(level=0, drop=True).groupby(features["symbol"]).shift(1)
+    )
+    features["gap_success_count_20_prev"] = (
+        (features["gap_return"].ge(0.01) & features["open_to_close_return"].gt(0.0))
+        .astype(float)
+        .groupby(features["symbol"])
+        .rolling(20)
+        .sum()
+        .reset_index(level=0, drop=True)
+        .groupby(features["symbol"])
+        .shift(1)
+    )
+    features["gap_success_rate_20_prev"] = features["gap_success_count_20_prev"] / features["gap_up_count_20_prev"].replace(0.0, np.nan)
+    features["gap_over_resistance_20"] = features["open"].astype(float) / features["roll_max_20_prev"].replace(0.0, np.nan) - 1.0
+    features["gap_over_resistance_50"] = features["open"].astype(float) / features["roll_max_50_prev"].replace(0.0, np.nan) - 1.0
 
     spy = features[features["symbol"].astype(str).str.upper() == "SPY"][
         ["date", "ret_5_prev", "ret_10_prev", "ret_20_prev"]
@@ -127,6 +150,13 @@ def add_cross_sectional_scores(frame: pd.DataFrame, daily: pd.DataFrame) -> pd.D
         "breakout_20_prev",
         "drawdown_20_prev",
         "range_pos_20_prev",
+        "gap_return",
+        "gap_return_prev",
+        "gap_followthrough_prev",
+        "gap_up_count_20_prev",
+        "gap_success_rate_20_prev",
+        "gap_over_resistance_20",
+        "gap_over_resistance_50",
     ]
     for col in score_cols:
         features[f"z_{col}"] = features.groupby("date", sort=False)[col].transform(safe_zscore)
@@ -155,19 +185,36 @@ def add_cross_sectional_scores(frame: pd.DataFrame, daily: pd.DataFrame) -> pd.D
         - 0.45 * features["z_vol_20_prev"]
         + 0.20 * features["z_range_pos_20_prev"]
     )
+    features["gap_resistance_score"] = (
+        0.45 * features["z_gap_return"]
+        + 0.45 * features["z_gap_over_resistance_20"]
+        + 0.20 * features["z_rel_ret_5_prev"]
+        - 0.20 * features["z_vol_10_prev"]
+    )
 
     keep = [
         "symbol",
         "date",
+        "open",
         "ret_5_prev",
         "ret_20_prev",
         "rel_ret_5_prev",
         "rel_ret_20_prev",
         "vol_10_prev",
+        "gap_return",
+        "open_to_close_return",
+        "gap_return_prev",
+        "gap_followthrough_prev",
+        "gap_failed_prev",
+        "gap_up_count_20_prev",
+        "gap_success_rate_20_prev",
+        "gap_over_resistance_20",
+        "gap_over_resistance_50",
         "relative_momentum_score",
         "trend_quality_score",
         "breakout_quality_score",
         "defensive_trend_score",
+        "gap_resistance_score",
     ]
     enriched = frame.merge(features[keep], on=["symbol", "date"], how="left")
     enriched["markov_z_score"] = enriched.groupby("date", sort=False)["markov_signal"].transform(safe_zscore)
@@ -176,6 +223,12 @@ def add_cross_sectional_scores(frame: pd.DataFrame, daily: pd.DataFrame) -> pd.D
         + 0.30 * enriched["trend_quality_score"].fillna(0.0)
         + 0.15 * enriched["relative_momentum_score"].fillna(0.0)
     )
+    enriched["trend_quality_gap_resistance_score"] = (
+        0.60 * enriched["trend_quality_score"].fillna(0.0)
+        + 0.40 * enriched["gap_resistance_score"].fillna(0.0)
+    )
+    enriched["trend_quality_avoid_failed_gap_score"] = enriched["trend_quality_score"].fillna(0.0)
+    enriched.loc[enriched["gap_failed_prev"].fillna(False).astype(bool), "trend_quality_avoid_failed_gap_score"] -= 0.75
     return enriched
 
 
@@ -185,8 +238,12 @@ def score_candidates(group: pd.DataFrame, config: MarkovConfig, selector: str, p
         "relative_momentum": "relative_momentum_score",
         "relative_momentum_spy_gated": "relative_momentum_score",
         "trend_quality": "trend_quality_score",
+        "trend_quality_avoid_failed_gap": "trend_quality_avoid_failed_gap_score",
+        "trend_quality_gap_resistance": "trend_quality_gap_resistance_score",
         "breakout_quality": "breakout_quality_score",
         "defensive_trend": "defensive_trend_score",
+        "gap_resistance": "gap_resistance_score",
+        "gap_resistance_50": "gap_resistance_score",
         "hybrid_markov_trend": "hybrid_markov_trend_score",
         "hybrid_markov_trend_spy_gated": "hybrid_markov_trend_score",
     }
@@ -194,6 +251,15 @@ def score_candidates(group: pd.DataFrame, config: MarkovConfig, selector: str, p
     if score_col:
         candidates = candidates[candidates[score_col].replace([np.inf, -np.inf], np.nan).notna()].copy()
         candidates = candidates[candidates[score_col].astype(float) > 0.0].copy()
+        if selector in {"gap_resistance", "gap_resistance_50", "trend_quality_gap_resistance"}:
+            candidates = candidates[candidates["gap_return"].astype(float).ge(0.01)].copy()
+            candidates = candidates[candidates["gap_over_resistance_20"].astype(float).ge(0.0)].copy()
+        if selector == "gap_resistance_50":
+            candidates = candidates[candidates["gap_over_resistance_50"].astype(float).ge(0.0)].copy()
+        if selector == "trend_quality_gap_resistance":
+            candidates = candidates[candidates["trend_quality_score"].astype(float).gt(0.0)].copy()
+        if selector == "trend_quality_avoid_failed_gap":
+            candidates = candidates[~candidates["gap_failed_prev"].fillna(False).astype(bool)].copy()
         if "hybrid" in selector:
             candidates = candidates[candidates["markov_signal"].astype(float) >= 0.0].copy()
     else:
@@ -222,8 +288,12 @@ def current_selector_score(row: pd.Series | None, selector: str) -> float:
         "relative_momentum": "relative_momentum_score",
         "relative_momentum_spy_gated": "relative_momentum_score",
         "trend_quality": "trend_quality_score",
+        "trend_quality_avoid_failed_gap": "trend_quality_avoid_failed_gap_score",
+        "trend_quality_gap_resistance": "trend_quality_gap_resistance_score",
         "breakout_quality": "breakout_quality_score",
         "defensive_trend": "defensive_trend_score",
+        "gap_resistance": "gap_resistance_score",
+        "gap_resistance_50": "gap_resistance_score",
         "hybrid_markov_trend": "hybrid_markov_trend_score",
         "hybrid_markov_trend_spy_gated": "hybrid_markov_trend_score",
     }
@@ -231,6 +301,10 @@ def current_selector_score(row: pd.Series | None, selector: str) -> float:
     if score_col not in row or pd.isna(row[score_col]):
         return -1.0
     return float(row[score_col])
+
+
+def enters_at_open(selector: str) -> bool:
+    return "gap_resistance" in selector
 
 
 def simulate_holding(
@@ -310,9 +384,15 @@ def simulate_holding(
         turnover = float(sum(abs(weights.get(name, 0.0) - prev_weights.get(name, 0.0)) for name in names))
         cost = turnover * cost_per_side
         portfolio_ret = -cost
+        entry_set = set(entries)
         for symbol, weight in weights.items():
             if symbol in by_symbol.index:
-                portfolio_ret += weight * float(by_symbol.loc[symbol, "daily_return"])
+                row = by_symbol.loc[symbol]
+                if symbol in entry_set and enters_at_open(strategy.selector) and "open_to_close_return" in row and pd.notna(row["open_to_close_return"]):
+                    realized = float(row["open_to_close_return"])
+                else:
+                    realized = float(row["daily_return"])
+                portfolio_ret += weight * realized
 
         equity *= 1.0 + portfolio_ret
         spy_equity *= 1.0 + spy_ret
@@ -341,6 +421,10 @@ def simulate_holding(
                     "hold_days": 0,
                     "score": float(row["score"]) if "score" in row else float(row["markov_signal"]),
                     "markov_signal": float(row["markov_signal"]),
+                    "gap_return": float(row["gap_return"]) if "gap_return" in row and pd.notna(row["gap_return"]) else None,
+                    "gap_over_resistance_20": float(row["gap_over_resistance_20"]) if "gap_over_resistance_20" in row and pd.notna(row["gap_over_resistance_20"]) else None,
+                    "gap_over_resistance_50": float(row["gap_over_resistance_50"]) if "gap_over_resistance_50" in row and pd.notna(row["gap_over_resistance_50"]) else None,
+                    "open_to_close_return": float(row["open_to_close_return"]) if "open_to_close_return" in row and pd.notna(row["open_to_close_return"]) else None,
                     "turnover": turnover,
                 }
             )
@@ -517,6 +601,11 @@ def strategies() -> list[HoldingStrategy]:
         HoldingStrategy("relative_momentum_exit_max10", "relative_momentum_spy_gated", max_hold_days=10, min_hold_days=2, exit_signal=0.0, exit_on_spy_gate=True),
         HoldingStrategy("trend_quality_hold_3d", "trend_quality", max_hold_days=3),
         HoldingStrategy("trend_quality_hold_5d", "trend_quality", max_hold_days=5),
+        HoldingStrategy("trend_quality_avoid_failed_gap_hold_3d", "trend_quality_avoid_failed_gap", max_hold_days=3),
+        HoldingStrategy("gap_resistance_hold_1d", "gap_resistance", max_hold_days=1),
+        HoldingStrategy("gap_resistance_hold_3d", "gap_resistance", max_hold_days=3),
+        HoldingStrategy("gap_resistance_50_hold_3d", "gap_resistance_50", max_hold_days=3),
+        HoldingStrategy("trend_quality_gap_resistance_hold_3d", "trend_quality_gap_resistance", max_hold_days=3),
         HoldingStrategy("breakout_quality_hold_3d", "breakout_quality", max_hold_days=3),
         HoldingStrategy("defensive_trend_hold_5d", "defensive_trend", max_hold_days=5),
         HoldingStrategy("hybrid_markov_trend_hold_3d", "hybrid_markov_trend", max_hold_days=3),

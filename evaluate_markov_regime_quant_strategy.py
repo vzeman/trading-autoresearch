@@ -159,14 +159,31 @@ def matrix_power_forecast(matrix: np.ndarray, horizon: int) -> np.ndarray:
 
 
 def daily_from_intraday(df: pd.DataFrame, config: Config) -> pd.DataFrame:
+    agg = {"close": ("close", "last"), "volume": ("volume", "sum")}
+    if "open" in df.columns:
+        agg["open"] = ("open", "first")
+    else:
+        agg["open"] = ("close", "first")
+    if "high" in df.columns:
+        agg["high"] = ("high", "max")
+    else:
+        agg["high"] = ("close", "max")
+    if "low" in df.columns:
+        agg["low"] = ("low", "min")
+    else:
+        agg["low"] = ("close", "min")
     daily = (
         df.sort_values(["symbol", "timestamp"])
         .assign(date=lambda x: x["timestamp"].dt.date)
         .groupby(["symbol", "date"], sort=True)
-        .agg(close=("close", "last"), volume=("volume", "sum"))
+        .agg(**agg)
         .reset_index()
     )
     daily["symbol"] = daily["symbol"].astype(str).str.upper()
+    daily["prev_close"] = daily.groupby("symbol")["close"].shift(1)
+    daily["gap_return"] = daily["open"].astype(float) / daily["prev_close"].replace(0.0, np.nan).astype(float) - 1.0
+    daily["open_to_close_return"] = daily["close"].astype(float) / daily["open"].replace(0.0, np.nan).astype(float) - 1.0
+    daily["intraday_range"] = daily["high"].astype(float) / daily["low"].replace(0.0, np.nan).astype(float) - 1.0
     daily["daily_return"] = daily.groupby("symbol")["close"].pct_change()
     daily["lookback_return"] = daily.groupby("symbol")["close"].pct_change(config.regime_window_days)
     daily["manual_state"] = manual_state(daily["lookback_return"], config)
@@ -187,7 +204,24 @@ def spy_daily_from_intraday(df: pd.DataFrame, config: Config) -> pd.DataFrame:
             date=lambda x: x["timestamp"].dt.date,
             symbol="SPY",
         )
-    spy = spy_source.groupby(["symbol", "date"], sort=True).agg(close=("close", "last"), volume=("volume", "size")).reset_index()
+    spy_agg = {"close": ("close", "last"), "volume": ("volume", "size")}
+    if "open" in spy_source.columns:
+        spy_agg["open"] = ("open", "first")
+    else:
+        spy_agg["open"] = ("close", "first")
+    if "high" in spy_source.columns:
+        spy_agg["high"] = ("high", "max")
+    else:
+        spy_agg["high"] = ("close", "max")
+    if "low" in spy_source.columns:
+        spy_agg["low"] = ("low", "min")
+    else:
+        spy_agg["low"] = ("close", "min")
+    spy = spy_source.groupby(["symbol", "date"], sort=True).agg(**spy_agg).reset_index()
+    spy["prev_close"] = spy.groupby("symbol")["close"].shift(1)
+    spy["gap_return"] = spy["open"].astype(float) / spy["prev_close"].replace(0.0, np.nan).astype(float) - 1.0
+    spy["open_to_close_return"] = spy["close"].astype(float) / spy["open"].replace(0.0, np.nan).astype(float) - 1.0
+    spy["intraday_range"] = spy["high"].astype(float) / spy["low"].replace(0.0, np.nan).astype(float) - 1.0
     spy["daily_return"] = spy.groupby("symbol")["close"].pct_change()
     spy["lookback_return"] = spy.groupby("symbol")["close"].pct_change(config.regime_window_days)
     spy["manual_state"] = manual_state(spy["lookback_return"], config)
@@ -286,6 +320,9 @@ def read_dataset(config: Config, daily_only: bool = False) -> pd.DataFrame:
             columns.append("close")
         elif "price" in sample_cols:
             columns.append("price")
+        for col in ["open", "high", "low"]:
+            if col in sample_cols:
+                columns.append(col)
         if "volume" in sample_cols:
             columns.append("volume")
         frames = []
@@ -302,7 +339,7 @@ def read_dataset(config: Config, daily_only: bool = False) -> pd.DataFrame:
         if daily_only:
             cols = set(pd.read_parquet(path, columns=None).columns)
             wanted = [
-                "symbol", "timestamp", "close", "price", "volume", "spy_close",
+                "symbol", "timestamp", "open", "high", "low", "close", "price", "volume", "spy_close",
                 "future_return", "future_spy_return",
             ]
             df = pd.read_parquet(path, columns=[c for c in wanted if c in cols])

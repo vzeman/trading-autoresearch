@@ -143,3 +143,22 @@ Do not promote this to a tradable model until it passes these gates:
    breaches a calibrated threshold.
 5. Compare equal-weight top three against volatility-weighted top three.
 
+## Gap-Up Follow-Up
+
+Added a gap-up-over-resistance diagnostic in
+`docs/gap_up_resistance_strategy.md`.
+
+The first pass found that directly buying gap-ups over 20-day or 50-day
+resistance was poor on the recent 2026 slice. The better use of gap data was as
+a risk filter for the original strategy: penalize stocks whose previous gap-up
+failed intraday.
+
+Latest comparison:
+
+| strategy | return | SPY | alpha | max DD |
+|---|---:|---:|---:|---:|
+| `trend_quality_avoid_failed_gap_hold_3d` | +29.90% | +9.65% | +20.25% | -7.34% |
+| `trend_quality_hold_3d` | +17.83% | +9.65% | +8.18% | -7.36% |
+
+This keeps the original strategy shape, but adds gap-failure awareness. It
+needs walk-forward validation before it can replace the original candidate.
