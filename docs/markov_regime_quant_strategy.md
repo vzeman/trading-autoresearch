@@ -274,3 +274,38 @@ Interpretation:
 - This is not yet a tradable final model. It is a promising candidate family
   that needs walk-forward validation across older folds and live paper trading
   before any real capital is used.
+
+## Regime Window Sweep
+
+Added `sweep_markov_regime_windows.py` to compare the lookback window used for
+bull/sideways/bear segmentation. Full notes are in
+`docs/markov_regime_window_sweep.md`.
+
+Windows tested:
+
+```text
+5, 10, 20, 40, 60, 90, 120 trading days
+```
+
+Best recent 2026-slice results:
+
+| regime source | window | strategy | return | SPY | alpha | max DD |
+|---|---:|---|---:|---:|---:|---:|
+| adaptive fallback/manual | 60d | `hybrid_markov_trend_hold_3d` | +28.85% | +9.65% | +19.20% | -12.70% |
+| adaptive | 10d | `confirmed_signal_exit_max10` | +26.99% | +9.65% | +17.34% | -4.75% |
+| fixed/manual | 20d | `hybrid_markov_trend_hold_3d` | +20.14% | +9.65% | +10.49% | -6.79% |
+| fixed/manual | 40d | `hybrid_markov_trend_hold_3d` | +19.89% | +9.65% | +10.24% | -8.91% |
+
+Interpretation:
+
+- The segmentation window is a high-impact parameter for Markov-sensitive
+  strategies.
+- The highest raw result came from a 60-day manual/fallback regime window, but
+  drawdown was larger.
+- The adaptive 10-day `confirmed_signal_exit_max10` result is the cleaner
+  risk-profile candidate in this short slice.
+- `trend_quality_hold_3d` is mostly window-invariant because it does not depend
+  on Markov regime labels; it remains a useful control baseline.
+
+Next validation should walk-forward test the adaptive 10-day, fixed 20-day, and
+fixed 60-day candidates with frozen parameter selection.
