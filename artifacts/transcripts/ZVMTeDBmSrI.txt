@@ -1,0 +1,760 @@
+[00:00] I've realized something about trading.
+[00:02] Average people who are trying to do day
+[00:03] trading, even all the way up to
+[00:05] professionals doing trading, they do it
+[00:07] completely different than how hedge
+[00:09] funds do it. Now, I want to tell you
+[00:11] something that I've learned recently
+[00:13] that completely shattered my view of
+[00:15] trading. And that is that quants are not
+[00:18] using trend lines and indicators on a
+[00:21] chart to make their decisions. And you
+[00:23] might be thinking, well, how on earth do
+[00:25] you do it then? Well, that's exactly
+[00:26] what I'm going to show you in this
+[00:28] video. In the depths of trading Twitter,
+[00:30] I found a thread by a person called
+[00:32] Rowan. He is a quant. He makes tons of
+[00:35] money as a quant. And he's laid out on
+[00:37] the table all of the secrets that these
+[00:39] hedge fund quants use that get them the
+[00:42] results that they do, which outperforms
+[00:44] your normal trader and is far more
+[00:46] consistent but significantly more
+[00:48] complex. I've gone through all of his
+[00:50] work on what's called the hedge fund
+[00:52] method and I've simplified it into a
+[00:55] single video and that's what you're
+[00:56] watching today.
+[00:58] So, in this video, I'm going to give you
+[00:59] a few things. Number one, I'm going to
+[01:01] share exactly what the hedge fund method
+[01:03] is. Number two, I'm going to convert all
+[01:06] of that hedge fund method into a format
+[01:08] that is understood by AI. And then
+[01:10] third, I'm going to give you an exact
+[01:12] copy and paste prompt that you can put
+[01:14] into your clawed code or any LLM right
+[01:17] now and have this whole method installed
+[01:19] into your own trading strategies. And if
+[01:22] you're using clawed code, you can use
+[01:24] this prompt as a skill in your AI. So
+[01:27] anytime you have a new strategy, it will
+[01:29] automatically apply this method on top
+[01:31] of it. And by the end of the video,
+[01:33] you'll have all the tools necessary to
+[01:35] operate like a hedge fund quant. And
+[01:37] right after you subscribe, let's get
+[01:39] into it.
+[01:49] In this video, we're going to go over
+[01:50] the 10 elements that make up the hedge
+[01:53] fund method. And after all of that has
+[01:55] been explained, I'm going to give you a
+[01:57] couple of prompts. One is going to be to
+[01:59] install this onto your Claude code or
+[02:01] any LLM that you use. And the other one
+[02:03] will be a visualization that you can put
+[02:05] onto your Trading View chart using
+[02:07] Pinescript. I want you to know that
+[02:09] these prompts are entirely free for you
+[02:11] to copy and paste and take. I don't even
+[02:13] want your email. You can find those
+[02:15] prompts on my GitHub link in the top
+[02:17] line of the description.
+[02:20] The first thing to understand is that
+[02:22] these hedge funds and the quants are not
+[02:24] operating using the same data that you
+[02:26] and I are. I think for the most part you
+[02:28] and I go on vibes kind of like feeling
+[02:31] our way around the investing like I've
+[02:33] got a good feeling about Bitcoin or I've
+[02:35] got a good feeling about Palunteer and
+[02:36] it's all about feelings. Quants and
+[02:39] hedge funds do their absolute best to
+[02:41] quantify these feelings actually put
+[02:44] numerical values to them. And it's a bit
+[02:46] like going outside and saying, "Oh, it's
+[02:47] windy today. I'm going to make this
+[02:49] decision as a result. Whereas if a quant
+[02:51] or a hedge fund went out there, they
+[02:53] want a numerical value. How strong is
+[02:55] the wind? What direction is it pointing?
+[02:57] And then with those numbers, they can
+[02:58] make decisions. So I want to introduce
+[03:00] to you something called states. Every
+[03:02] hedge fund and quant will operate with
+[03:04] these states. There are only three
+[03:06] states. There is a bull state, a
+[03:08] sideways state, and a bare state. Now a
+[03:10] bull state is defined as the last 20
+[03:13] days. When you add up all of the returns
+[03:15] of the last 20 days, are they at 5% or
+[03:19] more return? For example, if you had a
+[03:21] 1% gain every single day for 20 days,
+[03:24] that would represent a 20% gain and
+[03:26] obviously would be in a bull state. If
+[03:28] you had 15 of the days as a 1% increase,
+[03:31] but five of the days were a 1% decrease,
+[03:34] then overall you would have a 10% gain
+[03:37] over that 20-day period, which would
+[03:39] again match the criteria for a bull
+[03:41] state. Now if the last 20 days were a
+[03:44] negative 5% or greater meaning -5 - 6 so
+[03:49] on and so forth then that would be
+[03:50] classified as a bare state and anything
+[03:52] in between is a sideways state. I know
+[03:55] this sounds very elementary but wait
+[03:57] until you see how they use this
+[03:58] information. And so the next step of the
+[04:00] process is obvious. We need to figure
+[04:02] out what the state is currently. What is
+[04:05] today's state? And so what they do is
+[04:07] they go back over the course of the
+[04:09] entire asset history. Let's say it's
+[04:11] Bitcoin. And they actually run an
+[04:12] algorithm for every single day of the
+[04:14] history of Bitcoin and label each day
+[04:17] with its state. So, if you can imagine
+[04:18] now, you've got the entire price history
+[04:20] of Bitcoin or any asset. And every
+[04:23] single day starting from the 20th day
+[04:25] cuz that's the first time you actually
+[04:27] have a 20-day looking back period all
+[04:29] the way through to today has a label.
+[04:32] And each day is a specific state. And
+[04:35] this brings us to the third rule that
+[04:36] they use as part of this hedge fund
+[04:38] method. And it's something called the
+[04:39] mark of property. And it's this whole
+[04:41] idea that the market only moves to the
+[04:45] next place as a result of where it is
+[04:47] today. And this goes completely against
+[04:49] the way that traders view things. They
+[04:51] kind of look back throughout history and
+[04:54] try to determine what's going to happen
+[04:56] tomorrow. But the Markoff property
+[04:58] focuses solely on today. So let me give
+[05:01] you a bit of an analogy. Let's say
+[05:02] you're driving from Little Rock,
+[05:04] Arkansas all the way up to New York
+[05:06] City. The route you take to get to New
+[05:08] York City will entirely depend on the
+[05:10] starting location. This might sound very
+[05:12] obvious, but let me make it even
+[05:14] clearer. The way you get to New York
+[05:15] City from Little Rock, Arkansas, is not
+[05:18] the same way you get there from
+[05:19] Nebraska. And it goes without saying
+[05:21] that as you make your way on that
+[05:22] journey, let's say you get to Ohio, for
+[05:24] example, the journey to get to New York
+[05:26] City from Ohio is also different. The
+[05:29] journey to New York from Ohio is
+[05:32] entirely unique. It doesn't matter at
+[05:34] all that you started in Little Rock if
+[05:36] you're in Ohio trying to get to New
+[05:38] York. I hope I've made that quite clear.
+[05:40] To summarize, the past doesn't really
+[05:42] indicate where the future is going to
+[05:44] go. And you might be thinking, "Well,
+[05:46] Lewis, didn't we just do like the 20-day
+[05:48] thing back in history throughout the
+[05:49] whole history of Bitcoin? Why would we
+[05:51] do that if the past was irrelevant?" And
+[05:53] maybe I was a bit extreme there, but the
+[05:55] Markoff principle really is looking at
+[05:58] today. Today has the most weight. And it
+[06:01] brings us to this thing called the hedge
+[06:03] fund matrix, which before this video, I
+[06:06] had no idea this thing exists. And it
+[06:08] makes all the sense in the world. And it
+[06:10] brings everything we've talked about
+[06:11] already together. Now, with all that
+[06:13] data that we've got from the entire
+[06:15] history of Bitcoin, there are moments in
+[06:18] time where the state shifts. So we might
+[06:21] go from a sideways market to a bull
+[06:23] market or a bull state and we might go
+[06:25] from a bull state to a bare state and
+[06:28] each one of those transitions is counted
+[06:31] and logged. So what they do is is that
+[06:33] they look back in time at every time
+[06:35] that transition took place between a
+[06:37] bull and a sideways market for example
+[06:39] and they tally them all down. So we have
+[06:42] now a complete record of the transitions
+[06:45] that have occurred and how many times
+[06:47] they occurred. So, the amount of times
+[06:49] we went from bear to bull, bull to bear,
+[06:53] from sideways to bull, sideways to bear,
+[06:55] bear to sideways, bull to sideways,
+[06:57] every single combination, we've now
+[06:59] tallied them all down. And we can put a
+[07:01] numerical value on the amount of times
+[07:03] that it happened. Now that we've got
+[07:05] those counts and that tally, we can turn
+[07:07] them into percentages. And that brings
+[07:10] us to this very simple 3x3 grid. And
+[07:13] it's kind of difficult to explain, so
+[07:14] I'm going to show you on screen right
+[07:16] here. What you're seeing on screen are
+[07:18] three rows that represent today's state.
+[07:21] The three columns represent tomorrow's
+[07:24] state. And every row has to add up to
+[07:27] 100% because something does have to
+[07:29] happen tomorrow with 100% certainty. The
+[07:32] market does have to end up in one of
+[07:34] those buckets. And so you'll notice that
+[07:37] there is a most probable outcome for
+[07:40] tomorrow's price. And this is where we
+[07:42] get the whole concept of the trend is
+[07:44] your friend. If you're in a bare state,
+[07:46] the most likely outcome for the next day
+[07:48] is also going to be a a bare state, but
+[07:51] it's not 100% certain. There are other
+[07:53] outcomes that can take place. But the
+[07:55] hedge funds and the quants are
+[07:57] specifically using probabilities to
+[08:00] determine what the next day's moves are.
+[08:02] And that's moving and progressing every
+[08:04] single day as it looks back at all those
+[08:06] transitions, all the tallies, and all
+[08:08] the probabilities that they can see what
+[08:09] the outcome of the following day is most
+[08:12] likely to be. So you'll see on the
+[08:13] screen right now that we have a diagonal
+[08:16] line of cells running from the top left
+[08:18] to the bottom right. And these three
+[08:20] cells represent the market staying
+[08:22] exactly the same. That would be like
+[08:24] bull state into bull state, bare state
+[08:26] into bear state, sideways into sideways.
+[08:28] And the reason I highlight this diagonal
+[08:30] is because it shows something called
+[08:32] persistence. And that persistence brings
+[08:35] about a word called stickiness. And
+[08:37] every state has a stickiness score
+[08:40] essentially. How sticky is a bull
+[08:42] market? Well, if we are in a bull state
+[08:44] today, accounting for the last 20 days,
+[08:47] it's more likely for it to be another
+[08:49] bull state tomorrow than it is any of
+[08:52] the other states. Bull states tend to be
+[08:54] quite sticky states. And also, bare
+[08:56] markets do as well. And so, at all
+[08:58] times, there's a live matrix scoreboard
+[09:00] determining the likelihood of the
+[09:02] outcome of tomorrow. And this is what
+[09:04] the quants and the hedge funds use to
+[09:06] determine where to place their bets
+[09:08] today. So if you know that the
+[09:10] stickiness score of a bull state is 80%
+[09:13] for example, well then you can quite
+[09:14] easily hedge your bets on tomorrow also
+[09:17] being a bull state and as a result going
+[09:19] long. They're not saying tomorrow will
+[09:21] be a bull state. They're saying there's
+[09:23] an 80% chance there's an 80% probability
+[09:26] that it will be a bull state tomorrow as
+[09:28] well. And just to make this super cool
+[09:30] and amazing for you, I've actually
+[09:32] created a pine script for an indicator
+[09:34] that shows the matrix on a chart that
+[09:36] you can use right now. So, when we get
+[09:38] to the tutorial element of this video
+[09:40] where I explain how to do it, I'm going
+[09:41] to show you exactly how to install this
+[09:43] Pine script into your Trading View. And
+[09:44] you can see this 3x3 matrix on your
+[09:48] chart for any asset you want. How cool
+[09:50] is that? I think it's about time to
+[09:52] subscribe, don't you? So, to summarize
+[09:54] what we've covered so far, we've talked
+[09:56] about what is a state, so we know what
+[09:58] the states are. We've also decided
+[10:01] today's state. That's the calculation
+[10:03] that the hedge funds do to determine
+[10:05] where we are today based on the last 20
+[10:07] days of movement. We've talked about the
+[10:08] markoff property. That was number three.
+[10:10] Number four, we've talked about this
+[10:11] transition matrix here that the hedge
+[10:13] fund is using by that 3x3 grid. And
+[10:15] number five, we talked about this
+[10:17] persistence, the diagonal line that I
+[10:19] showed you there, the stickiness score
+[10:21] of the asset. But number six is kind of
+[10:23] an interesting move which I never
+[10:25] expected. And it is what if we don't
+[10:27] just want a one day forecast? What if we
+[10:30] want to look further in the future? How
+[10:32] do we use all this mathematics and all
+[10:34] the and all the information we've
+[10:35] gathered so far to determine a more
+[10:38] far-reaching prediction of the future?
+[10:40] Well, there actually is a calculation
+[10:41] for that, and I'm going to show you. And
+[10:43] it's something called squaring the
+[10:45] matrix. The great thing is is that you
+[10:46] don't need any new mathematics. You've
+[10:48] already got it already. So, all you have
+[10:50] to do is simply multiply the matrix by
+[10:53] itself. So, if you want a 2-day matrix,
+[10:56] you square the matrix by itself. If you
+[10:59] want a three-day forecast, you cube it
+[11:02] against itself. And don't worry, I'm
+[11:03] going to show you an example of this
+[11:04] with real numbers. But it goes on and on
+[11:06] and on depending on how far away you
+[11:08] want that prediction. And of course, as
+[11:10] you keep squaring and cubing against
+[11:12] yourself, the number ultimately of
+[11:14] percentage, the probability percentage
+[11:16] is going down over time. So let's do a
+[11:18] three example and I think by the end of
+[11:20] this you'll understand it. So path
+[11:21] number one would be like going from bull
+[11:23] to bull. So from the example we used
+[11:26] earlier, there's an 80% chance that if
+[11:27] we are in a bull state now, it will be a
+[11:30] bull state tomorrow. But the chance of
+[11:32] that bull state remaining for the the
+[11:34] following day is essentially 0.8
+[11:38] representing 80% times by 0.8. We're
+[11:41] tsing it by itself, which leaves us with
+[11:43] 0.64, which is 64%. So, we've got our
+[11:47] 2-day forecast predicting suggesting
+[11:49] that there's a 64% probability that in 2
+[11:53] days time we will still be in a bull
+[11:55] state. And so, by doing that calculation
+[11:56] for all the different combinations, you
+[11:59] end up with the ability and a basically
+[12:01] a way to kind of show on a huge matrix
+[12:03] with percentage probabilities all
+[12:06] perfectly laid out what the chances are
+[12:08] that that asset will be in a specific
+[12:10] state in a specific amount of days. You
+[12:13] can see how different this is from doing
+[12:14] trend lines and stuff, right? This is
+[12:16] mathematical and equationbased. And this
+[12:18] is what quants are doing. This is how
+[12:20] the people who understand this as
+[12:22] college kids end up landing jobs that
+[12:24] are $650,000
+[12:26] a year out of college. And that's true
+[12:28] and I am making a video about that. But
+[12:30] if you extrapolate this idea out quite a
+[12:32] bit, instead of looking 2 or 3 days
+[12:34] ahead where we're doing nice cute little
+[12:36] squaring and then cubing these numbers,
+[12:38] let's say you wanted to do a 28day
+[12:41] forecast. Well, now we're getting into
+[12:43] something where we're now multiplying
+[12:44] the matrix by the 28th power. And these
+[12:47] numbers start to get mind-boggling. And
+[12:50] actually, if you look at it on a chart
+[12:52] to see the kind of distribution of
+[12:54] percentages, you'll see that it all
+[12:56] basically converges into a single
+[12:58] slither. And that slither represents how
+[13:01] the probability of any of these outcomes
+[13:04] is so small that there's no meaningful
+[13:05] signal that you're getting from it. You
+[13:07] know, for example, it might say, you
+[13:08] know, in 28 days time there's a 0.2% 2%
+[13:11] chance of this outcome. There's a 0.2%
+[13:13] chance of this outcome, this outcome,
+[13:15] this outcome, this. They're all going to
+[13:16] be uniform, like 0.2%, but there's going
+[13:19] to be so many outcomes and so many ways
+[13:21] to get there that there's not really any
+[13:23] point in using that projection down the
+[13:25] line. And that is number seven, the
+[13:27] stationary distribution. And so, how do
+[13:29] you actually extract signals from all of
+[13:32] this to actually make some trades? Well,
+[13:34] it requires a process called signal
+[13:36] generation. And that's number eight.
+[13:38] Because when I'm thinking about this,
+[13:39] I'm like, okay, all this maths is good,
+[13:40] but what do I do with that information?
+[13:42] Well, despite all of the calculations
+[13:44] and all the equations that have come to
+[13:46] this point, the calculation is
+[13:49] incredibly easy. And that's what I found
+[13:51] with the way the quants operate. They do
+[13:53] lots of complex things in the background
+[13:55] only to simplify it with that
+[13:57] foundation. So, what they do is is one
+[13:59] simple calculation of this thing minus
+[14:02] this thing. And so, let's talk about it.
+[14:04] Basically, they're looking at tomorrow,
+[14:06] the probability of tomorrow being a bull
+[14:09] state. And what they do is is that they
+[14:10] subtract the likelihood of it being a
+[14:13] bare market tomorrow from the bull
+[14:15] market probability. And here's the
+[14:17] genius part. The larger the number that
+[14:19] you get as a result, the more money you
+[14:22] will put into that trade. So the
+[14:24] differential between the bull and the
+[14:26] bear in this case determines how big
+[14:28] that trade is going to be. So you're
+[14:29] managing risk that way as well. So let
+[14:31] me give you a concrete example. So,
+[14:33] let's say the chance of a bull state
+[14:35] tomorrow is 65%. And the chance of a
+[14:38] bare state tomorrow is 20%. And of
+[14:40] course, because we have to add up to
+[14:41] 100, there's a 15% chance that we're
+[14:43] going to be in a sideways state
+[14:45] tomorrow. So, to extract your trading
+[14:48] signal from this, all you do is take 65%
+[14:50] which is the bull probability tomorrow,
+[14:53] minus 20%, which is the bare probability
+[14:57] for tomorrow, and you're left with 45%.
+[15:00] So we've got the direction because it's
+[15:01] plus 45%. So we know that the idea is
+[15:04] that we're going to go long. So each
+[15:06] quant and hedge fund will have their own
+[15:08] calculation for you know how strong is
+[15:10] 45% and how much will they put on that
+[15:13] trade. I'd imagine that every hedge fund
+[15:14] is going to be slightly different in
+[15:16] that way. You know some people might
+[15:17] look at a plus 45% as a really strong
+[15:20] signal and put lots more into that trade
+[15:22] and others might look at that as a
+[15:23] little bit weaker and put less in. But
+[15:25] the point is it's giving you the
+[15:26] direction. And you might be wondering,
+[15:28] well, how could that ever be negative?
+[15:30] Well, you're doing the same calculation.
+[15:32] You're taking the bare percentage away
+[15:34] from the bull percentage. So, if the
+[15:35] bare percentage is a larger number than
+[15:37] the bull percentage, then you're going
+[15:39] to end up with a negative number. And
+[15:41] so, the signal is to go short. And the
+[15:43] degree to which that outcome uh is
+[15:45] revealed is the degree to which you
+[15:47] enter that trade. And so, this is far
+[15:49] from the idea of like Bitcoin feels
+[15:51] bullish today. It feels good today. This
+[15:53] is like far away from that. This is
+[15:55] calculations to say, you know, this is
+[15:57] how bullish I am or this is how bearish
+[15:59] I am and this is how much money goes in
+[16:01] as a result of that. It's calculated.
+[16:03] It's simple but complex. It's truly
+[16:07] amazing. So now, as we move into step
+[16:09] number nine of the 10 that we're going
+[16:11] to go over in this video before we get
+[16:12] into the tutorial, the tutorial is
+[16:14] relatively quick. I've just got a copy
+[16:15] and paste prompt for you. So cool. In
+[16:17] step nine, we're going to do something
+[16:19] called walk forward back testing. Now,
+[16:22] this walk forward back testing has taken
+[16:24] me a lot of time to try and comprehend,
+[16:26] and I'm not entirely sure I still do,
+[16:27] but I'm going to explain what I do
+[16:29] understand, and hopefully it will make
+[16:30] sense. Now, when you're trading, often
+[16:32] times, we'll create a strategy, and
+[16:34] we'll do a back test on it. That back
+[16:36] test basically takes all of the data
+[16:39] that has happened in the past and
+[16:40] applies the strategy to all of that
+[16:42] history. So the issue is and this is
+[16:44] where people come into a problem
+[16:46] especially as retail traders is that you
+[16:49] take that strategy with all the
+[16:51] information it's learned from all of the
+[16:53] all of the data right and you take that
+[16:56] strategy and implement it into let's say
+[16:58] 2020. Now it's not a good back test
+[17:01] because the data from 2020 has already
+[17:04] been baked in to the entire back test
+[17:07] and you're applying it back in time.
+[17:09] This is really complex, but it's not a
+[17:12] good back test because it's already
+[17:13] learned from the future. If you're
+[17:15] placing the strategy into 2020, for
+[17:17] example, it already has the future
+[17:19] outcomes baked into the strategy. And
+[17:22] so, it doesn't make any sense. If we've
+[17:23] got all the data right now as of today,
+[17:26] that means it's learned from 2020. It's
+[17:28] learned from 2021 already. And so, this
+[17:30] walk forward back testing thing is a
+[17:33] mitigation against that. Now, it's
+[17:35] massively computationally heavy, or at
+[17:37] least it was before AI. Hint hint. But
+[17:40] every single day has to be entirely
+[17:43] recalculated. So, the whole matrix has
+[17:45] to be entirely redone. So, we never have
+[17:47] that issue of having a strategy that's
+[17:50] learned from all the data applied to the
+[17:52] past and it just doesn't work. From my
+[17:54] understanding, that's how it works. And
+[17:56] if you don't understand, you kind of
+[17:58] don't need to because it's going to be
+[17:59] in the AI to do this for you. Now, we're
+[18:02] at number 10, and things are about to
+[18:04] get mind-blowing, okay? And so, prepare.
+[18:06] Earlier on, we talked about defining a
+[18:09] state. Like, what are the numbers that
+[18:10] define a state? We said, you know, 5%
+[18:13] and up means a bull. Negative 5% and
+[18:15] down means a bear. And anything in
+[18:17] between is sideways. But that's
+[18:19] subjective. Like, who decided that? We
+[18:21] decided that. Humans decided that.
+[18:23] That's a subjective interpretation of
+[18:25] what a bull and bear means. And
+[18:27] obviously then we come into this natural
+[18:29] flaw of the system doesn't work now does
+[18:33] it? How can we have these subjective
+[18:35] opinions and everything else is kind of
+[18:36] calculated and mathematical but we're
+[18:39] still left with the weakest link which
+[18:41] is our subjective view. And so step
+[18:43] number 10 closes all of that out and
+[18:46] solves that problem. Solves that
+[18:47] subjective behavior that ultimately
+[18:49] allows us to really determine what bull
+[18:52] means, what bare means, and what
+[18:53] sideways means. And this is called the
+[18:55] hidden marov model. And this is a part
+[18:58] of the process that looks back over all
+[19:00] of the price history of the asset we're
+[19:02] looking at. All of the transitions, but
+[19:04] all of the states and the labels that we
+[19:06] attached to them earlier have been
+[19:08] removed. So it's not learning from the
+[19:10] labeling of states anymore. It's
+[19:13] actually doing a whole pass through the
+[19:14] strategy of pattern recognition itself.
+[19:17] It's looking at details like the
+[19:19] continuation of the price going up or
+[19:21] the price going down. is looking at a
+[19:22] whole load of different data points
+[19:24] without the labels. And so to make this
+[19:26] like super simple to understand, it's
+[19:28] almost like a babysitter. They come into
+[19:31] the house and there's a whole bunch of
+[19:32] children in there. They don't
+[19:34] immediately know, you know, this child
+[19:36] has ADHD. This child sleeps all the
+[19:38] time. This child is crazy and violent.
+[19:40] You know, they don't know any of that
+[19:42] stuff. And so a few days later though,
+[19:44] once they've sat there and they've
+[19:46] observed the children and the way they
+[19:47] act and the way they interact with each
+[19:49] other, you can determine a whole bunch
+[19:51] of things about each child and assign or
+[19:53] prescribe a personality to each child.
+[19:56] But it takes time to kind of analyze and
+[19:57] sit back and watch. And that's what this
+[19:59] hidden marov model is doing. And after
+[20:01] all of that, now let's determine the
+[20:03] personalities of the children. It'll
+[20:05] actually put a label on the children
+[20:07] like ADHD, violent, sleepy. it will do
+[20:11] that across all of them. And it's doing
+[20:13] the same thing across the data of the
+[20:15] chart. So it's now actually prescribing
+[20:18] a bull state, a bare state, and a
+[20:21] sideways state without any labels
+[20:23] existing previously. And so when you
+[20:25] overlap the two of those where you've
+[20:27] got the you know the 5% is a bull
+[20:30] negative 5% and below is a bear the the
+[20:32] subjective labels that we gave and also
+[20:35] the hidden marov method labels that were
+[20:38] generated you can overlap them and see
+[20:41] where they are confirming each other and
+[20:43] when they confirm each other that gives
+[20:45] you the green light to move ahead right
+[20:48] now that we've understood all of that
+[20:49] and I hope you have that was all 10 of
+[20:51] the elements that make up this hedge
+[20:53] fund method but it's all kind of useless
+[20:55] to you as just information. We need a
+[20:57] real way to apply this into our own
+[21:00] trading strategies and specifically
+[21:01] using AI, get this onto our computers
+[21:04] and running for us. So, you're going to
+[21:06] get a couple of things here. The first
+[21:07] thing you're going to get is a Claude
+[21:09] code skill. This skill you can install
+[21:12] into your computer, especially if you're
+[21:14] using Claude Code. If you're not using
+[21:16] Claude Code and any other LLM, you can
+[21:18] actually take the oneshot prompt and it
+[21:19] will just learn it on your system
+[21:21] regardless of whether it's Claude Code
+[21:23] or not. But this skill, this system will
+[21:26] be applied to any trading strategy that
+[21:28] you ask it to apply it to. So if I've
+[21:31] got my strategy for Bit Tensor and all
+[21:34] the subnets like I actually do in real
+[21:36] life, I can copy and paste this prompt
+[21:38] into my Clawude code. It can learn it
+[21:40] and determine what needs to change about
+[21:42] my strategy to go in accordance to this
+[21:45] hedge fund method. That'll be a copy and
+[21:47] paste prompt that will take you through
+[21:48] from beginning to end very simply
+[21:50] regardless of how much experience you
+[21:52] have with AI or with trading. And then
+[21:54] as a little bonus, I've created a pine
+[21:56] script. As I mentioned earlier, this is
+[21:58] a way to visualize the 3x3 grid of
+[22:01] probabilities on your chart inside
+[22:03] Trading View. This will be a separate
+[22:04] copy and paste that you can go straight
+[22:06] into your Pinecript editor on Trading
+[22:08] View and paste it in. So with that,
+[22:10] let's get into the tutorial.
+[22:14] All right. So, first things first is
+[22:15] you're going to go to the first line in
+[22:17] the description of the video and you'll
+[22:20] be brought to a GitHub page. The GitHub
+[22:22] page is going to give you all the code
+[22:23] of everything I've worked on so far.
+[22:25] It's going to give you the pine script,
+[22:26] the oneshot prompt for you to install on
+[22:28] your Clawude code or any LLM for that
+[22:31] matter and I'm going to walk you through
+[22:32] how to do that. So, you've come over to
+[22:35] the GitHub right now and you can see a
+[22:37] series of things. Uh if you just kind of
+[22:40] come down and see, you can see the two
+[22:42] elements of this. The on camera build
+[22:44] that we're doing right now. This is the
+[22:46] Marov hedge fund method. If you click
+[22:48] that, it will open up a link in another
+[22:51] tab. And we're also going to click the
+[22:53] pine script bonus as well if you're
+[22:55] going to use this for trading view. So
+[22:57] here is the hedge fund method skill that
+[22:59] you're going to install into your AI. So
+[23:02] you're going to copy it from this moment
+[23:04] onwards all the way down. It's going to
+[23:07] this is all the information that I've
+[23:08] kind of put together so that you can uh
+[23:12] create this skill in your system. So,
+[23:14] I've copied it. You're going to come
+[23:15] over here. You're going to click paste
+[23:17] and click enter. There's then going to
+[23:19] be an onboarding process that you'll go
+[23:21] through where it's just going to install
+[23:23] this whole thing into your computer. If
+[23:26] you're on claude code, it's going to
+[23:27] create a skill. So, anytime you have a
+[23:29] trading strategy, you can just say,
+[23:30] "Hey, can you do the Markov run the
+[23:33] Markov skill here?" here and it will go
+[23:34] through the whole process to make sure
+[23:35] that the strategy is, you know, beefed
+[23:38] up. So, it said I'm going to install the
+[23:39] mark of hedge fund method skill into
+[23:41] these this file about 90 seconds on Mac
+[23:44] and Linux and up to two to three minutes
+[23:46] on Windows. You don't need any keys or
+[23:48] accounts or admin passwords. Great. This
+[23:50] is Rowan's framework on Rowan Chain, an
+[23:53] observable marov regime model that
+[23:55] builds a bare a bull bare sideways
+[23:58] transition matrix from any ticker.
+[24:00] Great. So if you're ready, you just type
+[24:02] go and it will start the process.
+[24:06] And it's basically done with the process
+[24:07] now. We've been about 2 minutes and 21
+[24:09] into this. And you can see that phase
+[24:11] four of this whole process of the
+[24:12] onboarding. It says it's going to run a
+[24:16] um a marov reggime basically on the spy
+[24:19] 10-year chart. And this is just a demo
+[24:22] to show that it does in fact work. You
+[24:24] could also then after this just say,
+[24:26] hey, run it on Bitcoin, run it on
+[24:28] Ethereum, whatever you want to do. And
+[24:29] it will apply the Markov regime,
+[24:31] everything we've talked about today to
+[24:33] that asset. And it really can be an any
+[24:35] asset. And just like that, the whole
+[24:37] Markov hedge fund method skill has been
+[24:39] installed. So whenever you want to use
+[24:41] it on a strategy, you just type forward
+[24:44] slashmarkov
+[24:46] and you can see hedge fund method. You
+[24:48] type that there and then talk about your
+[24:50] strategy or whatever. And that's how it
+[24:52] works. Next, we're going to just talk
+[24:54] about how we can apply the Pinescript
+[24:56] into our uh trading view. And all you do
+[24:59] is come over to the Pinescript page that
+[25:01] we talked about earlier. Click copy raw
+[25:03] file right up here. Then you can go over
+[25:05] to your trading view. I've already got
+[25:07] mine installed, but I'm going to delete
+[25:09] it so you can see it all work. On the
+[25:11] right hand side, this is on the desktop
+[25:13] app, by the way. We've got a mountain
+[25:16] looking icon. That is the pine script
+[25:18] icon. You can click that. And sometimes
+[25:20] it helps just to bring this out a little
+[25:22] bit further. Uh we can do control A or
+[25:26] command A to select everything and we
+[25:28] want to delete that. Then we're going to
+[25:29] click commandV which is paste. This is
+[25:31] the pine script right here. And all we
+[25:34] want to do is click the play button here
+[25:36] which is to add to chart. We can now
+[25:38] close this and we wait for it to
+[25:39] populate on the chart. And remember this
+[25:41] is the Bitcoin chart. And there we go.
+[25:43] The Markov regime has been uh laid on
+[25:46] here. This will work for any asset
+[25:48] because it's just doing the calculations
+[25:50] automatically. And the one to look at,
+[25:52] obviously, we've explained the nine the
+[25:55] nine kind of card uh view, but the long
+[25:58] run mix is the the one that I like to
+[26:00] look for. So, if we look at the bull
+[26:03] percentage for tomorrow, it's 29% chance
+[26:07] of tomorrow being a bull run. Tomorrow
+[26:09] being a bare market is 42% chance and
+[26:12] 29% chance of it going sideways. And so
+[26:15] that that bare market being the highest
+[26:17] percentage, the highest likelihood is
+[26:18] because we have bare behavior um uh
+[26:22] recently, right? It's just it's a sticky
+[26:24] state as we talked about. So that's how
+[26:27] it works. It all works here. I'll
+[26:28] actually go and change the the chart.
+[26:30] Maybe we do let's say XRP for example.
+[26:34] And again, it applies the numbers for
+[26:36] XRP as well. And you can do really
+[26:38] anything here. Um I don't know what else
+[26:40] I can kind of show. Stocks, Tesla. There
+[26:43] it the mark of regime works for that as
+[26:45] well. All right, so I hope you've got
+[26:47] tremendous use from this. This is one
+[26:49] part of a potential series on the topic
+[26:52] of quant strategies that we can use AI
+[26:55] to implement. If at any point you're
+[26:56] doing this process and you hit a
+[26:58] roadblock, you can always uh get in
+[27:00] touch with me on 01 systems. It's the
+[27:03] second link in the description. That's
+[27:05] the only place really where I can
+[27:06] provide feedback and help people with
+[27:08] issues and bugs that they have along the
+[27:10] way. So check that out if you're
+[27:12] interested and I'll see you in the next
+[27:13] one.

@@ -33,14 +33,20 @@ TARGET_REGRESSION = [
     "max_drawdown",
     "path_vol",
     "future_alpha_vs_spy",
+    "future_min_asset_return",
+    "future_asset_max_drawdown",
 ]
-TARGET_CLASSIFICATION = ["profit_label", "beat_spy_label"]
+TARGET_CLASSIFICATION = ["profit_label", "beat_spy_label", "asset_crash_label", "severe_adverse_label"]
 TARGET_CLIPS = {
     "portfolio_return": (-1.0, 3.0),
     "max_drawdown": (-1.0, 0.0),
     "path_vol": (0.0, 0.20),
     "future_alpha_vs_spy": (-1.0, 3.0),
+    "future_min_asset_return": (-1.0, 3.0),
+    "future_asset_max_drawdown": (-1.0, 0.0),
 }
+BASE_TARGET_REGRESSION = ["portfolio_return", "max_drawdown", "path_vol", "future_alpha_vs_spy"]
+BASE_TARGET_CLASSIFICATION = ["profit_label", "beat_spy_label"]
 
 
 @dataclass(frozen=True)
@@ -77,6 +83,8 @@ class PortfolioWorldModel(nn.Module):
         hidden_dim: int = 256,
         n_layers: int = 4,
         dropout: float = 0.10,
+        n_reg_targets: int = len(TARGET_REGRESSION),
+        n_cls_targets: int = len(TARGET_CLASSIFICATION),
     ) -> None:
         super().__init__()
         sym_dim = min(32, max(8, int(math.ceil(math.sqrt(max(n_symbols, 1))) * 2)))
@@ -96,8 +104,8 @@ class PortfolioWorldModel(nn.Module):
             ])
             dim = hidden_dim
         self.trunk = nn.Sequential(*blocks)
-        self.reg_head = nn.Linear(hidden_dim, len(TARGET_REGRESSION))
-        self.cls_head = nn.Linear(hidden_dim, len(TARGET_CLASSIFICATION))
+        self.reg_head = nn.Linear(hidden_dim, n_reg_targets)
+        self.cls_head = nn.Linear(hidden_dim, n_cls_targets)
         self.rank_head = nn.Linear(hidden_dim, 1)
 
     def forward(self, x: torch.Tensor, symbol_id: torch.Tensor, action_id: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -155,7 +163,34 @@ def load_frame(path: Path, limit_rows: int = 0, seed: int = 0) -> pd.DataFrame:
     return df.head(limit_rows) if limit_rows > 0 else df
 
 
+def ensure_crash_targets(df: pd.DataFrame) -> pd.DataFrame:
+    """Backfill crash-aware targets for older world-model parquet datasets."""
+    out = df.copy()
+    target_frac = out.get("target_position_frac", pd.Series(1.0, index=out.index)).astype(float).clip(lower=0.01)
+    if "future_min_asset_return" not in out.columns:
+        portfolio_dd = out.get("max_drawdown", pd.Series(0.0, index=out.index)).astype(float)
+        derived_asset_dd = (portfolio_dd / target_frac).clip(lower=-1.0, upper=0.0)
+        asset_ret = out.get("future_asset_return", out.get("portfolio_return", pd.Series(0.0, index=out.index))).astype(float)
+        out["future_min_asset_return"] = np.minimum(asset_ret, derived_asset_dd).astype(np.float32)
+    if "future_asset_max_drawdown" not in out.columns:
+        portfolio_dd = out.get("max_drawdown", pd.Series(0.0, index=out.index)).astype(float)
+        out["future_asset_max_drawdown"] = (portfolio_dd / target_frac).clip(lower=-1.0, upper=0.0).astype(np.float32)
+    if "asset_crash_label" not in out.columns:
+        asset_ret = out.get("future_asset_return", pd.Series(0.0, index=out.index)).astype(float)
+        min_ret = out["future_min_asset_return"].astype(float)
+        asset_dd = out["future_asset_max_drawdown"].astype(float)
+        out["asset_crash_label"] = ((asset_ret < -0.02) | (min_ret < -0.025) | (asset_dd < -0.025)).astype(np.float32)
+    if "severe_adverse_label" not in out.columns:
+        min_ret = out["future_min_asset_return"].astype(float)
+        asset_dd = out["future_asset_max_drawdown"].astype(float)
+        out["severe_adverse_label"] = ((min_ret < -0.04) | (asset_dd < -0.04)).astype(np.float32)
+    return out
+
+
 def make_matrices(df: pd.DataFrame, val_fraction: float, val_gap_days: float) -> dict:
+    df = ensure_crash_targets(df)
+    target_regression = [c for c in TARGET_REGRESSION if c in df.columns]
+    target_classification = [c for c in TARGET_CLASSIFICATION if c in df.columns]
     feature_cols = [
         c for c in df.columns
         if c.startswith("feat_") or c.startswith("state_") or c.startswith("xsec_")
@@ -195,12 +230,12 @@ def make_matrices(df: pd.DataFrame, val_fraction: float, val_gap_days: float) ->
     if "price" in feature_cols:
         x[:, feature_cols.index("price")] = np.log1p(np.maximum(x[:, feature_cols.index("price")], 0.0))
 
-    y_reg_df = df[TARGET_REGRESSION].replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    y_reg_df = df[target_regression].replace([np.inf, -np.inf], np.nan).fillna(0.0)
     for col, (lo, hi) in TARGET_CLIPS.items():
         if col in y_reg_df.columns:
             y_reg_df[col] = y_reg_df[col].clip(lo, hi)
     y_reg = y_reg_df.to_numpy(np.float32)
-    y_cls = df[TARGET_CLASSIFICATION].astype(np.float32).to_numpy(np.float32)
+    y_cls = df[target_classification].astype(np.float32).to_numpy(np.float32)
     group_key = (
         df[time_col].astype(str)
         + "|"
@@ -235,6 +270,8 @@ def make_matrices(df: pd.DataFrame, val_fraction: float, val_gap_days: float) ->
         "train_mask": train_mask,
         "val_mask": val_mask,
         "feature_cols": feature_cols,
+        "target_regression": target_regression,
+        "target_classification": target_classification,
         "time_col": time_col,
         "symbols": symbols,
         "actions": actions,
@@ -295,18 +332,17 @@ def evaluate(
             correct_profit += int(((probs[:, 0] >= 0.5) == (ycls[:, 0] >= 0.5)).sum().item())
             correct_spy += int(((probs[:, 1] >= 0.5) == (ycls[:, 1] >= 0.5)).sum().item())
             total += int(ycls.size(0))
-    mae = np.mean(np.stack(mae_raw), axis=0) if mae_raw else np.zeros(len(TARGET_REGRESSION))
-    return {
+    mae = np.mean(np.stack(mae_raw), axis=0) if mae_raw else np.zeros(len(y_mean))
+    metrics = {
         "loss": float(np.mean(losses)) if losses else 0.0,
         "bce": float(np.mean(bce_losses)) if bce_losses else 0.0,
         "rank_bce": float(np.mean(rank_losses)) if rank_losses else 0.0,
-        "mae_portfolio_return": float(mae[0]),
-        "mae_max_drawdown": float(mae[1]),
-        "mae_path_vol": float(mae[2]),
-        "mae_future_alpha_vs_spy": float(mae[3]),
         "profit_accuracy": float(correct_profit / max(total, 1)),
         "beat_spy_accuracy": float(correct_spy / max(total, 1)),
     }
+    for idx, name in enumerate(TARGET_REGRESSION[: len(mae)]):
+        metrics[f"mae_{name}"] = float(mae[idx])
+    return metrics
 
 
 def train(config: TrainConfig) -> dict:
@@ -334,6 +370,8 @@ def train(config: TrainConfig) -> dict:
         hidden_dim=config.hidden_dim,
         n_layers=config.n_layers,
         dropout=config.dropout,
+        n_reg_targets=len(mats["target_regression"]),
+        n_cls_targets=len(mats["target_classification"]),
     ).to(device)
     if config.init_checkpoint:
         ckpt = torch.load(config.init_checkpoint, map_location="cpu", weights_only=False)
@@ -420,8 +458,8 @@ def train(config: TrainConfig) -> dict:
         "feature_cols": mats["feature_cols"],
         "symbols": mats["symbols"],
         "actions": mats["actions"],
-        "target_regression": TARGET_REGRESSION,
-        "target_classification": TARGET_CLASSIFICATION,
+        "target_regression": mats["target_regression"],
+        "target_classification": mats["target_classification"],
         "x_mean": mats["x_mean"],
         "x_std": mats["x_std"],
         "y_mean": mats["y_mean"],

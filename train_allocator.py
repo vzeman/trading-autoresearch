@@ -27,8 +27,12 @@ NUMERIC_FEATURES = [
     "pred_max_drawdown",
     "pred_path_vol",
     "pred_future_alpha_vs_spy",
+    "pred_future_min_asset_return",
+    "pred_future_asset_max_drawdown",
     "pred_profit_label",
     "pred_beat_spy_label",
+    "pred_asset_crash_label",
+    "pred_severe_adverse_label",
     "pred_rank_top_quartile",
     "price",
     "horizon_bars",
@@ -102,6 +106,7 @@ class AllocatorConfig:
     top_quantile: float
     feature_mode: str
     utility_mode: str
+    train_entry_only: bool
     extra_roundtrip_bps: float
     drawdown_penalty: float
     volatility_penalty: float
@@ -141,6 +146,17 @@ def filter_frame(df: pd.DataFrame, min_horizon: int, max_horizon: int) -> pd.Dat
     return df.reset_index(drop=True)
 
 
+def entry_only_frame(df: pd.DataFrame) -> pd.DataFrame:
+    out = df[
+        (df["action"].astype(str) == "buy")
+        & (df["current_position_frac"].astype(float) == 0.0)
+        & (df["target_position_frac"].astype(float) > 0.0)
+    ].copy()
+    if out.empty:
+        raise RuntimeError("no entry-only buy rows left after filtering")
+    return out.reset_index(drop=True)
+
+
 def split_masks(df: pd.DataFrame, val_fraction: float, val_gap_days: float) -> tuple[np.ndarray, np.ndarray]:
     time_col = "decision_timestamp" if "decision_timestamp" in df.columns else "timestamp"
     timestamps = pd.to_datetime(df[time_col], utc=True)
@@ -168,6 +184,27 @@ def add_targets(
     volatility_penalty: float = 0.10,
 ) -> pd.DataFrame:
     out = df.copy()
+    target_frac_for_crash = out.get("target_position_frac", pd.Series(1.0, index=out.index)).astype(float).clip(lower=0.01)
+    if "future_min_asset_return" not in out.columns:
+        derived_dd = out.get("max_drawdown", pd.Series(0.0, index=out.index)).astype(float) / target_frac_for_crash
+        asset_ret = out.get("future_asset_return", out.get("portfolio_return", pd.Series(0.0, index=out.index))).astype(float)
+        out["future_min_asset_return"] = np.minimum(asset_ret, derived_dd.clip(lower=-1.0, upper=0.0)).astype(np.float32)
+    if "future_asset_max_drawdown" not in out.columns:
+        out["future_asset_max_drawdown"] = (
+            out.get("max_drawdown", pd.Series(0.0, index=out.index)).astype(float) / target_frac_for_crash
+        ).clip(lower=-1.0, upper=0.0).astype(np.float32)
+    if "asset_crash_label" not in out.columns:
+        asset_ret = out.get("future_asset_return", pd.Series(0.0, index=out.index)).astype(float)
+        out["asset_crash_label"] = (
+            (asset_ret < -0.02)
+            | (out["future_min_asset_return"].astype(float) < -0.025)
+            | (out["future_asset_max_drawdown"].astype(float) < -0.025)
+        ).astype(np.float32)
+    if "severe_adverse_label" not in out.columns:
+        out["severe_adverse_label"] = (
+            (out["future_min_asset_return"].astype(float) < -0.04)
+            | (out["future_asset_max_drawdown"].astype(float) < -0.04)
+        ).astype(np.float32)
     time_col = "decision_timestamp" if "decision_timestamp" in out.columns else "timestamp"
     group_key = out[time_col].astype(str) + "|" + out["horizon_bars"].astype(str)
     if utility_mode == "default":
@@ -177,7 +214,7 @@ def add_targets(
         beat_label = out["beat_spy_label"].astype(float)
         dd_penalty = 0.25
         vol_penalty = 0.10
-    elif utility_mode in {"stress_adjusted", "stress_convex", "tradable_stress"}:
+    elif utility_mode in {"stress_adjusted", "stress_convex", "tradable_stress", "crash_averse"}:
         target_return = _stress_adjusted_return(out, extra_roundtrip_bps)
         alpha = target_return - out["future_spy_return"].astype(float)
         profit_label = (target_return > 0.0).astype(float)
@@ -209,6 +246,30 @@ def add_targets(
             + 0.65 * out["max_drawdown"].astype(float).clip(lower=-0.25, upper=0.0)
             - 0.20 * out["path_vol"].astype(float).clip(lower=0.0, upper=0.20)
         )
+    elif utility_mode == "crash_averse":
+        max_dd = out["max_drawdown"].astype(float)
+        path_vol = out["path_vol"].astype(float)
+        asset_ret = out["future_asset_return"].astype(float) if "future_asset_return" in out.columns else target_return
+        target_frac = out["target_position_frac"].astype(float).clip(lower=0.0, upper=1.0)
+        dd_breach = (max_dd < -0.0125).astype(float)
+        deep_dd_breach = (max_dd < -0.025).astype(float)
+        losing_trade = (target_return <= 0.0).astype(float)
+        underperforming_trade = (alpha <= 0.0).astype(float)
+        crash_event = ((asset_ret < -0.02) | (max_dd < -0.025)).astype(float)
+        rank_target = (
+            1.25 * target_return.clip(lower=-0.08, upper=0.15)
+            + 1.50 * alpha.clip(lower=-0.08, upper=0.15)
+            + 0.20 * profit_label
+            + 0.45 * beat_label
+            + 1.75 * max_dd.clip(lower=-0.20, upper=0.0)
+            - 0.35 * path_vol.clip(lower=0.0, upper=0.20)
+            - 0.35 * target_frac
+            - 0.60 * dd_breach
+            - 1.10 * deep_dd_breach
+            - 0.45 * losing_trade
+            - 0.65 * underperforming_trade
+            - 1.25 * crash_event
+        )
     rank_pct = out.assign(_allocator_rank_target=rank_target).groupby(group_key)["_allocator_rank_target"].rank(pct=True, method="average")
     out["allocator_top_label"] = (rank_pct >= top_quantile).astype(np.float32)
     utility = (
@@ -230,6 +291,32 @@ def add_targets(
             + 0.25 * alpha.clip(lower=0.0, upper=0.12)
             - 0.08 * target_frac
             - 0.15 * state_vol
+        )
+    elif utility_mode == "crash_averse":
+        max_dd = out["max_drawdown"].astype(float)
+        path_vol = out["path_vol"].astype(float)
+        asset_ret = out["future_asset_return"].astype(float) if "future_asset_return" in out.columns else target_return
+        target_frac = out["target_position_frac"].astype(float).clip(lower=0.0, upper=1.0)
+        state_vol = out["state_vol_1d"].astype(float).clip(lower=0.0, upper=0.20) if "state_vol_1d" in out.columns else 0.0
+        state_ret_1d = out["state_ret_1d"].astype(float) if "state_ret_1d" in out.columns else 0.0
+        state_drawdown = out["state_drawdown_5d"].astype(float) if "state_drawdown_5d" in out.columns else 0.0
+        dd_breach = (max_dd < -0.0125).astype(float)
+        deep_dd_breach = (max_dd < -0.025).astype(float)
+        crash_event = ((asset_ret < -0.02) | (max_dd < -0.025)).astype(float)
+        weak_context = ((state_ret_1d < -0.02) | (state_drawdown < -0.06)).astype(float)
+        utility = (
+            1.30 * target_return.clip(lower=-0.08, upper=0.15)
+            + 1.60 * alpha.clip(lower=-0.08, upper=0.15)
+            + 0.30 * profit_label
+            + 0.55 * beat_label
+            + 2.25 * max_dd.clip(lower=-0.20, upper=0.0)
+            - 0.45 * path_vol.clip(lower=0.0, upper=0.20)
+            - 0.40 * target_frac
+            - 0.20 * state_vol
+            - 0.75 * dd_breach
+            - 1.35 * deep_dd_breach
+            - 1.50 * crash_event
+            - 0.35 * weak_context
         )
     out["allocator_utility"] = utility.astype(np.float32)
     return out
@@ -294,10 +381,11 @@ def dataset(mats: dict, mask: np.ndarray) -> TensorDataset:
     )
 
 
-def evaluate_model(model: AllocatorModel, loader: DataLoader, device: str) -> dict:
+def evaluate_model(model: AllocatorModel, loader: DataLoader, device: str, top_pos_weight: float = 1.0) -> dict:
     model.eval()
     mse = nn.MSELoss()
-    bce = nn.BCEWithLogitsLoss()
+    pos_weight = torch.tensor([max(float(top_pos_weight), 1.0)], device=device)
+    bce = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     losses, utility_losses, top_losses = [], [], []
     correct = total = 0
     with torch.no_grad():
@@ -370,6 +458,8 @@ def train(config: AllocatorConfig) -> dict:
 
     train_df = filter_frame(load_frame(Path(config.train_data), config.limit_rows, seed=config.seed), config.min_horizon_bars, config.max_horizon_bars)
     train_scored = predict(train_df, world_ckpt, device=device, batch_size=config.batch_size)
+    if config.train_entry_only:
+        train_scored = entry_only_frame(train_scored)
     train_scored = add_targets(
         train_scored,
         config.top_quantile,
@@ -380,6 +470,8 @@ def train(config: AllocatorConfig) -> dict:
     )
     train_mask, val_mask = split_masks(train_scored, config.val_fraction, config.val_gap_days)
     mats = make_matrices(train_scored, train_mask, feature_mode=config.feature_mode)
+    top_positive_rate = float(mats["top"][train_mask].mean())
+    top_pos_weight = float((1.0 - top_positive_rate) / max(top_positive_rate, 1e-6))
 
     train_loader = DataLoader(dataset(mats, train_mask), batch_size=config.batch_size, shuffle=True)
     val_loader = DataLoader(dataset(mats, val_mask), batch_size=config.batch_size * 2, shuffle=False)
@@ -393,7 +485,8 @@ def train(config: AllocatorConfig) -> dict:
     ).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
     mse = nn.MSELoss()
-    bce = nn.BCEWithLogitsLoss()
+    top_pos_weight_tensor = torch.tensor([max(top_pos_weight, 1.0)], device=device)
+    bce = nn.BCEWithLogitsLoss(pos_weight=top_pos_weight_tensor)
     history = []
     best_loss = float("inf")
     best_state: dict[str, torch.Tensor] | None = None
@@ -401,7 +494,8 @@ def train(config: AllocatorConfig) -> dict:
 
     print(
         f"[allocator] rows={len(train_scored):,} train={int(train_mask.sum()):,} val={int(val_mask.sum()):,} "
-        f"features={mats['x'].shape[1]} symbols={len(mats['symbols'])} actions={len(mats['actions'])} device={device}",
+        f"features={mats['x'].shape[1]} symbols={len(mats['symbols'])} actions={len(mats['actions'])} "
+        f"top_pos_rate={top_positive_rate:.3f} top_pos_weight={top_pos_weight:.2f} device={device}",
         flush=True,
     )
     for epoch in range(config.epochs):
@@ -417,7 +511,7 @@ def train(config: AllocatorConfig) -> dict:
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
             losses.append(float(loss.item()))
-        val = evaluate_model(model, val_loader, device)
+        val = evaluate_model(model, val_loader, device, top_pos_weight=top_pos_weight)
         row = {"epoch": epoch + 1, "train_loss": float(np.mean(losses)) if losses else 0.0, **val}
         history.append(row)
         print(
@@ -442,6 +536,8 @@ def train(config: AllocatorConfig) -> dict:
         "x_std": mats["x_std"],
         "utility_mean": mats["utility_mean"],
         "utility_std": mats["utility_std"],
+        "top_positive_rate": top_positive_rate,
+        "top_pos_weight": top_pos_weight,
         "history": history,
         "best_epoch": best_epoch,
         "best_val_loss": best_loss,
@@ -454,6 +550,8 @@ def train(config: AllocatorConfig) -> dict:
     val_result = evaluate_planner(val_scored)
     test_df = filter_frame(load_frame(Path(config.test_data), config.limit_rows, seed=config.seed), config.min_horizon_bars, config.max_horizon_bars)
     test_scored = predict(test_df, world_ckpt, device=device, batch_size=config.batch_size)
+    if config.train_entry_only:
+        test_scored = entry_only_frame(test_scored)
     test_scored = apply_allocator(test_scored, ckpt, device=device, batch_size=config.batch_size)
     test_result = evaluate_planner(test_scored)
 
@@ -468,6 +566,7 @@ def train(config: AllocatorConfig) -> dict:
         "max_horizon_bars": int(config.max_horizon_bars),
         "feature_mode": config.feature_mode,
         "utility_mode": config.utility_mode,
+        "train_entry_only": bool(config.train_entry_only),
         "extra_roundtrip_bps": float(config.extra_roundtrip_bps),
         "drawdown_penalty": float(config.drawdown_penalty),
         "volatility_penalty": float(config.volatility_penalty),
@@ -503,7 +602,8 @@ def main() -> None:
     parser.add_argument("--max-horizon-bars", type=int, default=0)
     parser.add_argument("--top-quantile", type=float, default=0.80)
     parser.add_argument("--feature-mode", choices=["compact", "market"], default="compact")
-    parser.add_argument("--utility-mode", choices=["default", "stress_adjusted", "stress_convex", "tradable_stress"], default="default")
+    parser.add_argument("--utility-mode", choices=["default", "stress_adjusted", "stress_convex", "tradable_stress", "crash_averse"], default="default")
+    parser.add_argument("--train-entry-only", action="store_true", help="train and report allocator only on cash-to-buy entry rows")
     parser.add_argument("--extra-roundtrip-bps", type=float, default=0.0)
     parser.add_argument("--drawdown-penalty", type=float, default=0.25)
     parser.add_argument("--volatility-penalty", type=float, default=0.10)

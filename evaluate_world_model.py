@@ -71,6 +71,8 @@ def prepare_inputs(df: pd.DataFrame, ckpt: dict) -> tuple[np.ndarray, np.ndarray
 
 def predict(df: pd.DataFrame, ckpt: dict, device: str, batch_size: int) -> pd.DataFrame:
     x, symbol_id, action_id = prepare_inputs(df, ckpt)
+    target_regression = list(ckpt.get("target_regression", TARGET_REGRESSION))
+    target_classification = list(ckpt.get("target_classification", TARGET_CLASSIFICATION))
     model = PortfolioWorldModel(
         n_features=len(ckpt["feature_cols"]),
         n_symbols=len(ckpt["symbols"]),
@@ -78,6 +80,8 @@ def predict(df: pd.DataFrame, ckpt: dict, device: str, batch_size: int) -> pd.Da
         hidden_dim=ckpt["config"]["hidden_dim"],
         n_layers=ckpt["config"]["n_layers"],
         dropout=0.0,
+        n_reg_targets=len(target_regression),
+        n_cls_targets=len(target_classification),
     ).to(device)
     model.load_state_dict(ckpt["state_dict"])
     model.eval()
@@ -101,14 +105,22 @@ def predict(df: pd.DataFrame, ckpt: dict, device: str, batch_size: int) -> pd.Da
     cls_arr = np.concatenate(preds_cls, axis=0)
     rank_arr = np.concatenate(preds_rank, axis=0)
     out = df.copy()
-    for j, name in enumerate(TARGET_REGRESSION):
+    for j, name in enumerate(target_regression):
         out[f"pred_{name}"] = reg_arr[:, j]
         if name in TARGET_CLIPS:
             lo, hi = TARGET_CLIPS[name]
             out[f"pred_{name}"] = out[f"pred_{name}"].clip(lo, hi)
-    for j, name in enumerate(TARGET_CLASSIFICATION):
+    for j, name in enumerate(target_classification):
         out[f"pred_{name}"] = cls_arr[:, j]
     out["pred_rank_top_quartile"] = rank_arr
+    for name in TARGET_REGRESSION:
+        col = f"pred_{name}"
+        if col not in out.columns:
+            out[col] = 0.0
+    for name in TARGET_CLASSIFICATION:
+        col = f"pred_{name}"
+        if col not in out.columns:
+            out[col] = 0.0
     out["pred_score"] = (
         out["pred_portfolio_return"]
         + 0.20 * out["pred_future_alpha_vs_spy"]
@@ -117,6 +129,10 @@ def predict(df: pd.DataFrame, ckpt: dict, device: str, batch_size: int) -> pd.Da
         + 0.50 * out["pred_rank_top_quartile"]
         + 0.50 * out["pred_max_drawdown"]
         - 0.10 * out["pred_path_vol"]
+        - 0.30 * out["pred_asset_crash_label"]
+        - 0.50 * out["pred_severe_adverse_label"]
+        + 0.20 * out["pred_future_min_asset_return"]
+        + 0.20 * out["pred_future_asset_max_drawdown"]
     )
     return out
 

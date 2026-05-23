@@ -82,6 +82,14 @@ def apply_trade_rule(planner: pd.DataFrame, rule: dict) -> pd.DataFrame:
         out = out[out["pred_beat_spy_label"].astype(float) >= float(rule["min_pred_beat_spy_label"])].copy()
     if "min_pred_future_alpha_vs_spy" in rule and "pred_future_alpha_vs_spy" in out.columns:
         out = out[out["pred_future_alpha_vs_spy"].astype(float) >= float(rule["min_pred_future_alpha_vs_spy"])].copy()
+    if "min_pred_future_min_asset_return" in rule and "pred_future_min_asset_return" in out.columns:
+        out = out[out["pred_future_min_asset_return"].astype(float) >= float(rule["min_pred_future_min_asset_return"])].copy()
+    if "min_pred_future_asset_max_drawdown" in rule and "pred_future_asset_max_drawdown" in out.columns:
+        out = out[out["pred_future_asset_max_drawdown"].astype(float) >= float(rule["min_pred_future_asset_max_drawdown"])].copy()
+    if "max_pred_asset_crash_label" in rule and "pred_asset_crash_label" in out.columns:
+        out = out[out["pred_asset_crash_label"].astype(float) <= float(rule["max_pred_asset_crash_label"])].copy()
+    if "max_pred_severe_adverse_label" in rule and "pred_severe_adverse_label" in out.columns:
+        out = out[out["pred_severe_adverse_label"].astype(float) <= float(rule["max_pred_severe_adverse_label"])].copy()
     if "max_pred_score_std" in rule and "pred_score_std" in out.columns:
         out = out[out["pred_score_std"].astype(float) <= float(rule["max_pred_score_std"])].copy()
     return out
@@ -99,13 +107,21 @@ def rule_name(rule: dict) -> str:
         parts.append(f"p_beat>={rule['min_pred_beat_spy_label']:.2f}")
     if "min_pred_future_alpha_vs_spy" in rule:
         parts.append(f"pred_alpha>={rule['min_pred_future_alpha_vs_spy']:.4f}")
+    if "min_pred_future_min_asset_return" in rule:
+        parts.append(f"pred_min_ret>={rule['min_pred_future_min_asset_return']:.4f}")
+    if "min_pred_future_asset_max_drawdown" in rule:
+        parts.append(f"pred_asset_dd>={rule['min_pred_future_asset_max_drawdown']:.4f}")
+    if "max_pred_asset_crash_label" in rule:
+        parts.append(f"p_crash<={rule['max_pred_asset_crash_label']:.2f}")
+    if "max_pred_severe_adverse_label" in rule:
+        parts.append(f"p_severe<={rule['max_pred_severe_adverse_label']:.2f}")
     if "max_pred_score_std" in rule:
         parts.append(f"score_std<={rule['max_pred_score_std']:.4f}")
     return " | ".join(parts)
 
 
 def candidate_rules(calibration_planner: pd.DataFrame) -> list[dict]:
-    score_quantiles = (0.50, 0.60, 0.70, 0.80, 0.85, 0.90)
+    score_quantiles = (0.50, 0.60, 0.70, 0.80, 0.85, 0.90, 0.95)
     max_targets = (0.50, 0.75, 1.00)
     max_horizons = (30, 60, 120)
     min_profit = (None, 0.50, 0.55)
@@ -122,8 +138,32 @@ def candidate_rules(calibration_planner: pd.DataFrame) -> list[dict]:
             float(calibration_planner["pred_score_std"].quantile(q))
             for q in (0.50, 0.75)
         ]
+    min_asset_thresholds: list[float | None] = [None]
+    if "pred_future_min_asset_return" in calibration_planner.columns:
+        min_asset_thresholds += [
+            float(calibration_planner["pred_future_min_asset_return"].quantile(q))
+            for q in (0.50, 0.60)
+        ]
+    asset_dd_thresholds: list[float | None] = [None]
+    if "pred_future_asset_max_drawdown" in calibration_planner.columns:
+        asset_dd_thresholds += [
+            float(calibration_planner["pred_future_asset_max_drawdown"].quantile(q))
+            for q in (0.50, 0.60)
+        ]
+    crash_thresholds: list[float | None] = [None]
+    if "pred_asset_crash_label" in calibration_planner.columns:
+        crash_thresholds += [
+            float(calibration_planner["pred_asset_crash_label"].quantile(q))
+            for q in (0.40, 0.60)
+        ]
+    severe_thresholds: list[float | None] = [None]
+    if "pred_severe_adverse_label" in calibration_planner.columns:
+        severe_thresholds += [
+            float(calibration_planner["pred_severe_adverse_label"].quantile(q))
+            for q in (0.40, 0.60)
+        ]
 
-    rules = []
+    base_rules = []
     for q in score_quantiles:
         score_threshold = float(calibration_planner["pred_score"].quantile(q))
         for max_target in max_targets:
@@ -148,7 +188,44 @@ def candidate_rules(calibration_planner: pd.DataFrame) -> list[dict]:
                                 if score_std_threshold is not None:
                                     rule["max_pred_score_std"] = float(score_std_threshold)
                                 rule["name"] = rule_name(rule)
-                                rules.append(rule)
+                                base_rules.append(rule)
+
+    rules = list(base_rules)
+    crash_variants = []
+    min_asset_values = [v for v in min_asset_thresholds if v is not None]
+    asset_dd_values = [v for v in asset_dd_thresholds if v is not None]
+    crash_values = [v for v in crash_thresholds if v is not None]
+    severe_values = [v for v in severe_thresholds if v is not None]
+    for base in base_rules:
+        if min_asset_values or asset_dd_values:
+            rule = dict(base)
+            if min_asset_values:
+                rule["min_pred_future_min_asset_return"] = float(max(min_asset_values))
+            if asset_dd_values:
+                rule["min_pred_future_asset_max_drawdown"] = float(max(asset_dd_values))
+            rule["name"] = rule_name(rule)
+            crash_variants.append(rule)
+        if crash_values or severe_values:
+            rule = dict(base)
+            if crash_values:
+                rule["max_pred_asset_crash_label"] = float(min(crash_values))
+            if severe_values:
+                rule["max_pred_severe_adverse_label"] = float(min(severe_values))
+            rule["name"] = rule_name(rule)
+            crash_variants.append(rule)
+        if (min_asset_values or asset_dd_values) and (crash_values or severe_values):
+            rule = dict(base)
+            if min_asset_values:
+                rule["min_pred_future_min_asset_return"] = float(max(min_asset_values))
+            if asset_dd_values:
+                rule["min_pred_future_asset_max_drawdown"] = float(max(asset_dd_values))
+            if crash_values:
+                rule["max_pred_asset_crash_label"] = float(min(crash_values))
+            if severe_values:
+                rule["max_pred_severe_adverse_label"] = float(min(severe_values))
+            rule["name"] = rule_name(rule)
+            crash_variants.append(rule)
+    rules.extend(crash_variants)
     return rules
 
 
@@ -203,6 +280,15 @@ def choose_trade_rule(
     idle_asset: str,
     starting_equity: float,
     max_calibration_drawdown: float,
+    min_calibration_trades: int,
+    min_calibration_return: float,
+    min_calibration_profit_rate: float,
+    min_calibration_beat_spy_rate: float,
+    validation_planner: pd.DataFrame | None,
+    min_validation_trades: int,
+    min_validation_return: float,
+    min_validation_profit_rate: float,
+    min_validation_beat_spy_rate: float,
     extra_roundtrip_bps: float,
     extra_fee_usd: float,
     max_trades_per_symbol: int,
@@ -229,16 +315,62 @@ def choose_trade_rule(
             max_trades_per_symbol=max_trades_per_symbol,
             symbol_cooldown_days=symbol_cooldown_days,
         )
-        if seq["trades"] < 10:
+        if seq["trades"] < min_calibration_trades:
             continue
         if abs(float(seq["max_drawdown"])) > max_calibration_drawdown:
             continue
+        if float(seq["total_return"]) < min_calibration_return:
+            continue
+        if float(seq["profit_rate"]) < min_calibration_profit_rate:
+            continue
+        if float(seq["beat_spy_rate"]) < min_calibration_beat_spy_rate:
+            continue
+        validation_seq = None
+        validation_coverage = 0.0
+        if validation_planner is not None and not validation_planner.empty:
+            validation_active = apply_trade_rule(validation_planner, rule)
+            validation_coverage = len(validation_active) / max(len(validation_planner), 1)
+            validation_start, validation_end = _date_range(validation_planner)
+            validation_seq = constrained_sequential_portfolio(
+                validation_active,
+                starting_equity=starting_equity,
+                idle_asset=idle_asset,
+                test_start=validation_start,
+                test_end=validation_end,
+                include_details=False,
+                extra_roundtrip_bps=extra_roundtrip_bps,
+                extra_fee_usd=extra_fee_usd,
+                max_trades_per_symbol=max_trades_per_symbol,
+                symbol_cooldown_days=symbol_cooldown_days,
+            )
+            if validation_seq["trades"] < min_validation_trades:
+                continue
+            if float(validation_seq["total_return"]) < min_validation_return:
+                continue
+            if float(validation_seq["profit_rate"]) < min_validation_profit_rate:
+                continue
+            if float(validation_seq["beat_spy_rate"]) < min_validation_beat_spy_rate:
+                continue
+            if abs(float(validation_seq["max_drawdown"])) > max_calibration_drawdown:
+                continue
         score = (
-            seq["total_return"]
-            - 2.00 * abs(seq["max_drawdown"])
-            + 0.05 * seq["profit_rate"]
-            + 0.05 * seq["beat_spy_rate"]
+            4.00 * seq["total_return"]
+            - 3.00 * abs(seq["max_drawdown"])
+            + 0.08 * seq["profit_rate"]
+            + 0.04 * seq["beat_spy_rate"]
+            + 0.02 * min(seq["trades"] / 25.0, 1.0)
         )
+        if validation_seq is not None:
+            score = (
+                0.35 * score
+                + 0.65 * (
+                    4.00 * validation_seq["total_return"]
+                    - 3.00 * abs(validation_seq["max_drawdown"])
+                    + 0.08 * validation_seq["profit_rate"]
+                    + 0.04 * validation_seq["beat_spy_rate"]
+                    + 0.02 * min(validation_seq["trades"] / 25.0, 1.0)
+                )
+            )
         row = {
             "rule": rule,
             "coverage": float(coverage),
@@ -249,6 +381,12 @@ def choose_trade_rule(
                 if k not in ("equity_curve", "trades_detail")
             },
         }
+        if validation_seq is not None:
+            row["validation_coverage"] = float(validation_coverage)
+            row["validation_sequential"] = {
+                k: v for k, v in validation_seq.items()
+                if k not in ("equity_curve", "trades_detail")
+            }
         evaluated.append(row)
         if best is None or row["objective"] > best["objective"]:
             best = row
@@ -513,6 +651,20 @@ def constrained_sequential_portfolio(
     return seq
 
 
+def split_planner_by_time(planner: pd.DataFrame, validation_fraction: float) -> tuple[pd.DataFrame, pd.DataFrame | None]:
+    frac = max(0.0, min(float(validation_fraction), 0.8))
+    if frac <= 0.0 or planner.empty:
+        return planner, None
+    time_col = _time_col(planner)
+    times = pd.to_datetime(planner[time_col], utc=True)
+    cutoff = times.quantile(1.0 - frac)
+    search = planner.loc[times <= cutoff].reset_index(drop=True)
+    validation = planner.loc[times > cutoff].reset_index(drop=True)
+    if search.empty or validation.empty:
+        return planner, None
+    return search, validation
+
+
 def run(args: argparse.Namespace) -> dict:
     device = pick_device(args.device)
     world_ckpt = torch.load(args.world_checkpoint, map_location="cpu", weights_only=False)
@@ -534,28 +686,59 @@ def run(args: argparse.Namespace) -> dict:
         calibration_scored = entry_candidates(calibration_scored)
     calibration_scored, calibration_filter_summary = tradability_filters(calibration_scored, args)
     calibration_planner = planner_rows(calibration_scored)
+    rule_search_planner, rule_validation_planner = split_planner_by_time(
+        calibration_planner,
+        args.rule_validation_fraction,
+    )
     threshold_choice = choose_threshold(calibration_planner, args.min_coverage, args.objective_mode)
     selected = threshold_choice["best"]
+    if args.fixed_score_quantile >= 0:
+        selected = min(
+            threshold_choice["candidates"],
+            key=lambda row: abs(float(row["quantile"]) - float(args.fixed_score_quantile)),
+        )
     fixed_rule = {
         "name": f"fixed_threshold_q{selected['quantile']:.2f}",
         "score_quantile": float(selected["quantile"]),
         "score_threshold": float(selected["threshold"]),
     }
+    if args.fixed_max_target_position_frac > 0:
+        fixed_rule["max_target_position_frac"] = float(args.fixed_max_target_position_frac)
+    if args.fixed_max_horizon_bars > 0:
+        fixed_rule["max_horizon_bars"] = int(args.fixed_max_horizon_bars)
+    fixed_rule["name"] = rule_name(fixed_rule)
     calibrated_rule = None
     selected_rule = fixed_rule
     if args.rule_mode == "calibrated":
-        calibrated_rule = choose_trade_rule(
-            calibration_planner,
-            min_coverage=args.min_coverage,
-            idle_asset=args.idle_asset,
-            starting_equity=args.starting_equity,
-            max_calibration_drawdown=args.max_calibration_drawdown,
-            extra_roundtrip_bps=args.extra_roundtrip_bps,
-            extra_fee_usd=args.extra_fee_usd,
-            max_trades_per_symbol=args.max_trades_per_symbol,
-            symbol_cooldown_days=args.symbol_cooldown_days,
-        )
-        selected_rule = calibrated_rule["best"]["rule"]
+        try:
+            calibrated_rule = choose_trade_rule(
+                rule_search_planner,
+                min_coverage=args.min_coverage,
+                idle_asset=args.idle_asset,
+                starting_equity=args.starting_equity,
+                max_calibration_drawdown=args.max_calibration_drawdown,
+                min_calibration_trades=args.min_calibration_trades,
+                min_calibration_return=args.min_calibration_return,
+                min_calibration_profit_rate=args.min_calibration_profit_rate,
+                min_calibration_beat_spy_rate=args.min_calibration_beat_spy_rate,
+                validation_planner=rule_validation_planner,
+                min_validation_trades=args.min_validation_trades,
+                min_validation_return=args.min_validation_return,
+                min_validation_profit_rate=args.min_validation_profit_rate,
+                min_validation_beat_spy_rate=args.min_validation_beat_spy_rate,
+                extra_roundtrip_bps=args.extra_roundtrip_bps,
+                extra_fee_usd=args.extra_fee_usd,
+                max_trades_per_symbol=args.max_trades_per_symbol,
+                symbol_cooldown_days=args.symbol_cooldown_days,
+            )
+            selected_rule = calibrated_rule["best"]["rule"]
+        except RuntimeError as exc:
+            calibrated_rule = {"error": str(exc), "best": None, "top_candidates": [], "evaluated_rules": 0}
+            selected_rule = {
+                "name": "no_trade_no_calibrated_rule",
+                "score_quantile": 1.0,
+                "score_threshold": float("inf"),
+            }
 
     test_scored = score_dataset_ensemble(
         Path(args.test_data),
@@ -612,12 +795,26 @@ def run(args: argparse.Namespace) -> dict:
             "max_state_vol_1d": float(args.max_state_vol_1d),
             "max_abs_state_ret_1d": float(args.max_abs_state_ret_1d),
         },
+        "calibrated_rule_constraints": {
+            "rule_validation_fraction": float(args.rule_validation_fraction),
+            "min_calibration_trades": int(args.min_calibration_trades),
+            "min_calibration_return": float(args.min_calibration_return),
+            "min_calibration_profit_rate": float(args.min_calibration_profit_rate),
+            "min_calibration_beat_spy_rate": float(args.min_calibration_beat_spy_rate),
+            "min_validation_trades": int(args.min_validation_trades),
+            "min_validation_return": float(args.min_validation_return),
+            "min_validation_profit_rate": float(args.min_validation_profit_rate),
+            "min_validation_beat_spy_rate": float(args.min_validation_beat_spy_rate),
+            "max_calibration_drawdown": float(args.max_calibration_drawdown),
+        },
         "calibration_filter_summary": calibration_filter_summary,
         "test_filter_summary": test_filter_summary,
         "selected_threshold": selected,
         "selected_trade_rule": selected_rule,
         "calibrated_rule_search": calibrated_rule,
         "calibration_groups": int(len(calibration_planner)),
+        "rule_search_groups": int(len(rule_search_planner)),
+        "rule_validation_groups": int(len(rule_validation_planner)) if rule_validation_planner is not None else 0,
         "test_groups": int(len(test_planner)),
         "active_group_summary": summarize_with_cash(
             "locked_test_active_groups",
@@ -651,7 +848,19 @@ def main() -> None:
     parser.add_argument("--min-coverage", type=float, default=0.05)
     parser.add_argument("--objective-mode", choices=["cash_return", "active_return", "hybrid"], default="hybrid")
     parser.add_argument("--rule-mode", choices=["fixed_threshold", "calibrated"], default="fixed_threshold")
+    parser.add_argument("--fixed-score-quantile", type=float, default=-1.0, help="force fixed-threshold mode to use the nearest calibration quantile candidate")
+    parser.add_argument("--fixed-max-target-position-frac", type=float, default=0.0, help="optional max target allocation for fixed-threshold rules")
+    parser.add_argument("--fixed-max-horizon-bars", type=int, default=0, help="optional max horizon for fixed-threshold rules")
     parser.add_argument("--max-calibration-drawdown", type=float, default=0.18)
+    parser.add_argument("--rule-validation-fraction", type=float, default=0.0, help="reserve the latest calibration slice for rule validation")
+    parser.add_argument("--min-calibration-trades", type=int, default=10)
+    parser.add_argument("--min-calibration-return", type=float, default=0.0)
+    parser.add_argument("--min-calibration-profit-rate", type=float, default=0.0)
+    parser.add_argument("--min-calibration-beat-spy-rate", type=float, default=0.0)
+    parser.add_argument("--min-validation-trades", type=int, default=0)
+    parser.add_argument("--min-validation-return", type=float, default=0.0)
+    parser.add_argument("--min-validation-profit-rate", type=float, default=0.0)
+    parser.add_argument("--min-validation-beat-spy-rate", type=float, default=0.0)
     parser.add_argument("--extra-roundtrip-bps", type=float, default=0.0, help="extra per-active-trade cost stress in bps of target exposure")
     parser.add_argument("--extra-fee-usd", type=float, default=0.0, help="extra flat cost stress per active trade")
     parser.add_argument("--max-trades-per-symbol", type=int, default=0, help="optional cap on selected active trades per symbol")

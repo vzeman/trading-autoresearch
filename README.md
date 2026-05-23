@@ -45,6 +45,21 @@ MPS made the longer base-training run practical. Five mixed-JEPA epochs plus fiv
 
 ![iteration equity](docs/weighted_bf1bed0.png)
 
+### Next possible strategy: trend-quality holding
+
+The newest non-JEPA branch is documented in
+[`docs/next_strategy_trend_quality_holding.md`](docs/next_strategy_trend_quality_holding.md).
+It compares multi-day holding periods and alternative cross-sectional selectors
+on the latest local Alpaca cache. The current candidate is
+`trend_quality_hold_3d`: rank liquid symbols by recent trend quality, buy the
+top three, and hold each position for three trading days.
+
+Recent 2026 slice result: +17.83% versus +9.65% for SPY, with -7.36% max
+drawdown. This is a promising research candidate, not live-trading approved; it
+needs multi-year walk-forward validation and cost stress before paper trading.
+
+![holding-period strategy comparison](docs/markov_holding_period_comparison.png)
+
 ### Current best (`f9dfd67`)
 
 | metric | value |
@@ -136,6 +151,24 @@ filters: +51.5%, 40 trades, -8.5% max drawdown, 47.5% profitable trades, and
 not live-tradable until it survives full rolling retrains and paper trading.
 The repo now includes `rolling_retrain_tradable.py` for full per-year retrains
 and `backfill_alpaca_history.py` for explicit older Alpaca bar backfills.
+The 2026-05-13 follow-up rejected direct relative-SPY input features and added
+`walk_forward_tradable_allocator.py`, a stricter past-only fold gate that uses
+the sequential tradability simulator instead of planner averages. Under that
+gate, the current top-500 adjusted/liquid q95 candidate returns +33.5% with 8
+trades, -2.6% max drawdown, and 62.5% active beat-SPY; a broader calibrated
+walk-forward rule returned +28.1% with more drawdown, so q95 remains the
+deploy-shaped candidate for now.
+Full rolling retrain/walk-forward over unseen calendar years 2023-2025 has now
+run. It retrained the world model and allocator separately inside each fold and
+then applied the same fixed q95 tradability rule. Results: 2023 +19.3% versus
+SPY +23.7%, 2024 +27.8% versus SPY +25.2%, and 2025 +19.7% versus SPY +17.2%.
+That q95 rule was encouraging, but failed the strict "beat SPY every year"
+requirement. A follow-up threshold/exposure sweep found a better paper-trading
+candidate: fixed q80 with max target exposure capped at 75%. It reached 2023
++24.1% versus SPY +23.7%, 2024 +25.6% versus SPY +25.2%, and 2025 +23.0%
+versus SPY +17.2%, with 28 total trades and -9.8% worst drawdown. This passes
+the three-fold SPY gate, but it is still not live-tradable: the margins are thin
+in 2023/2024, the fold count is small, and paper execution has not run yet.
 
 Read the full model creation notes, features, training settings, attempts, and
 simulated portfolio charts in

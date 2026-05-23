@@ -157,6 +157,12 @@ def _eval_cmd(args: argparse.Namespace, train_dir: Path, test_dir: Path, world_c
         args.objective_mode,
         "--rule-mode",
         args.rule_mode,
+        "--fixed-score-quantile",
+        str(args.fixed_score_quantile),
+        "--fixed-max-target-position-frac",
+        str(args.fixed_max_target_position_frac),
+        "--fixed-max-horizon-bars",
+        str(args.fixed_max_horizon_bars),
         "--max-calibration-drawdown",
         str(args.max_calibration_drawdown),
         "--extra-roundtrip-bps",
@@ -293,13 +299,16 @@ def main() -> None:
     parser.add_argument("--allocator-weight-decay", type=float, default=1e-3)
     parser.add_argument("--top-quantile", type=float, default=0.80)
     parser.add_argument("--feature-mode", choices=["compact", "market"], default="compact")
-    parser.add_argument("--utility-mode", choices=["default", "stress_adjusted", "stress_convex", "tradable_stress"], default="stress_adjusted")
+    parser.add_argument("--utility-mode", choices=["default", "stress_adjusted", "stress_convex", "tradable_stress", "crash_averse"], default="stress_adjusted")
     parser.add_argument("--drawdown-penalty", type=float, default=0.50)
     parser.add_argument("--volatility-penalty", type=float, default=0.25)
     parser.add_argument("--eval-batch-size", type=int, default=32768)
     parser.add_argument("--min-coverage", type=float, default=0.05)
     parser.add_argument("--objective-mode", choices=["cash_return", "active_return", "hybrid"], default="hybrid")
     parser.add_argument("--rule-mode", choices=["fixed_threshold", "calibrated"], default="fixed_threshold")
+    parser.add_argument("--fixed-score-quantile", type=float, default=-1.0)
+    parser.add_argument("--fixed-max-target-position-frac", type=float, default=0.0)
+    parser.add_argument("--fixed-max-horizon-bars", type=int, default=0)
     parser.add_argument("--max-calibration-drawdown", type=float, default=0.18)
     parser.add_argument("--extra-roundtrip-bps", type=float, default=10.0)
     parser.add_argument("--max-trades-per-symbol", type=int, default=3)

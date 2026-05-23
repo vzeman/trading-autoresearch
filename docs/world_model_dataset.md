@@ -106,6 +106,105 @@ times, and a non-survivorship-biased universe. `backfill_alpaca_history.py`
 can explicitly fetch older Alpaca bars into the same cache format without
 modifying the frozen `prepare.py` path.
 
+Latest 2026-05-13 iteration on the larger top-500 adjusted/liquid dataset:
+
+- The proposed direct relative-SPY input features were removed from active
+  training. They made the locked result worse: q95 returned +24.2%, 10 trades,
+  -3.4% max drawdown, 40.0% profit rate, and only 20.0% active beat-SPY rate.
+- The active feature set keeps broad market context (`feat_spy_*`, TLT/UUP,
+  state features, and cross-sectional ranks), but no longer injects
+  `state_spy_ret_*` or `state_rel_spy_ret_*` as model inputs.
+- `walk_forward_tradable_allocator.py` is now the strict gate for threshold or
+  rule changes. It scores a frozen world model plus allocator, splits the
+  locked test year into chronological folds, selects each fold's trade rule from
+  past data only, then stitches the selected fold trades into one continuous
+  sequential portfolio.
+- The current robust top-500 adjusted/liquid candidate is the q95 fixed rule on
+  `world_model_top500_adjusted_liquid_xsec_s250_fast_4p5m.pt` plus
+  `allocator_top500_adjusted_liquid_xsec_s250_fast_q80_tradable10.pt`: +33.5%,
+  8 trades, -2.6% max drawdown, 62.5% profit rate, and 62.5% active beat-SPY
+  rate under 10 bps extra active-trade cost, max 3 trades/symbol, 10-day symbol
+  cooldown, observable tradability filters, and SPY idle capital.
+- A broader calibrated-rule walk-forward search was more active but weaker:
+  +28.1%, 20 trades, -7.6% max drawdown, 60.0% profit rate, and 60.0% beat-SPY.
+  For now, keep q95 as the deploy-shaped candidate and require future feature
+  changes to beat it under the strict walk-forward script before promotion.
+- Full rolling retrain/walk-forward over calendar 2023-2025 now exists at
+  `checkpoints/world_model/rolling_retrain_top500_adjusted_liquid_xsec_q95_summary.json`.
+  Each fold retrains the world model and allocator from scratch on the prior
+  three-year window, then evaluates the next unseen calendar year with the same
+  fixed q95 rule, 10 bps cost stress, symbol cap/cooldown, observable filters,
+  and SPY idle capital. It is encouraging but not yet tradable-ready: 2024 and
+  2025 beat SPY, but 2023 did not, and the policy still trades too sparsely.
+
+Rolling retrain results:
+
+| test year | strategy return | SPY return | excess vs SPY | trades | max DD | profit rate | active beat-SPY |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 2023 | +19.3% | +23.7% | -4.4% | 3 | -1.8% | 66.7% | 66.7% |
+| 2024 | +27.8% | +25.2% | +2.7% | 2 | -2.8% | 100.0% | 100.0% |
+| 2025 | +19.7% | +17.2% | +2.5% | 5 | -0.5% | 60.0% | 80.0% |
+
+Interpretation: the model generalizes better than the one-year locked test
+alone suggested, but it fails the strict "beat SPY in every unseen yearly fold"
+bar because 2023 underperformed SPY. The next improvement should increase
+trade count and reduce reliance on SPY idle beta, then re-run this same rolling
+retrain gate.
+
+Follow-up threshold/position-cap sweep:
+
+The first useful improvement was not lowering the threshold by itself. q90/q85
+admitted more trades, but 2023 became fragile because a few full-size trades
+created large drawdowns. The best simple overlay is q80 with max target exposure
+capped at 75%. It increases total trades from 10 to 28 and is the first
+candidate in this sweep to beat SPY in all three rolling retrain folds:
+
+| candidate | beat years | mean return | mean excess vs SPY | trades | worst DD |
+|---|---:|---:|---:|---:|---:|
+| q95, target <= 100% | 2 / 3 | +22.3% | +0.3% | 10 | -2.8% |
+| q85, target <= 100% | 2 / 3 | +22.5% | +0.5% | 28 | -11.4% |
+| q80, target <= 75% | 3 / 3 | +24.2% | +2.2% | 28 | -9.8% |
+
+q80/75 fold details:
+
+| test year | strategy return | SPY return | excess vs SPY | trades | max DD | profit rate | active beat-SPY |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 2023 | +24.1% | +23.7% | +0.4% | 4 | 0.0% | 50.0% | 50.0% |
+| 2024 | +25.6% | +25.2% | +0.4% | 5 | -3.0% | 60.0% | 60.0% |
+| 2025 | +23.0% | +17.2% | +5.8% | 19 | -9.8% | 52.6% | 68.4% |
+
+This is a better paper-trading candidate than the q95 rule, but it is still not
+live-tradable. It has only three yearly folds, 2023 and 2024 beat SPY by thin
+margins, and the 2025 drawdown is much larger. The next gate is more historical
+folds plus cash-idle and paper-execution tests.
+
+Strict walk-forward tradability command:
+
+```bash
+.venv/bin/python walk_forward_tradable_allocator.py \
+  --calibration-data data/world_model/top500_adjusted_liquid_xsec_train_intraday120_s250_fast \
+  --test-data data/world_model/top500_adjusted_liquid_xsec_test_intraday120_s125_fast \
+  --world-checkpoint checkpoints/world_model/world_model_top500_adjusted_liquid_xsec_s250_fast_4p5m.pt \
+  --allocator-checkpoint checkpoints/world_model/allocator_top500_adjusted_liquid_xsec_s250_fast_q80_tradable10.pt \
+  --output checkpoints/world_model/walk_forward_tradable_top500_adjusted_liquid_xsec_s250_fast_q95_tradable10_cost10_cap3_cd10_spyidle.json \
+  --objective-mode hybrid \
+  --fixed-score-quantile 0.95 \
+  --fixed-max-target-position-frac 1.0 \
+  --fixed-max-horizon-bars 120 \
+  --extra-roundtrip-bps 10 \
+  --max-trades-per-symbol 3 \
+  --symbol-cooldown-days 10 \
+  --min-price 5 \
+  --min-trade-notional 1000 \
+  --min-state-volume-z-1d -3 \
+  --max-state-vol-1d 0.08 \
+  --max-abs-state-ret-1d 0.20 \
+  --entry-only \
+  --idle-asset spy \
+  --device mps \
+  --folds 5
+```
+
 The important caveat: the policy only beats SPY when idle capital remains in
 SPY. If idle capital sits in cash, the same active stock trades return +21.7%,
 which is good but below SPY's +27.7% over this unusually strong locked year.

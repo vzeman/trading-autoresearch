@@ -89,6 +89,9 @@ def _make_args(base: argparse.Namespace, calibration_data: Path, test_data: Path
         min_coverage=base.min_coverage,
         objective_mode=base.objective_mode,
         rule_mode=base.rule_mode,
+        fixed_score_quantile=base.fixed_score_quantile,
+        fixed_max_target_position_frac=base.fixed_max_target_position_frac,
+        fixed_max_horizon_bars=base.fixed_max_horizon_bars,
         max_calibration_drawdown=base.max_calibration_drawdown,
         extra_roundtrip_bps=base.extra_roundtrip_bps,
         extra_fee_usd=base.extra_fee_usd,
@@ -180,6 +183,9 @@ def main() -> None:
     parser.add_argument("--min-coverage", type=float, default=0.05)
     parser.add_argument("--objective-mode", choices=["cash_return", "active_return", "hybrid"], default="hybrid")
     parser.add_argument("--rule-mode", choices=["fixed_threshold", "calibrated"], default="calibrated")
+    parser.add_argument("--fixed-score-quantile", type=float, default=-1.0)
+    parser.add_argument("--fixed-max-target-position-frac", type=float, default=0.0)
+    parser.add_argument("--fixed-max-horizon-bars", type=int, default=0)
     parser.add_argument("--max-calibration-drawdown", type=float, default=0.18)
     parser.add_argument("--extra-roundtrip-bps", type=float, default=10.0)
     parser.add_argument("--extra-fee-usd", type=float, default=0.0)

@@ -92,6 +92,7 @@ class BuildConfig:
     shard_by_symbol: bool = False
     start_date: str = ""
     end_date: str = ""
+    min_symbol_bars: int = 0
 
 
 def _cache_path(symbol: str) -> Path:
@@ -209,6 +210,8 @@ def _build_cross_sectional_features(
         except Exception:
             continue
         source_bars = _source_bars_for_split(bars, config.split_name)
+        if config.min_symbol_bars > 0 and len(source_bars) < config.min_symbol_bars:
+            continue
         if len(source_bars) < max(w for w, _ in windows) + 2:
             continue
         feat = featurize(source_bars, context=context).dropna().reset_index(drop=True)
@@ -323,6 +326,9 @@ def _outcome_for_action(
         starting_equity=STARTING_CASH_USD,
     )
     path_prices = close[i : i + horizon + 1].astype(np.float64)
+    asset_peak = np.maximum.accumulate(path_prices)
+    asset_dd = path_prices / np.maximum(asset_peak, 1e-12) - 1.0
+    asset_rets_from_entry = path_prices / max(path_prices[0], 1e-12) - 1.0
     equity = cash + qty * path_prices
     final_equity = float(equity[-1])
     peak = np.maximum.accumulate(equity)
@@ -342,6 +348,8 @@ def _outcome_for_action(
         "fees": float(fee),
         "slippage": float(slippage),
         "future_asset_return": asset_return,
+        "future_min_asset_return": float(np.min(asset_rets_from_entry)),
+        "future_asset_max_drawdown": float(np.min(asset_dd)),
         "future_spy_return": spy_return,
         "future_alpha_vs_spy": asset_return - spy_return,
         "final_equity": final_equity,
@@ -353,6 +361,8 @@ def _outcome_for_action(
         "max_equity": float(np.max(equity)),
         "profit_label": int(portfolio_return > 0),
         "beat_spy_label": int(portfolio_return > spy_return),
+        "asset_crash_label": int(asset_return < -0.02 or np.min(asset_rets_from_entry) < -0.025 or np.min(asset_dd) < -0.025),
+        "severe_adverse_label": int(np.min(asset_rets_from_entry) < -0.04 or np.min(asset_dd) < -0.04),
     }
 
 
@@ -407,7 +417,8 @@ def _build_symbol_rows(
     except Exception as exc:
         return pd.DataFrame(), {"status": "failed", "error": str(exc)}
     source_bars = _source_bars_for_split(bars, config.split_name)
-    if len(source_bars) < config.context_bars + max_horizon + 2:
+    min_required_bars = max(config.context_bars + max_horizon + 2, config.min_symbol_bars)
+    if len(source_bars) < min_required_bars:
         return pd.DataFrame(), {"status": "skipped", "bars": int(len(source_bars))}
 
     feat = featurize(source_bars, context=context)
@@ -490,7 +501,8 @@ def _build_symbol_rows_at_timestamps(
     except Exception as exc:
         return pd.DataFrame(), {"status": "failed", "error": str(exc)}
     source_bars = _source_bars_for_split(bars, config.split_name)
-    if len(source_bars) < config.context_bars + max_horizon + 2:
+    min_required_bars = max(config.context_bars + max_horizon + 2, config.min_symbol_bars)
+    if len(source_bars) < min_required_bars:
         return pd.DataFrame(), {"status": "skipped", "bars": int(len(source_bars))}
 
     feat = featurize(source_bars, context=context).dropna().reset_index(drop=True)
@@ -577,10 +589,14 @@ def _metadata(config: BuildConfig, row_count: int, symbol_stats: dict[str, dict]
             "max_drawdown",
             "path_vol",
             "future_asset_return",
+            "future_min_asset_return",
+            "future_asset_max_drawdown",
             "future_spy_return",
             "future_alpha_vs_spy",
             "profit_label",
             "beat_spy_label",
+            "asset_crash_label",
+            "severe_adverse_label",
         ],
         "action_count": len(_action_specs(config.action_mode)),
     }
@@ -697,6 +713,7 @@ def main(argv: Iterable[str] | None = None) -> None:
     parser.add_argument("--shared-timestamps", action="store_true", help="sample shared decision timestamps so groups rank across symbols")
     parser.add_argument("--start-date", default="", help="optional UTC decision start date, inclusive; keeps earlier bars for feature context")
     parser.add_argument("--end-date", default="", help="optional UTC outcome end date, exclusive; max horizon must finish before this")
+    parser.add_argument("--min-symbol-bars", type=int, default=0, help="skip symbols with fewer raw bars in the selected split")
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     symbols = _load_symbols(
@@ -727,6 +744,7 @@ def main(argv: Iterable[str] | None = None) -> None:
         shard_by_symbol=args.shard_by_symbol,
         start_date=args.start_date,
         end_date=args.end_date,
+        min_symbol_bars=args.min_symbol_bars,
     )
     if args.shard_by_symbol:
         meta = build_dataset_sharded(config, output)
