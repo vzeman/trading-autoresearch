@@ -224,7 +224,11 @@ def add_cross_sectional_scores(frame: pd.DataFrame, daily: pd.DataFrame) -> pd.D
         "ret_5_prev",
         "ret_20_prev",
         "rel_ret_5_prev",
+        "rel_ret_10_prev",
         "rel_ret_20_prev",
+        "spy_ret_5_prev",
+        "spy_ret_10_prev",
+        "spy_ret_20_prev",
         "vol_10_prev",
         "median_dollar_volume_20_prev",
         "volume_ratio_prev",
@@ -273,6 +277,14 @@ def add_cross_sectional_scores(frame: pd.DataFrame, daily: pd.DataFrame) -> pd.D
         0.75 * enriched["relative_momentum_score"].fillna(0.0)
         + 0.25 * enriched["volume_shape_score"].fillna(0.0)
     )
+    spy_ret_5 = enriched["spy_ret_5_prev"].fillna(0.0).astype(float)
+    spy_ret_20 = enriched["spy_ret_20_prev"].fillna(0.0).astype(float)
+    spy_signal = enriched["spy_markov_signal"].fillna(0.0).astype(float)
+    exposure = pd.Series(1.0, index=enriched.index, dtype=float)
+    exposure[(spy_ret_5 < 0.0) & (spy_signal <= 0.0)] = 0.65
+    exposure[(spy_ret_20 < -0.02) & (spy_signal <= 0.0)] = 0.40
+    exposure[(spy_ret_20 < -0.04) & (spy_signal < -0.05)] = 0.20
+    enriched["spy_relative_guard_exposure"] = exposure
     return enriched
 
 
@@ -312,6 +324,16 @@ def score_candidates(group: pd.DataFrame, config: MarkovConfig, selector: str, p
             candidates = candidates[candidates["markov_signal"].astype(float) >= 0.0].copy()
     else:
         candidates = candidates[candidates["markov_signal"].astype(float) >= config.min_signal].copy()
+    if "relative_guard" in selector:
+        candidates = candidates[candidates["rel_ret_5_prev"].fillna(-1.0).astype(float) > 0.0].copy()
+        candidates = candidates[candidates["rel_ret_20_prev"].fillna(-1.0).astype(float) > -0.01].copy()
+        candidates = candidates[candidates["ret_5_prev"].fillna(-1.0).astype(float) > -0.015].copy()
+        candidates = candidates[candidates["volume_ratio_5_20_prev"].fillna(0.0).astype(float) >= 0.8].copy()
+    if "strong_relative_guard" in selector:
+        candidates = candidates[candidates["rel_ret_5_prev"].fillna(-1.0).astype(float) >= 0.005].copy()
+        candidates = candidates[candidates["rel_ret_20_prev"].fillna(-1.0).astype(float) >= 0.0].copy()
+        candidates = candidates[candidates["ret_5_prev"].fillna(-1.0).astype(float) >= 0.0].copy()
+        candidates = candidates[candidates["relative_momentum_score"].fillna(-99.0).astype(float) > 0.0].copy()
     if "spy_gated" in selector:
         candidates = candidates[candidates["spy_markov_signal"].fillna(0.0).astype(float) > 0.0].copy()
     if "confirmed" in selector:
@@ -323,6 +345,18 @@ def score_candidates(group: pd.DataFrame, config: MarkovConfig, selector: str, p
         score = candidates[score_col].astype(float).copy()
     else:
         score = candidates["markov_signal"].astype(float).copy()
+    if "relative_guard" in selector:
+        score = (
+            score
+            + 0.08 * candidates["relative_momentum_score"].fillna(0.0).astype(float)
+            + 0.04 * candidates["volume_shape_score"].fillna(0.0).astype(float)
+        )
+    if "rel_rank" in selector:
+        score = (
+            score
+            + 0.04 * candidates["relative_momentum_score"].fillna(0.0).astype(float)
+            + 0.02 * candidates["trend_quality_score"].fillna(0.0).astype(float)
+        )
     if "algo_fused" in selector:
         score = score + 0.15 * candidates["state_persistence"].astype(float)
     candidates["score"] = score
@@ -645,6 +679,50 @@ def strategies() -> list[HoldingStrategy]:
         HoldingStrategy("confirmed_hold_5d", "confirmed", max_hold_days=5),
         HoldingStrategy("confirmed_hold_10d", "confirmed", max_hold_days=10),
         HoldingStrategy("confirmed_signal_exit_max10", "confirmed", max_hold_days=10, min_hold_days=2, exit_signal=0.02),
+        HoldingStrategy(
+            "confirmed_market_exposure_hold_5d",
+            "confirmed",
+            max_hold_days=5,
+            exposure_column="spy_relative_guard_exposure",
+        ),
+        HoldingStrategy(
+            "confirmed_market_exposure_hold_10d",
+            "confirmed",
+            max_hold_days=10,
+            exposure_column="spy_relative_guard_exposure",
+        ),
+        HoldingStrategy("confirmed_rel_rank_hold_5d", "confirmed_rel_rank", max_hold_days=5),
+        HoldingStrategy(
+            "confirmed_rel_rank_market_hold_5d",
+            "confirmed_rel_rank",
+            max_hold_days=5,
+            exposure_column="spy_relative_guard_exposure",
+        ),
+        HoldingStrategy(
+            "confirmed_relative_guard_hold_5d",
+            "confirmed_relative_guard",
+            max_hold_days=5,
+            min_hold_days=1,
+            exit_signal=0.02,
+            exposure_column="spy_relative_guard_exposure",
+        ),
+        HoldingStrategy(
+            "confirmed_relative_guard_exit_max10",
+            "confirmed_relative_guard",
+            max_hold_days=10,
+            min_hold_days=2,
+            exit_signal=0.02,
+            rank_exit_top_n=10,
+            exposure_column="spy_relative_guard_exposure",
+        ),
+        HoldingStrategy(
+            "confirmed_strong_relative_guard_hold_5d",
+            "confirmed_strong_relative_guard",
+            max_hold_days=5,
+            min_hold_days=1,
+            exit_signal=0.02,
+            exposure_column="spy_relative_guard_exposure",
+        ),
         HoldingStrategy("spy_fused_rebalance_daily", "algo_fused_spy_gated", max_hold_days=1),
         HoldingStrategy("spy_fused_hold_3d", "algo_fused_spy_gated", max_hold_days=3),
         HoldingStrategy("spy_fused_hold_5d", "algo_fused_spy_gated", max_hold_days=5),
