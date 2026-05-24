@@ -162,3 +162,84 @@ Latest comparison:
 
 This keeps the original strategy shape, but adds gap-failure awareness. It
 needs walk-forward validation before it can replace the original candidate.
+
+## High-Volume Multi-Year Follow-Up
+
+Added a liquidity-filtered multi-year diagnostic in
+`docs/liquid_multiyear_volume_strategy.md`.
+
+The test re-ran the holding strategy family across 2021 through 2026 YTD and
+restricted entries to higher-volume stocks. The strict top-10
+volume-and-valuation universe was much stronger than the broader `$20M` daily
+dollar-volume threshold.
+
+Best strict-liquid candidate:
+
+| strategy | avg return | avg alpha vs SPY | SPY-beating folds | worst alpha | worst DD |
+|---|---:|---:|---:|---:|---:|
+| `trend_quality_hold_3d` | +25.65% | +14.61% | 5 / 6 | -17.14% | -41.50% |
+
+Conclusion: high-volume filtering helps, but the system is still not
+tradable-ready. The next fix should be an adaptive market-risk gate so the
+portfolio reduces exposure or switches strategy during SPY bear regimes like
+2022.
+
+## Volume-Shape Signal Follow-Up
+
+Added volume-shape features to the holding strategy family. The new signal
+rewards constructive volume build-up and penalizes one-day blowoff spikes:
+
+```text
+volume_shape_score =
+  0.30 * z(avg_volume_5_prev / avg_volume_20_prev)
++ 0.25 * z(avg_dollar_volume_5_prev / avg_dollar_volume_20_prev)
++ 0.25 * z(ret_5_prev * avg_volume_5_prev / avg_volume_20_prev)
++ 0.15 * z(previous_day_volume / avg_volume_20_prev)
+- 0.20 * z(max(previous_day_volume / avg_volume_20_prev - 2.5, 0))
+```
+
+New tested variants:
+
+- `trend_quality_volume_shape_hold_3d`
+- `trend_quality_avoid_failed_gap_volume_shape_hold_3d`
+- `relative_momentum_volume_shape_exit_max10`
+
+Result: volume shape is useful but conditional. In the strict top-10 universe,
+`trend_quality_volume_shape_hold_3d` averaged +10.30% alpha versus +14.61% for
+the original `trend_quality_hold_3d`. It did help specific folds, such as 2023
+top-10 and the broader `$20M` universe in 2024-2026 for the failed-gap variant.
+Use it as an ensemble signal, not as a full replacement for trend quality.
+
+## Volume-State Transformer Gate
+
+Added `train_volume_state_transformer.py` and documented the experiment in
+`docs/volume_state_transformer_gate.md`.
+
+This trains a separate iTransformer-style market-state model from 40-day
+market-wide volume-shape sequences. Its output is shifted forward one trading
+session and used as a risk gate for `trend_quality_hold_3d`.
+
+Final top-10 walk-forward result with threshold `0.80`:
+
+| strategy | avg return | avg alpha vs SPY | SPY-beating folds | worst alpha | avg DD | worst DD |
+|---|---:|---:|---:|---:|---:|---:|
+| `trend_quality_hold_3d` | +20.37% | +11.51% | 4 / 5 | -17.14% | -26.24% | -41.50% |
+| `trend_quality_hold_3d_volume_state_gate` | +17.44% | +8.58% | 4 / 5 | -13.18% | -23.76% | -39.14% |
+
+Follow-up: added a leader-aware gate after analyzing why 2025 failed. The
+failure was not that risk was fake. The risky days had a much higher actual
+risk-label rate, but the top liquid leaders still outperformed SPY. The new
+rule blocks only when the transformer sees risk and the top trend-quality
+leaders do not have enough relative strength.
+
+Updated result:
+
+| strategy | avg return | avg alpha vs SPY | worst alpha | avg DD | worst DD |
+|---|---:|---:|---:|---:|---:|
+| `trend_quality_hold_3d` | +20.37% | +11.51% | -17.14% | -26.24% | -41.50% |
+| `trend_quality_hold_3d_volume_state_leader_gate` | +20.35% | +11.49% | -13.18% | -23.64% | -39.14% |
+
+Conclusion: leader-aware volume-state gating is not a return booster yet, but
+it preserves return while improving worst-case behavior. Next version should
+learn the leader-strength/action threshold walk-forward rather than fixing it
+at `0.24`.

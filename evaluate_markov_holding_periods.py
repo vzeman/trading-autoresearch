@@ -29,6 +29,7 @@ class HoldingStrategy:
     exit_signal: float | None = None
     rank_exit_top_n: int = 0
     exit_on_spy_gate: bool = False
+    exposure_column: str = ""
 
 
 def default_markov_config(args: argparse.Namespace) -> MarkovConfig:
@@ -80,6 +81,8 @@ def safe_zscore(values: pd.Series) -> pd.Series:
 def add_cross_sectional_scores(frame: pd.DataFrame, daily: pd.DataFrame) -> pd.DataFrame:
     """Add leak-resistant alternative model scores from information known before the target day."""
     features = daily.sort_values(["symbol", "date"]).copy()
+    if "dollar_volume" not in features.columns:
+        features["dollar_volume"] = features["close"].astype(float) * features["volume"].astype(float)
     by_symbol = features.groupby("symbol", sort=False)
     features["ret_3_prev"] = by_symbol["close"].pct_change(3).groupby(features["symbol"]).shift(1)
     features["ret_5_prev"] = by_symbol["close"].pct_change(5).groupby(features["symbol"]).shift(1)
@@ -87,8 +90,17 @@ def add_cross_sectional_scores(frame: pd.DataFrame, daily: pd.DataFrame) -> pd.D
     features["ret_20_prev"] = by_symbol["close"].pct_change(20).groupby(features["symbol"]).shift(1)
     features["vol_10_prev"] = by_symbol["daily_return"].rolling(10).std().reset_index(level=0, drop=True).groupby(features["symbol"]).shift(1)
     features["vol_20_prev"] = by_symbol["daily_return"].rolling(20).std().reset_index(level=0, drop=True).groupby(features["symbol"]).shift(1)
+    features["avg_vol_5_prev"] = by_symbol["volume"].rolling(5).mean().reset_index(level=0, drop=True).groupby(features["symbol"]).shift(1)
     features["avg_vol_20_prev"] = by_symbol["volume"].rolling(20).mean().reset_index(level=0, drop=True).groupby(features["symbol"]).shift(1)
+    features["avg_dollar_vol_5_prev"] = by_symbol["dollar_volume"].rolling(5).mean().reset_index(level=0, drop=True).groupby(features["symbol"]).shift(1)
+    features["avg_dollar_vol_20_prev"] = by_symbol["dollar_volume"].rolling(20).mean().reset_index(level=0, drop=True).groupby(features["symbol"]).shift(1)
     features["volume_ratio_prev"] = by_symbol["volume"].shift(1) / features["avg_vol_20_prev"].replace(0.0, np.nan)
+    features["volume_ratio_5_20_prev"] = features["avg_vol_5_prev"] / features["avg_vol_20_prev"].replace(0.0, np.nan)
+    features["dollar_volume_ratio_5_20_prev"] = features["avg_dollar_vol_5_prev"] / features["avg_dollar_vol_20_prev"].replace(0.0, np.nan)
+    features["volume_spike_prev"] = (features["volume_ratio_prev"] - 2.5).clip(lower=0.0)
+    features["median_dollar_volume_20_prev"] = (
+        by_symbol["dollar_volume"].rolling(20).median().reset_index(level=0, drop=True).groupby(features["symbol"]).shift(1)
+    )
     features["roll_max_20_prev"] = by_symbol["close"].rolling(20).max().reset_index(level=0, drop=True).groupby(features["symbol"]).shift(1)
     features["roll_min_20_prev"] = by_symbol["close"].rolling(20).min().reset_index(level=0, drop=True).groupby(features["symbol"]).shift(1)
     features["roll_max_50_prev"] = by_symbol["close"].rolling(50).max().reset_index(level=0, drop=True).groupby(features["symbol"]).shift(1)
@@ -135,6 +147,7 @@ def add_cross_sectional_scores(frame: pd.DataFrame, daily: pd.DataFrame) -> pd.D
     features["rel_ret_5_prev"] = features["ret_5_prev"] - features["spy_ret_5_prev"]
     features["rel_ret_10_prev"] = features["ret_10_prev"] - features["spy_ret_10_prev"]
     features["rel_ret_20_prev"] = features["ret_20_prev"] - features["spy_ret_20_prev"]
+    features["price_volume_confirm_prev"] = features["ret_5_prev"] * features["volume_ratio_5_20_prev"]
 
     score_cols = [
         "ret_3_prev",
@@ -147,6 +160,11 @@ def add_cross_sectional_scores(frame: pd.DataFrame, daily: pd.DataFrame) -> pd.D
         "vol_10_prev",
         "vol_20_prev",
         "volume_ratio_prev",
+        "volume_ratio_5_20_prev",
+        "dollar_volume_ratio_5_20_prev",
+        "volume_spike_prev",
+        "price_volume_confirm_prev",
+        "median_dollar_volume_20_prev",
         "breakout_20_prev",
         "drawdown_20_prev",
         "range_pos_20_prev",
@@ -191,6 +209,13 @@ def add_cross_sectional_scores(frame: pd.DataFrame, daily: pd.DataFrame) -> pd.D
         + 0.20 * features["z_rel_ret_5_prev"]
         - 0.20 * features["z_vol_10_prev"]
     )
+    features["volume_shape_score"] = (
+        0.30 * features["z_volume_ratio_5_20_prev"]
+        + 0.25 * features["z_dollar_volume_ratio_5_20_prev"]
+        + 0.25 * features["z_price_volume_confirm_prev"]
+        + 0.15 * features["z_volume_ratio_prev"]
+        - 0.20 * features["z_volume_spike_prev"]
+    )
 
     keep = [
         "symbol",
@@ -201,6 +226,12 @@ def add_cross_sectional_scores(frame: pd.DataFrame, daily: pd.DataFrame) -> pd.D
         "rel_ret_5_prev",
         "rel_ret_20_prev",
         "vol_10_prev",
+        "median_dollar_volume_20_prev",
+        "volume_ratio_prev",
+        "volume_ratio_5_20_prev",
+        "dollar_volume_ratio_5_20_prev",
+        "volume_spike_prev",
+        "price_volume_confirm_prev",
         "gap_return",
         "open_to_close_return",
         "gap_return_prev",
@@ -215,6 +246,7 @@ def add_cross_sectional_scores(frame: pd.DataFrame, daily: pd.DataFrame) -> pd.D
         "breakout_quality_score",
         "defensive_trend_score",
         "gap_resistance_score",
+        "volume_shape_score",
     ]
     enriched = frame.merge(features[keep], on=["symbol", "date"], how="left")
     enriched["markov_z_score"] = enriched.groupby("date", sort=False)["markov_signal"].transform(safe_zscore)
@@ -229,6 +261,18 @@ def add_cross_sectional_scores(frame: pd.DataFrame, daily: pd.DataFrame) -> pd.D
     )
     enriched["trend_quality_avoid_failed_gap_score"] = enriched["trend_quality_score"].fillna(0.0)
     enriched.loc[enriched["gap_failed_prev"].fillna(False).astype(bool), "trend_quality_avoid_failed_gap_score"] -= 0.75
+    enriched["trend_quality_volume_shape_score"] = (
+        0.72 * enriched["trend_quality_score"].fillna(0.0)
+        + 0.28 * enriched["volume_shape_score"].fillna(0.0)
+    )
+    enriched["trend_quality_avoid_failed_gap_volume_shape_score"] = (
+        0.72 * enriched["trend_quality_avoid_failed_gap_score"].fillna(0.0)
+        + 0.28 * enriched["volume_shape_score"].fillna(0.0)
+    )
+    enriched["relative_momentum_volume_shape_score"] = (
+        0.75 * enriched["relative_momentum_score"].fillna(0.0)
+        + 0.25 * enriched["volume_shape_score"].fillna(0.0)
+    )
     return enriched
 
 
@@ -237,8 +281,12 @@ def score_candidates(group: pd.DataFrame, config: MarkovConfig, selector: str, p
     score_map = {
         "relative_momentum": "relative_momentum_score",
         "relative_momentum_spy_gated": "relative_momentum_score",
+        "relative_momentum_volume_shape": "relative_momentum_volume_shape_score",
+        "relative_momentum_volume_shape_spy_gated": "relative_momentum_volume_shape_score",
         "trend_quality": "trend_quality_score",
+        "trend_quality_volume_shape": "trend_quality_volume_shape_score",
         "trend_quality_avoid_failed_gap": "trend_quality_avoid_failed_gap_score",
+        "trend_quality_avoid_failed_gap_volume_shape": "trend_quality_avoid_failed_gap_volume_shape_score",
         "trend_quality_gap_resistance": "trend_quality_gap_resistance_score",
         "breakout_quality": "breakout_quality_score",
         "defensive_trend": "defensive_trend_score",
@@ -258,7 +306,7 @@ def score_candidates(group: pd.DataFrame, config: MarkovConfig, selector: str, p
             candidates = candidates[candidates["gap_over_resistance_50"].astype(float).ge(0.0)].copy()
         if selector == "trend_quality_gap_resistance":
             candidates = candidates[candidates["trend_quality_score"].astype(float).gt(0.0)].copy()
-        if selector == "trend_quality_avoid_failed_gap":
+        if selector in {"trend_quality_avoid_failed_gap", "trend_quality_avoid_failed_gap_volume_shape"}:
             candidates = candidates[~candidates["gap_failed_prev"].fillna(False).astype(bool)].copy()
         if "hybrid" in selector:
             candidates = candidates[candidates["markov_signal"].astype(float) >= 0.0].copy()
@@ -287,8 +335,12 @@ def current_selector_score(row: pd.Series | None, selector: str) -> float:
     score_map = {
         "relative_momentum": "relative_momentum_score",
         "relative_momentum_spy_gated": "relative_momentum_score",
+        "relative_momentum_volume_shape": "relative_momentum_volume_shape_score",
+        "relative_momentum_volume_shape_spy_gated": "relative_momentum_volume_shape_score",
         "trend_quality": "trend_quality_score",
+        "trend_quality_volume_shape": "trend_quality_volume_shape_score",
         "trend_quality_avoid_failed_gap": "trend_quality_avoid_failed_gap_score",
+        "trend_quality_avoid_failed_gap_volume_shape": "trend_quality_avoid_failed_gap_volume_shape_score",
         "trend_quality_gap_resistance": "trend_quality_gap_resistance_score",
         "breakout_quality": "breakout_quality_score",
         "defensive_trend": "defensive_trend_score",
@@ -375,7 +427,12 @@ def simulate_holding(
 
         symbols = sorted(positions)
         if symbols:
-            weight = config.portfolio_exposure / len(symbols)
+            exposure_scale = 1.0
+            if strategy.exposure_column and strategy.exposure_column in group.columns:
+                values = group[strategy.exposure_column].dropna().astype(float)
+                if not values.empty:
+                    exposure_scale = float(np.clip(values.iloc[0], 0.0, 1.0))
+            weight = config.portfolio_exposure * exposure_scale / len(symbols)
             weights = {symbol: weight for symbol in symbols}
         else:
             weights = {}
@@ -424,6 +481,10 @@ def simulate_holding(
                     "gap_return": float(row["gap_return"]) if "gap_return" in row and pd.notna(row["gap_return"]) else None,
                     "gap_over_resistance_20": float(row["gap_over_resistance_20"]) if "gap_over_resistance_20" in row and pd.notna(row["gap_over_resistance_20"]) else None,
                     "gap_over_resistance_50": float(row["gap_over_resistance_50"]) if "gap_over_resistance_50" in row and pd.notna(row["gap_over_resistance_50"]) else None,
+                    "volume_shape_score": float(row["volume_shape_score"]) if "volume_shape_score" in row and pd.notna(row["volume_shape_score"]) else None,
+                    "volume_ratio_5_20_prev": float(row["volume_ratio_5_20_prev"]) if "volume_ratio_5_20_prev" in row and pd.notna(row["volume_ratio_5_20_prev"]) else None,
+                    "dollar_volume_ratio_5_20_prev": float(row["dollar_volume_ratio_5_20_prev"]) if "dollar_volume_ratio_5_20_prev" in row and pd.notna(row["dollar_volume_ratio_5_20_prev"]) else None,
+                    "volume_spike_prev": float(row["volume_spike_prev"]) if "volume_spike_prev" in row and pd.notna(row["volume_spike_prev"]) else None,
                     "open_to_close_return": float(row["open_to_close_return"]) if "open_to_close_return" in row and pd.notna(row["open_to_close_return"]) else None,
                     "turnover": turnover,
                 }
@@ -599,9 +660,12 @@ def strategies() -> list[HoldingStrategy]:
         HoldingStrategy("relative_momentum_hold_3d", "relative_momentum", max_hold_days=3),
         HoldingStrategy("relative_momentum_hold_5d", "relative_momentum", max_hold_days=5),
         HoldingStrategy("relative_momentum_exit_max10", "relative_momentum_spy_gated", max_hold_days=10, min_hold_days=2, exit_signal=0.0, exit_on_spy_gate=True),
+        HoldingStrategy("relative_momentum_volume_shape_exit_max10", "relative_momentum_volume_shape_spy_gated", max_hold_days=10, min_hold_days=2, exit_signal=0.0, exit_on_spy_gate=True),
         HoldingStrategy("trend_quality_hold_3d", "trend_quality", max_hold_days=3),
         HoldingStrategy("trend_quality_hold_5d", "trend_quality", max_hold_days=5),
+        HoldingStrategy("trend_quality_volume_shape_hold_3d", "trend_quality_volume_shape", max_hold_days=3),
         HoldingStrategy("trend_quality_avoid_failed_gap_hold_3d", "trend_quality_avoid_failed_gap", max_hold_days=3),
+        HoldingStrategy("trend_quality_avoid_failed_gap_volume_shape_hold_3d", "trend_quality_avoid_failed_gap_volume_shape", max_hold_days=3),
         HoldingStrategy("gap_resistance_hold_1d", "gap_resistance", max_hold_days=1),
         HoldingStrategy("gap_resistance_hold_3d", "gap_resistance", max_hold_days=3),
         HoldingStrategy("gap_resistance_50_hold_3d", "gap_resistance_50", max_hold_days=3),
@@ -620,6 +684,17 @@ def run(args: argparse.Namespace) -> None:
     config = default_markov_config(args)
     frame, daily, signals = load_daily_eval_frame(config)
     frame = add_cross_sectional_scores(frame, daily)
+    if args.min_median_dollar_volume > 0:
+        before = len(frame)
+        frame = frame[
+            (frame["symbol"].astype(str).str.upper() == "SPY")
+            | frame["median_dollar_volume_20_prev"].fillna(0.0).astype(float).ge(args.min_median_dollar_volume)
+        ].copy()
+        print(
+            f"[liquidity] min_median_dollar_volume={args.min_median_dollar_volume:,.0f} "
+            f"rows {before}->{len(frame)} symbols={frame['symbol'].nunique()}",
+            flush=True,
+        )
     summaries = []
     curves = []
     trades = []
@@ -639,6 +714,7 @@ def run(args: argparse.Namespace) -> None:
     monthly = monthly_returns(all_curves)
     result = {
         "config": asdict(config),
+        "min_median_dollar_volume": float(args.min_median_dollar_volume),
         "rows": int(len(frame)),
         "symbols": int(frame["symbol"].nunique()),
         "daily_rows": int(len(daily)),
@@ -681,6 +757,7 @@ def main() -> None:
     parser.add_argument("--regime-source", choices=["fixed", "adaptive"], default="adaptive")
     parser.add_argument("--transition-lookback-days", type=int, default=126)
     parser.add_argument("--transition-halflife-days", type=float, default=42.0)
+    parser.add_argument("--min-median-dollar-volume", type=float, default=0.0)
     run(parser.parse_args())
 
 

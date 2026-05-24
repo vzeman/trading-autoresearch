@@ -1,0 +1,927 @@
+{
+  "args": {
+    "dataset": "checkpoints/transformer_15m/shared_15m_top10_volume_valuation_algo.parquet",
+    "symbols": [
+      "BRK.B,LLY,JPM,AMD,XOM,JNJ,INTC,V,WMT,CSCO,COST,MA,CAT,ABBV,LRCX,NFLX,CVX,UNH,BAC,AMAT,PG,ORCL,GE,KO,PLTR,HD,GS,PM,MRK,GEV,TXN,KLAC,MS,LIN,IBM,RTX,WFC,QCOM,SNDK,C,PANW,VZ,PEP,MCD,ADI,NEE,DIS,AMGN,T,STX,TJX,BA,TMO,AXP,CRM,WDC,CRWD,GILD,UNP,ISRG,APH,BLK,ANET,ABT,UBER,SCHW,WELL,GLW,ETN,COP,PFE,HON,PLD,DE,APP,BKNG,SPGI,VRT,MO,LOW,BMY,CB,CVS,SBUX,NEM,PGR,COF,VRTX,ACN,DHR"
+    ],
+    "include_spy": false,
+    "start": "2017-01-01",
+    "end": "2026-05-23",
+    "feed": "sip",
+    "adjustment": "raw",
+    "chunk_months": 6,
+    "sleep": 0.05,
+    "limit": 0,
+    "start_at": 1,
+    "skip_covered": true,
+    "retries": 3,
+    "manifest": "checkpoints/data_download/full_alpaca_1m_sp500_top100_remaining_manifest.json"
+  },
+  "symbols": {
+    "BRK.B": {
+      "symbol": "BRK.B",
+      "old_rows": 40514,
+      "new_rows": 1016090,
+      "merged_rows": 1016090,
+      "start": "2017-01-03 09:00:00+00:00",
+      "end": "2026-05-22 23:50:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/BRK.B_1m.parquet",
+      "size_mb": 21.41
+    },
+    "LLY": {
+      "symbol": "LLY",
+      "old_rows": 41416,
+      "new_rows": 969114,
+      "merged_rows": 969114,
+      "start": "2017-01-03 13:21:00+00:00",
+      "end": "2026-05-22 23:53:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/LLY_1m.parquet",
+      "size_mb": 20.39
+    },
+    "JPM": {
+      "symbol": "JPM",
+      "old_rows": 50015,
+      "new_rows": 1091709,
+      "merged_rows": 1091709,
+      "start": "2017-01-03 09:00:00+00:00",
+      "end": "2026-05-22 23:56:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/JPM_1m.parquet",
+      "size_mb": 21.68
+    },
+    "AMD": {
+      "symbol": "AMD",
+      "old_rows": 52009,
+      "new_rows": 1712893,
+      "merged_rows": 1712892,
+      "start": "2017-01-03 09:00:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/AMD_1m.parquet",
+      "size_mb": 37.41
+    },
+    "XOM": {
+      "symbol": "XOM",
+      "old_rows": 52373,
+      "new_rows": 1143629,
+      "merged_rows": 1143629,
+      "start": "2017-01-03 12:22:00+00:00",
+      "end": "2026-05-22 23:58:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/XOM_1m.parquet",
+      "size_mb": 22.83
+    },
+    "JNJ": {
+      "symbol": "JNJ",
+      "old_rows": 42540,
+      "new_rows": 983943,
+      "merged_rows": 983943,
+      "start": "2017-01-03 09:00:00+00:00",
+      "end": "2026-05-22 22:23:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/JNJ_1m.parquet",
+      "size_mb": 18.87
+    },
+    "INTC": {
+      "symbol": "INTC",
+      "old_rows": 53862,
+      "new_rows": 1447658,
+      "merged_rows": 1447657,
+      "start": "2017-01-03 13:00:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/INTC_1m.parquet",
+      "size_mb": 29.03
+    },
+    "V": {
+      "symbol": "V",
+      "old_rows": 50358,
+      "new_rows": 1004225,
+      "merged_rows": 1004225,
+      "start": "2017-01-03 13:00:00+00:00",
+      "end": "2026-05-22 23:47:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/V_1m.parquet",
+      "size_mb": 19.69
+    },
+    "WMT": {
+      "symbol": "WMT",
+      "old_rows": 52419,
+      "new_rows": 1066856,
+      "merged_rows": 1066854,
+      "start": "2017-01-03 13:00:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/WMT_1m.parquet",
+      "size_mb": 20.75
+    },
+    "CSCO": {
+      "symbol": "CSCO",
+      "old_rows": 52744,
+      "new_rows": 1088217,
+      "merged_rows": 1088217,
+      "start": "2017-01-03 09:12:00+00:00",
+      "end": "2026-05-22 23:58:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/CSCO_1m.parquet",
+      "size_mb": 21.03
+    },
+    "COST": {
+      "symbol": "COST",
+      "old_rows": 32999,
+      "new_rows": 959669,
+      "merged_rows": 959669,
+      "start": "2017-01-03 13:00:00+00:00",
+      "end": "2026-05-22 23:16:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/COST_1m.parquet",
+      "size_mb": 21.55
+    },
+    "MA": {
+      "symbol": "MA",
+      "old_rows": 44910,
+      "new_rows": 952845,
+      "merged_rows": 952845,
+      "start": "2017-01-03 14:29:00+00:00",
+      "end": "2026-05-22 23:29:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/MA_1m.parquet",
+      "size_mb": 19.35
+    },
+    "CAT": {
+      "symbol": "CAT",
+      "old_rows": 38555,
+      "new_rows": 980784,
+      "merged_rows": 980784,
+      "start": "2017-01-03 10:09:00+00:00",
+      "end": "2026-05-22 23:58:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/CAT_1m.parquet",
+      "size_mb": 20.16
+    },
+    "ABBV": {
+      "symbol": "ABBV",
+      "old_rows": 39338,
+      "new_rows": 970413,
+      "merged_rows": 970413,
+      "start": "2017-01-03 13:18:00+00:00",
+      "end": "2026-05-22 22:36:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/ABBV_1m.parquet",
+      "size_mb": 19.11
+    },
+    "LRCX": {
+      "symbol": "LRCX",
+      "old_rows": 0,
+      "new_rows": 952468,
+      "merged_rows": 952467,
+      "start": "2017-01-03 14:30:00+00:00",
+      "end": "2026-05-22 23:56:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/LRCX_1m.parquet",
+      "size_mb": 21.23
+    },
+    "NFLX": {
+      "symbol": "NFLX",
+      "old_rows": 53986,
+      "new_rows": 1195383,
+      "merged_rows": 1195381,
+      "start": "2017-01-03 09:14:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/NFLX_1m.parquet",
+      "size_mb": 28.08
+    },
+    "CVX": {
+      "symbol": "CVX",
+      "old_rows": 45511,
+      "new_rows": 1034840,
+      "merged_rows": 1034840,
+      "start": "2017-01-03 13:00:00+00:00",
+      "end": "2026-05-22 23:55:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/CVX_1m.parquet",
+      "size_mb": 20.03
+    },
+    "UNH": {
+      "symbol": "UNH",
+      "old_rows": 48509,
+      "new_rows": 1011774,
+      "merged_rows": 1011774,
+      "start": "2017-01-03 11:36:00+00:00",
+      "end": "2026-05-22 23:57:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/UNH_1m.parquet",
+      "size_mb": 21.28
+    },
+    "BAC": {
+      "symbol": "BAC",
+      "old_rows": 52819,
+      "new_rows": 1319955,
+      "merged_rows": 1319955,
+      "start": "2017-01-03 09:00:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/BAC_1m.parquet",
+      "size_mb": 26.2
+    },
+    "AMAT": {
+      "symbol": "AMAT",
+      "old_rows": 42011,
+      "new_rows": 1038384,
+      "merged_rows": 1038384,
+      "start": "2017-01-03 11:39:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/AMAT_1m.parquet",
+      "size_mb": 20.24
+    },
+    "PG": {
+      "symbol": "PG",
+      "old_rows": 47165,
+      "new_rows": 969942,
+      "merged_rows": 969942,
+      "start": "2017-01-03 12:58:00+00:00",
+      "end": "2026-05-22 22:24:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/PG_1m.parquet",
+      "size_mb": 18.25
+    },
+    "ORCL": {
+      "symbol": "ORCL",
+      "old_rows": 53351,
+      "new_rows": 1079896,
+      "merged_rows": 1079895,
+      "start": "2017-01-03 13:30:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/ORCL_1m.parquet",
+      "size_mb": 20.8
+    },
+    "GE": {
+      "symbol": "GE",
+      "old_rows": 48263,
+      "new_rows": 1168641,
+      "merged_rows": 1168640,
+      "start": "2017-01-03 09:00:00+00:00",
+      "end": "2026-05-22 23:54:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/GE_1m.parquet",
+      "size_mb": 23.54
+    },
+    "KO": {
+      "symbol": "KO",
+      "old_rows": 52056,
+      "new_rows": 1050150,
+      "merged_rows": 1050150,
+      "start": "2017-01-03 12:24:00+00:00",
+      "end": "2026-05-22 23:58:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/KO_1m.parquet",
+      "size_mb": 19.01
+    },
+    "PLTR": {
+      "symbol": "PLTR",
+      "old_rows": 52330,
+      "new_rows": 1120283,
+      "merged_rows": 1120280,
+      "start": "2020-09-30 17:38:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/PLTR_1m.parquet",
+      "size_mb": 23.52
+    },
+    "HD": {
+      "symbol": "HD",
+      "old_rows": 46028,
+      "new_rows": 981190,
+      "merged_rows": 981190,
+      "start": "2017-01-03 11:32:00+00:00",
+      "end": "2026-05-22 23:54:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/HD_1m.parquet",
+      "size_mb": 20.37
+    },
+    "GS": {
+      "symbol": "GS",
+      "old_rows": 34963,
+      "new_rows": 982086,
+      "merged_rows": 982086,
+      "start": "2017-01-03 09:00:00+00:00",
+      "end": "2026-05-22 23:50:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/GS_1m.parquet",
+      "size_mb": 20.27
+    },
+    "PM": {
+      "symbol": "PM",
+      "old_rows": 36821,
+      "new_rows": 942653,
+      "merged_rows": 942653,
+      "start": "2017-01-03 10:02:00+00:00",
+      "end": "2026-05-22 21:03:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/PM_1m.parquet",
+      "size_mb": 17.57
+    },
+    "MRK": {
+      "symbol": "MRK",
+      "old_rows": 48655,
+      "new_rows": 991752,
+      "merged_rows": 991752,
+      "start": "2017-01-03 13:42:00+00:00",
+      "end": "2026-05-22 23:50:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/MRK_1m.parquet",
+      "size_mb": 18.64
+    },
+    "GEV": {
+      "symbol": "GEV",
+      "old_rows": 0,
+      "new_rows": 237260,
+      "merged_rows": 237260,
+      "start": "2024-04-02 10:36:00+00:00",
+      "end": "2026-05-22 23:52:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/GEV_1m.parquet",
+      "size_mb": 6.13
+    },
+    "TXN": {
+      "symbol": "TXN",
+      "old_rows": 40642,
+      "new_rows": 965855,
+      "merged_rows": 965855,
+      "start": "2017-01-03 14:29:00+00:00",
+      "end": "2026-05-22 23:35:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/TXN_1m.parquet",
+      "size_mb": 17.78
+    },
+    "KLAC": {
+      "symbol": "KLAC",
+      "old_rows": 0,
+      "new_rows": 861574,
+      "merged_rows": 861574,
+      "start": "2017-01-03 14:30:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/KLAC_1m.parquet",
+      "size_mb": 17.75
+    },
+    "MS": {
+      "symbol": "MS",
+      "old_rows": 39801,
+      "new_rows": 990491,
+      "merged_rows": 990491,
+      "start": "2017-01-03 13:14:00+00:00",
+      "end": "2026-05-22 23:53:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/MS_1m.parquet",
+      "size_mb": 18.35
+    },
+    "LIN": {
+      "symbol": "LIN",
+      "old_rows": 39675,
+      "new_rows": 745213,
+      "merged_rows": 745213,
+      "start": "2018-10-31 13:36:00+00:00",
+      "end": "2026-05-22 20:37:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/LIN_1m.parquet",
+      "size_mb": 14.14
+    },
+    "IBM": {
+      "symbol": "IBM",
+      "old_rows": 44527,
+      "new_rows": 1005329,
+      "merged_rows": 1005329,
+      "start": "2017-01-03 09:00:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/IBM_1m.parquet",
+      "size_mb": 20.11
+    },
+    "RTX": {
+      "symbol": "RTX",
+      "old_rows": 36580,
+      "new_rows": 965419,
+      "merged_rows": 965419,
+      "start": "2017-01-03 13:22:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/RTX_1m.parquet",
+      "size_mb": 18.43
+    },
+    "WFC": {
+      "symbol": "WFC",
+      "old_rows": 0,
+      "new_rows": 1086542,
+      "merged_rows": 1086541,
+      "start": "2017-01-03 12:57:00+00:00",
+      "end": "2026-05-22 23:44:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/WFC_1m.parquet",
+      "size_mb": 21.66
+    },
+    "QCOM": {
+      "symbol": "QCOM",
+      "old_rows": 45503,
+      "new_rows": 1088091,
+      "merged_rows": 1088091,
+      "start": "2017-01-03 13:06:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/QCOM_1m.parquet",
+      "size_mb": 21.44
+    },
+    "SNDK": {
+      "symbol": "SNDK",
+      "old_rows": 0,
+      "new_rows": 183325,
+      "merged_rows": 183325,
+      "start": "2025-02-13 14:42:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/SNDK_1m.parquet",
+      "size_mb": 4.79
+    },
+    "C": {
+      "symbol": "C",
+      "old_rows": 50150,
+      "new_rows": 1106842,
+      "merged_rows": 1106842,
+      "start": "2017-01-03 09:21:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/C_1m.parquet",
+      "size_mb": 21.55
+    },
+    "PANW": {
+      "symbol": "PANW",
+      "old_rows": 0,
+      "new_rows": 956280,
+      "merged_rows": 956280,
+      "start": "2017-01-03 14:30:00+00:00",
+      "end": "2026-05-22 23:54:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/PANW_1m.parquet",
+      "size_mb": 20.66
+    },
+    "VZ": {
+      "symbol": "VZ",
+      "old_rows": 51918,
+      "new_rows": 1082863,
+      "merged_rows": 1082863,
+      "start": "2017-01-03 13:00:00+00:00",
+      "end": "2026-05-22 23:54:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/VZ_1m.parquet",
+      "size_mb": 20.51
+    },
+    "PEP": {
+      "symbol": "PEP",
+      "old_rows": 40551,
+      "new_rows": 967367,
+      "merged_rows": 967367,
+      "start": "2017-01-03 13:22:00+00:00",
+      "end": "2026-05-22 23:58:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/PEP_1m.parquet",
+      "size_mb": 17.83
+    },
+    "MCD": {
+      "symbol": "MCD",
+      "old_rows": 43304,
+      "new_rows": 965812,
+      "merged_rows": 965812,
+      "start": "2017-01-03 13:00:00+00:00",
+      "end": "2026-05-22 23:58:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/MCD_1m.parquet",
+      "size_mb": 18.48
+    },
+    "ADI": {
+      "symbol": "ADI",
+      "old_rows": 37214,
+      "new_rows": 936393,
+      "merged_rows": 936393,
+      "start": "2017-01-03 13:18:00+00:00",
+      "end": "2026-05-22 23:35:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/ADI_1m.parquet",
+      "size_mb": 17.16
+    },
+    "NEE": {
+      "symbol": "NEE",
+      "old_rows": 49022,
+      "new_rows": 957257,
+      "merged_rows": 957257,
+      "start": "2017-01-03 13:22:00+00:00",
+      "end": "2026-05-22 23:06:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/NEE_1m.parquet",
+      "size_mb": 18.45
+    },
+    "DIS": {
+      "symbol": "DIS",
+      "old_rows": 49403,
+      "new_rows": 1127077,
+      "merged_rows": 1127077,
+      "start": "2017-01-03 11:25:00+00:00",
+      "end": "2026-05-22 23:22:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/DIS_1m.parquet",
+      "size_mb": 22.34
+    },
+    "AMGN": {
+      "symbol": "AMGN",
+      "old_rows": 37036,
+      "new_rows": 939007,
+      "merged_rows": 939007,
+      "start": "2017-01-03 13:11:00+00:00",
+      "end": "2026-05-22 22:25:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/AMGN_1m.parquet",
+      "size_mb": 18.07
+    },
+    "T": {
+      "symbol": "T",
+      "old_rows": 51213,
+      "new_rows": 1196062,
+      "merged_rows": 1196061,
+      "start": "2017-01-03 09:00:00+00:00",
+      "end": "2026-05-22 23:53:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/T_1m.parquet",
+      "size_mb": 23.43
+    },
+    "STX": {
+      "symbol": "STX",
+      "old_rows": 0,
+      "new_rows": 950395,
+      "merged_rows": 950395,
+      "start": "2017-01-03 14:29:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/STX_1m.parquet",
+      "size_mb": 18.0
+    },
+    "TJX": {
+      "symbol": "TJX",
+      "old_rows": 0,
+      "new_rows": 941555,
+      "merged_rows": 941555,
+      "start": "2017-01-03 13:44:00+00:00",
+      "end": "2026-05-22 23:57:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/TJX_1m.parquet",
+      "size_mb": 17.18
+    },
+    "BA": {
+      "symbol": "BA",
+      "old_rows": 40993,
+      "new_rows": 1202860,
+      "merged_rows": 1202859,
+      "start": "2017-01-03 13:20:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/BA_1m.parquet",
+      "size_mb": 27.49
+    },
+    "TMO": {
+      "symbol": "TMO",
+      "old_rows": 39765,
+      "new_rows": 891338,
+      "merged_rows": 891338,
+      "start": "2017-01-03 14:30:00+00:00",
+      "end": "2026-05-22 22:07:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/TMO_1m.parquet",
+      "size_mb": 18.02
+    },
+    "AXP": {
+      "symbol": "AXP",
+      "old_rows": 40954,
+      "new_rows": 958601,
+      "merged_rows": 958601,
+      "start": "2017-01-03 13:44:00+00:00",
+      "end": "2026-05-22 23:58:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/AXP_1m.parquet",
+      "size_mb": 18.15
+    },
+    "CRM": {
+      "symbol": "CRM",
+      "old_rows": 46582,
+      "new_rows": 1043698,
+      "merged_rows": 1043698,
+      "start": "2017-01-03 13:00:00+00:00",
+      "end": "2026-05-22 23:58:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/CRM_1m.parquet",
+      "size_mb": 20.99
+    },
+    "WDC": {
+      "symbol": "WDC",
+      "old_rows": 0,
+      "new_rows": 1008685,
+      "merged_rows": 1008685,
+      "start": "2017-01-03 13:46:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/WDC_1m.parquet",
+      "size_mb": 19.26
+    },
+    "CRWD": {
+      "symbol": "CRWD",
+      "old_rows": 0,
+      "new_rows": 797111,
+      "merged_rows": 797111,
+      "start": "2019-06-12 15:28:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/CRWD_1m.parquet",
+      "size_mb": 18.01
+    },
+    "GILD": {
+      "symbol": "GILD",
+      "old_rows": 39188,
+      "new_rows": 1007091,
+      "merged_rows": 1007091,
+      "start": "2017-01-03 09:07:00+00:00",
+      "end": "2026-05-22 20:00:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/GILD_1m.parquet",
+      "size_mb": 18.64
+    },
+    "UNP": {
+      "symbol": "UNP",
+      "old_rows": 0,
+      "new_rows": 926548,
+      "merged_rows": 926548,
+      "start": "2017-01-03 14:29:00+00:00",
+      "end": "2026-05-22 21:42:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/UNP_1m.parquet",
+      "size_mb": 17.23
+    },
+    "ISRG": {
+      "symbol": "ISRG",
+      "old_rows": 34871,
+      "new_rows": 835635,
+      "merged_rows": 835635,
+      "start": "2017-01-03 14:30:00+00:00",
+      "end": "2026-05-22 23:16:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/ISRG_1m.parquet",
+      "size_mb": 19.08
+    },
+    "APH": {
+      "symbol": "APH",
+      "old_rows": 47942,
+      "new_rows": 911970,
+      "merged_rows": 911970,
+      "start": "2017-01-03 13:22:00+00:00",
+      "end": "2026-05-22 23:47:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/APH_1m.parquet",
+      "size_mb": 15.75
+    },
+    "BLK": {
+      "symbol": "BLK",
+      "old_rows": 39498,
+      "new_rows": 752717,
+      "merged_rows": 752717,
+      "start": "2017-01-03 13:23:00+00:00",
+      "end": "2026-05-22 20:37:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/BLK_1m.parquet",
+      "size_mb": 16.94
+    },
+    "ANET": {
+      "symbol": "ANET",
+      "old_rows": 44790,
+      "new_rows": 908450,
+      "merged_rows": 908450,
+      "start": "2017-01-03 09:19:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/ANET_1m.parquet",
+      "size_mb": 18.71
+    },
+    "ABT": {
+      "symbol": "ABT",
+      "old_rows": 45581,
+      "new_rows": 950312,
+      "merged_rows": 950312,
+      "start": "2017-01-03 13:00:00+00:00",
+      "end": "2026-05-22 23:17:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/ABT_1m.parquet",
+      "size_mb": 17.61
+    },
+    "UBER": {
+      "symbol": "UBER",
+      "old_rows": 0,
+      "new_rows": 942797,
+      "merged_rows": 942796,
+      "start": "2019-05-10 15:50:00+00:00",
+      "end": "2026-05-22 23:58:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/UBER_1m.parquet",
+      "size_mb": 19.5
+    },
+    "SCHW": {
+      "symbol": "SCHW",
+      "old_rows": 51151,
+      "new_rows": 968316,
+      "merged_rows": 968316,
+      "start": "2017-01-03 13:00:00+00:00",
+      "end": "2026-05-22 23:49:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/SCHW_1m.parquet",
+      "size_mb": 17.48
+    },
+    "WELL": {
+      "symbol": "WELL",
+      "old_rows": 0,
+      "new_rows": 911270,
+      "merged_rows": 911270,
+      "start": "2017-01-03 14:30:00+00:00",
+      "end": "2026-05-22 20:00:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/WELL_1m.parquet",
+      "size_mb": 16.63
+    },
+    "GLW": {
+      "symbol": "GLW",
+      "old_rows": 0,
+      "new_rows": 962617,
+      "merged_rows": 962617,
+      "start": "2017-01-03 14:30:00+00:00",
+      "end": "2026-05-22 23:58:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/GLW_1m.parquet",
+      "size_mb": 17.27
+    },
+    "ETN": {
+      "symbol": "ETN",
+      "old_rows": 43267,
+      "new_rows": 921545,
+      "merged_rows": 921545,
+      "start": "2017-01-03 14:30:00+00:00",
+      "end": "2026-05-22 23:33:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/ETN_1m.parquet",
+      "size_mb": 17.41
+    },
+    "COP": {
+      "symbol": "COP",
+      "old_rows": 0,
+      "new_rows": 973033,
+      "merged_rows": 973033,
+      "start": "2017-01-03 09:15:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/COP_1m.parquet",
+      "size_mb": 18.1
+    },
+    "PFE": {
+      "symbol": "PFE",
+      "old_rows": 52209,
+      "new_rows": 1233513,
+      "merged_rows": 1233511,
+      "start": "2017-01-03 12:50:00+00:00",
+      "end": "2026-05-22 23:47:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/PFE_1m.parquet",
+      "size_mb": 24.06
+    },
+    "HON": {
+      "symbol": "HON",
+      "old_rows": 28819,
+      "new_rows": 939957,
+      "merged_rows": 939957,
+      "start": "2017-01-03 13:22:00+00:00",
+      "end": "2026-05-22 23:53:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/HON_1m.parquet",
+      "size_mb": 17.55
+    },
+    "PLD": {
+      "symbol": "PLD",
+      "old_rows": 30056,
+      "new_rows": 919846,
+      "merged_rows": 919846,
+      "start": "2017-01-03 14:30:00+00:00",
+      "end": "2026-05-22 20:00:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/PLD_1m.parquet",
+      "size_mb": 16.36
+    },
+    "DE": {
+      "symbol": "DE",
+      "old_rows": 32754,
+      "new_rows": 912165,
+      "merged_rows": 912165,
+      "start": "2017-01-03 11:34:00+00:00",
+      "end": "2026-05-22 23:57:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/DE_1m.parquet",
+      "size_mb": 18.11
+    },
+    "APP": {
+      "symbol": "APP",
+      "old_rows": 45087,
+      "new_rows": 557829,
+      "merged_rows": 557829,
+      "start": "2021-04-15 16:36:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/APP_1m.parquet",
+      "size_mb": 11.81
+    },
+    "BKNG": {
+      "symbol": "BKNG",
+      "old_rows": 38511,
+      "new_rows": 602170,
+      "merged_rows": 602170,
+      "start": "2017-01-03 13:31:00+00:00",
+      "end": "2026-05-22 23:42:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/BKNG_1m.parquet",
+      "size_mb": 15.17
+    },
+    "SPGI": {
+      "symbol": "SPGI",
+      "old_rows": 37473,
+      "new_rows": 867566,
+      "merged_rows": 867566,
+      "start": "2017-01-03 13:20:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/SPGI_1m.parquet",
+      "size_mb": 16.38
+    },
+    "VRT": {
+      "symbol": "VRT",
+      "old_rows": 0,
+      "new_rows": 694993,
+      "merged_rows": 694993,
+      "start": "2018-07-30 13:33:00+00:00",
+      "end": "2026-05-22 23:58:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/VRT_1m.parquet",
+      "size_mb": 13.18
+    },
+    "MO": {
+      "symbol": "MO",
+      "old_rows": 50135,
+      "new_rows": 1006923,
+      "merged_rows": 1006923,
+      "start": "2017-01-03 13:00:00+00:00",
+      "end": "2026-05-22 23:03:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/MO_1m.parquet",
+      "size_mb": 18.97
+    },
+    "LOW": {
+      "symbol": "LOW",
+      "old_rows": 39934,
+      "new_rows": 948362,
+      "merged_rows": 948362,
+      "start": "2017-01-03 13:00:00+00:00",
+      "end": "2026-05-22 21:11:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/LOW_1m.parquet",
+      "size_mb": 18.04
+    },
+    "BMY": {
+      "symbol": "BMY",
+      "old_rows": 51556,
+      "new_rows": 988102,
+      "merged_rows": 988102,
+      "start": "2017-01-03 13:50:00+00:00",
+      "end": "2026-05-22 23:23:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/BMY_1m.parquet",
+      "size_mb": 18.2
+    },
+    "CB": {
+      "symbol": "CB",
+      "old_rows": 32238,
+      "new_rows": 898061,
+      "merged_rows": 898061,
+      "start": "2017-01-03 13:22:00+00:00",
+      "end": "2026-05-22 21:58:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/CB_1m.parquet",
+      "size_mb": 16.79
+    },
+    "CVS": {
+      "symbol": "CVS",
+      "old_rows": 0,
+      "new_rows": 998757,
+      "merged_rows": 998757,
+      "start": "2017-01-03 13:22:00+00:00",
+      "end": "2026-05-22 22:04:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/CVS_1m.parquet",
+      "size_mb": 19.11
+    },
+    "SBUX": {
+      "symbol": "SBUX",
+      "old_rows": 46763,
+      "new_rows": 1028756,
+      "merged_rows": 1028756,
+      "start": "2017-01-03 12:22:00+00:00",
+      "end": "2026-05-22 23:53:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/SBUX_1m.parquet",
+      "size_mb": 19.48
+    },
+    "NEM": {
+      "symbol": "NEM",
+      "old_rows": 0,
+      "new_rows": 1041859,
+      "merged_rows": 1041859,
+      "start": "2017-01-03 09:36:00+00:00",
+      "end": "2026-05-22 23:57:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/NEM_1m.parquet",
+      "size_mb": 18.72
+    },
+    "PGR": {
+      "symbol": "PGR",
+      "old_rows": 0,
+      "new_rows": 919415,
+      "merged_rows": 919415,
+      "start": "2017-01-03 13:22:00+00:00",
+      "end": "2026-05-22 20:37:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/PGR_1m.parquet",
+      "size_mb": 16.78
+    },
+    "COF": {
+      "symbol": "COF",
+      "old_rows": 37282,
+      "new_rows": 936610,
+      "merged_rows": 936610,
+      "start": "2017-01-03 14:30:00+00:00",
+      "end": "2026-05-22 21:09:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/COF_1m.parquet",
+      "size_mb": 17.09
+    },
+    "VRTX": {
+      "symbol": "VRTX",
+      "old_rows": 28643,
+      "new_rows": 885792,
+      "merged_rows": 885792,
+      "start": "2017-01-03 13:48:00+00:00",
+      "end": "2026-05-22 21:06:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/VRTX_1m.parquet",
+      "size_mb": 17.15
+    },
+    "ACN": {
+      "symbol": "ACN",
+      "old_rows": 38668,
+      "new_rows": 925752,
+      "merged_rows": 925752,
+      "start": "2017-01-03 14:28:00+00:00",
+      "end": "2026-05-22 23:20:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/ACN_1m.parquet",
+      "size_mb": 17.64
+    },
+    "DHR": {
+      "symbol": "DHR",
+      "old_rows": 37187,
+      "new_rows": 924354,
+      "merged_rows": 924354,
+      "start": "2017-01-03 10:43:00+00:00",
+      "end": "2026-05-22 20:37:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/DHR_1m.parquet",
+      "size_mb": 17.17
+    }
+  },
+  "started_at": "2026-05-24 05:05:38.502253+00:00",
+  "finished_at": "2026-05-24 05:55:08.816836+00:00",
+  "ok": 90,
+  "failed": 0,
+  "elapsed_seconds": 2970.3
+}

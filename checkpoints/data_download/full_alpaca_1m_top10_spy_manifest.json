@@ -1,0 +1,135 @@
+{
+  "args": {
+    "dataset": "checkpoints/transformer_15m/shared_15m_top10_volume_valuation_algo.parquet",
+    "symbols": [],
+    "include_spy": true,
+    "start": "2017-01-01",
+    "end": "",
+    "feed": "sip",
+    "adjustment": "raw",
+    "chunk_months": 3,
+    "sleep": 0.15,
+    "limit": 0,
+    "start_at": 1,
+    "skip_covered": true,
+    "retries": 3,
+    "manifest": "checkpoints/data_download/full_alpaca_1m_top10_spy_manifest.json"
+  },
+  "symbols": {
+    "SPY": {
+      "symbol": "SPY",
+      "old_rows": 55650,
+      "new_rows": 1886127,
+      "merged_rows": 1886124,
+      "start": "2017-01-03 09:00:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/SPY_1m.parquet",
+      "size_mb": 39.28
+    },
+    "AAPL": {
+      "symbol": "AAPL",
+      "old_rows": 53387,
+      "new_rows": 1711433,
+      "merged_rows": 1711429,
+      "start": "2017-01-03 09:03:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/AAPL_1m.parquet",
+      "size_mb": 37.57
+    },
+    "AMZN": {
+      "symbol": "AMZN",
+      "old_rows": 53149,
+      "new_rows": 1413692,
+      "merged_rows": 1413691,
+      "start": "2017-01-03 09:01:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/AMZN_1m.parquet",
+      "size_mb": 34.79
+    },
+    "AVGO": {
+      "symbol": "AVGO",
+      "old_rows": 53548,
+      "new_rows": 1098310,
+      "merged_rows": 1098309,
+      "start": "2017-01-03 13:05:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/AVGO_1m.parquet",
+      "size_mb": 24.39
+    },
+    "GOOG": {
+      "symbol": "GOOG",
+      "old_rows": 49338,
+      "new_rows": 1163130,
+      "merged_rows": 1163129,
+      "start": "2017-01-03 13:12:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/GOOG_1m.parquet",
+      "size_mb": 27.83
+    },
+    "GOOGL": {
+      "symbol": "GOOGL",
+      "old_rows": 52779,
+      "new_rows": 1208851,
+      "merged_rows": 1208851,
+      "start": "2017-01-03 09:01:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/GOOGL_1m.parquet",
+      "size_mb": 28.65
+    },
+    "META": {
+      "symbol": "META",
+      "old_rows": 52377,
+      "new_rows": 1422304,
+      "merged_rows": 1422303,
+      "start": "2017-01-03 09:00:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/META_1m.parquet",
+      "size_mb": 31.81
+    },
+    "MSFT": {
+      "symbol": "MSFT",
+      "old_rows": 53562,
+      "new_rows": 1411431,
+      "merged_rows": 1411431,
+      "start": "2017-01-03 09:00:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/MSFT_1m.parquet",
+      "size_mb": 30.62
+    },
+    "MU": {
+      "symbol": "MU",
+      "old_rows": 0,
+      "new_rows": 1395633,
+      "merged_rows": 1395633,
+      "start": "2017-01-03 09:00:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/MU_1m.parquet",
+      "size_mb": 30.02
+    },
+    "NVDA": {
+      "symbol": "NVDA",
+      "old_rows": 54637,
+      "new_rows": 1663004,
+      "merged_rows": 1663002,
+      "start": "2017-01-03 09:05:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/NVDA_1m.parquet",
+      "size_mb": 39.8
+    },
+    "TSLA": {
+      "symbol": "TSLA",
+      "old_rows": 54295,
+      "new_rows": 1753660,
+      "merged_rows": 1753658,
+      "start": "2017-01-03 09:00:00+00:00",
+      "end": "2026-05-22 23:59:00+00:00",
+      "path": "/Users/viktorzeman/.cache/trading-autoresearch/TSLA_1m.parquet",
+      "size_mb": 42.27
+    }
+  },
+  "started_at": "2026-05-24 04:47:45.736555+00:00",
+  "finished_at": "2026-05-24 04:57:48.226469+00:00",
+  "ok": 11,
+  "failed": 0,
+  "elapsed_seconds": 602.5
+}

@@ -184,6 +184,7 @@ def daily_from_intraday(df: pd.DataFrame, config: Config) -> pd.DataFrame:
     daily["gap_return"] = daily["open"].astype(float) / daily["prev_close"].replace(0.0, np.nan).astype(float) - 1.0
     daily["open_to_close_return"] = daily["close"].astype(float) / daily["open"].replace(0.0, np.nan).astype(float) - 1.0
     daily["intraday_range"] = daily["high"].astype(float) / daily["low"].replace(0.0, np.nan).astype(float) - 1.0
+    daily["dollar_volume"] = daily["close"].astype(float) * daily["volume"].astype(float)
     daily["daily_return"] = daily.groupby("symbol")["close"].pct_change()
     daily["lookback_return"] = daily.groupby("symbol")["close"].pct_change(config.regime_window_days)
     daily["manual_state"] = manual_state(daily["lookback_return"], config)
@@ -222,6 +223,7 @@ def spy_daily_from_intraday(df: pd.DataFrame, config: Config) -> pd.DataFrame:
     spy["gap_return"] = spy["open"].astype(float) / spy["prev_close"].replace(0.0, np.nan).astype(float) - 1.0
     spy["open_to_close_return"] = spy["close"].astype(float) / spy["open"].replace(0.0, np.nan).astype(float) - 1.0
     spy["intraday_range"] = spy["high"].astype(float) / spy["low"].replace(0.0, np.nan).astype(float) - 1.0
+    spy["dollar_volume"] = spy["close"].astype(float) * spy["volume"].astype(float)
     spy["daily_return"] = spy.groupby("symbol")["close"].pct_change()
     spy["lookback_return"] = spy.groupby("symbol")["close"].pct_change(config.regime_window_days)
     spy["manual_state"] = manual_state(spy["lookback_return"], config)
